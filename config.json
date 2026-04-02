@@ -1,5 +1,9 @@
 {
-  "name": "Мегабот",
-  "version": "1.0",
-  "status": "active"
+    "api_key": "",
+    "max_attempts": 5,
+    "platform_url": "",
+    "log_level": "info",
+    "data_storage_path": "data",
+    "performance_threshold": 0.5,
+    "update_interval": 86400
 }

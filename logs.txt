@@ -1,1 +1,1 @@
-Логи запуска
+Logs of the system's performance and changes.

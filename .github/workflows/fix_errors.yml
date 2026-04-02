@@ -1,0 +1,52 @@
+name: Auto-fix errors and restart
+
+on:
+  push:
+    branches:
+      - main
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+jobs:
+  fix_and_restart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Check if requirements.txt exists
+        run: |
+          if [ ! -f requirements.txt ]; then
+            echo "requirements.txt не найден. Создаю его."
+            echo -e "requests\nbeautifulsoup4" > requirements.txt
+            git add requirements.txt
+            git commit -m "Создан requirements.txt"
+            git push
+          fi
+
+      - name: Check if dependencies are correct
+        run: |
+          if grep -q "unittest" requirements.txt; then
+            echo "Удаляю unittest, так как это встроенная библиотека Python."
+            sed -i '/unittest/d' requirements.txt
+            git add requirements.txt
+            git commit -m "Удален unittest из requirements.txt"
+            git push
+          fi
+
+      - name: Update actions if needed
+        run: |
+          echo "Проверка на устаревшие действия..."
+          sed -i 's/actions\/checkout@v2/actions\/checkout@v3/' .github/workflows/ci.yml
+          git add .github/workflows/ci.yml
+          git commit -m "Обновлены действия checkout"
+          git push
+
+      - name: Run CI
+        run: |
+          echo "Перезапуск CI..."
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -d '{"event_type": "restart", "client_payload": {}}' \
+          https://api.github.com/repos/${{ github.repository }}/dispatches

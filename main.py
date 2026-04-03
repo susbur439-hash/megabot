@@ -1,43 +1,63 @@
-import json
+import requests
 import random
 
-# Основные функции
-def start_bot():
-    print("Запуск бота...")
-    
-    # Инициализация самопостроения
-    system = SelfBuildingSystem()
-    system.start_self_building()
+# ================= AI =================
+HF_API_KEY = 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
 
-# Классы для самопостроения и саморазвития
+def ask_ai(question):
+    API_URL = "https://api-inference.huggingface.co/models/gpt2"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}"
+    }
+
+    payload = {"inputs": question}
+
+    response = requests.post(API_URL, headers=headers, json=payload)
+
+    try:
+        return response.json()[0]["generated_text"]
+    except:
+        return "Ошибка AI"
+
+# ================= СИСТЕМА =================
 class SelfBuildingSystem:
     def __init__(self):
-        self.components = ['initial_algorithm']  # Изначальная структура системы
-        self.performance_data = []  # Данные для анализа эффективности
+        self.components = ['initial_algorithm']
+        self.performance_data = []
 
-    # Самоанализ
     def analyze_system(self):
-        print(f"Текущие компоненты: {self.components}")
-        performance = random.uniform(0, 1)  # Симуляция анализа
+        print(f"\nКомпоненты: {self.components}")
+        performance = random.uniform(0, 1)
         self.performance_data.append(performance)
-        print(f"Производительность на текущем шаге: {performance}")
 
-        # Если производительность низкая, система будет обновлять алгоритмы
+        print(f"Производительность: {performance}")
+
         if performance < 0.5:
-            print("Низкая производительность, обновляем алгоритмы...")
+            print("⚠️ Улучшаем систему...")
             self.upgrade_system()
 
-    # Самообновление
     def upgrade_system(self):
-        new_component = f"upgraded_algorithm_{len(self.components) + 1}"
+        new_component = f"algo_{len(self.components)+1}"
         self.components.append(new_component)
-        print(f"Добавлен новый компонент: {new_component}")
-    
-    # Добавление новых функций
+        print(f"✅ Добавлен: {new_component}")
+
     def add_new_function(self):
-        if len(self.performance_data) > 5 and self.performance_data[-1] > 0.8:
-            new_function = f"self_optimization_function_{len(self.components)}"
-            self.components.append(new_function)
-            print(f"Добавлена новая функция: {new_function}")
-        else:
-            print("Новых функций пока не добавлено, производительность не достаточно высокая.")
+        if len(self.performance_data) > 3 and self.performance_data[-1] > 0.7:
+            print("\n🤖 AI думает...")
+            idea = ask_ai("Придумай способ заработка в интернете")
+            print("💡 Идея:", idea)
+
+    def start(self):
+        print("🚀 Мегабот запущен\n")
+
+        for i in range(5):
+            print(f"\n=== Шаг {i+1} ===")
+            self.analyze_system()
+            self.add_new_function()
+
+        print("\n✅ Готово")
+
+# ================= ЗАПУСК =================
+if __name__ == "__main__":
+    bot = SelfBuildingSystem()
+    bot.start()

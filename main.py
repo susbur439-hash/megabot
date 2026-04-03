@@ -61,3 +61,4 @@ class SelfBuildingSystem:
 if __name__ == "__main__":
     bot = SelfBuildingSystem()
     bot.start()
+# run

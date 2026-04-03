@@ -41,14 +41,3 @@ class SelfBuildingSystem:
             print(f"Добавлена новая функция: {new_function}")
         else:
             print("Новых функций пока не добавлено, производительность не достаточно высокая.")
-
-    # Запуск самопостроения
-    def start_self_building(self):
-        print("Запуск процесса самопостроения и саморазвития...")
-        for _ in range(10):  # 10 шагов саморазвития
-            self.analyze_system()
-            self.add_new_function()
-        print("Самопостроение завершено.")
-
-if __name__ == "__main__":
-    start_bot()

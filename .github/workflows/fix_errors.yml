@@ -1,52 +1,42 @@
-name: Auto-fix errors and restart
+name: Auto Fix & Restart
 
 on:
   push:
-    branches:
-      - main
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+    branches: [ "main" ]
 
 jobs:
   fix_and_restart:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
 
-      - name: Check if requirements.txt exists
+    steps:
+      - name: Клонирование
+        uses: actions/checkout@v4
+
+      - name: Настройка Git (ВАЖНО!)
+        run: |
+          git config --global user.email "bot@megabot.com"
+          git config --global user.name "MegaBot"
+
+      - name: Проверка requirements.txt
         run: |
           if [ ! -f requirements.txt ]; then
-            echo "requirements.txt не найден. Создаю его."
-            echo -e "requests\nbeautifulsoup4" > requirements.txt
-            git add requirements.txt
-            git commit -m "Создан requirements.txt"
-            git push
+            echo "requests" > requirements.txt
+            echo "beautifulsoup4" >> requirements.txt
           fi
 
-      - name: Check if dependencies are correct
+      - name: Удаление лишнего
         run: |
-          if grep -q "unittest" requirements.txt; then
-            echo "Удаляю unittest, так как это встроенная библиотека Python."
-            sed -i '/unittest/d' requirements.txt
-            git add requirements.txt
-            git commit -m "Удален unittest из requirements.txt"
-            git push
-          fi
+          sed -i '/unittest/d' requirements.txt || true
 
-      - name: Update actions if needed
-        run: |
-          echo "Проверка на устаревшие действия..."
-          sed -i 's/actions\/checkout@v2/actions\/checkout@v3/' .github/workflows/ci.yml
-          git add .github/workflows/ci.yml
-          git commit -m "Обновлены действия checkout"
-          git push
+      - name: Установка Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-      - name: Run CI
+      - name: Установка зависимостей
         run: |
-          echo "Перезапуск CI..."
-          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -d '{"event_type": "restart", "client_payload": {}}' \
-          https://api.github.com/repos/${{ github.repository }}/dispatches
+          pip install -r requirements.txt || true
+
+      - name: Запуск бота
+        run: |
+          python main.py || true

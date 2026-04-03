@@ -2,7 +2,7 @@ import requests
 import random
 
 # ================= AI =================
-HF_API_KEY = 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
+HF_API_KEY = "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"
 
 def ask_ai(question):
     API_URL = "https://api-inference.huggingface.co/models/gpt2"

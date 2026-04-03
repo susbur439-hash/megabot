@@ -1,6 +1,10 @@
 import requests
 import random
 
+def log(message):
+    with open("logs.txt", "a", encoding="utf-8") as f:
+        f.write(message + "\n")
+
 # ================= AI =================
 HF_API_KEY = "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"
 

@@ -32,7 +32,11 @@ def run_task(task_text):
 
 if __name__ == "__main__":
     task = "развивай себя"
-    result = run_task(task)
 
-    print("=== RESULT ===")
-    print(result)
+    while True:
+        result = run_task(task)
+
+        print("=== RESULT ===")
+        print(result)
+
+        input("Нажми Enter для следующего цикла...")

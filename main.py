@@ -35,7 +35,7 @@ def run_task(task_text):
 if __name__ == "__main__":
     task = "развивай себя"
 
-    while True:
+    for i in range(5):
         result = run_task(task)
 
         print("=== RESULT ===")

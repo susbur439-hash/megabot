@@ -41,4 +41,5 @@ if __name__ == "__main__":
         print("=== RESULT ===")
         print(result)
 
-        input("Нажми Enter для следующего цикла...")
+        import time
+time.sleep(5)

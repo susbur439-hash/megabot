@@ -7,7 +7,7 @@ def execution(data):
     with open("logs.txt", "a", encoding="utf-8") as f:
         f.write(str(data) + "\n")
 
-    # 🚀 САМОРАЗВИТИЕ
+    # 🚀 саморазвитие
     if data["decision"] == "add_module":
         module_name = "new_module.py"
         module_path = os.path.join("modules", module_name)

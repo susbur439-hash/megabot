@@ -1,18 +1,10 @@
-def load_memory():
-    try:
-        with open("memory.txt", "r", encoding="utf-8") as f:
-            return f.readlines()
-    except:
-        return []
-
-
 def analysis(data):
     task = data["task"]
 
-    memory = load_memory()
+    memory = data.get("memory", [])
 
     # считаем, сколько раз уже делали add_module
-    add_module_count = sum("add_module" in line for line in memory)
+    add_module_count = memory.count("add_module")
 
     if "развивай" in task:
         if add_module_count > 2:

@@ -1,5 +1,10 @@
 import os
 
+def save_to_memory(data):
+    with open("memory.txt", "a", encoding="utf-8") as f:
+        f.write(str(data) + "\n")
+
+
 def execution(data):
     print("EXECUTION:", data["result"])
 
@@ -23,4 +28,8 @@ def execution(data):
             print("ℹ️ Модуль уже существует")
 
     data["log"].append("execution complete")
+
+    # 🧠 СОХРАНЕНИЕ В ПАМЯТЬ
+    save_to_memory(data)
+
     return data

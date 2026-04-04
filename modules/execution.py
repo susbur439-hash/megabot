@@ -1,9 +1,26 @@
+import os
+
 def execution(data):
     print("EXECUTION:", data["result"])
 
-    # 💾 запись в лог (память)
+    # 💾 лог
     with open("logs.txt", "a", encoding="utf-8") as f:
         f.write(str(data) + "\n")
+
+    # 🚀 САМОРАЗВИТИЕ
+    if data["decision"] == "add_module":
+        module_name = "new_module.py"
+        module_path = os.path.join("modules", module_name)
+
+        if not os.path.exists(module_path):
+            with open(module_path, "w", encoding="utf-8") as f:
+                f.write("""def new_module(data):
+    data["log"].append("new module works")
+    return data
+""")
+            print("🔥 Создан новый модуль:", module_name)
+        else:
+            print("ℹ️ Модуль уже существует")
 
     data["log"].append("execution complete")
     return data

@@ -27,9 +27,16 @@ def execution(data):
         else:
             print("ℹ️ Модуль уже существует")
 
+    elif data["decision"] == "change_strategy":
+        print("🧠 Меняю стратегию...")
+        data["result"] = "strategy changed"
+
+    # 🧠 ГЛАВНОЕ — ПАМЯТЬ
+    data["memory"].append(data["decision"])
+
     data["log"].append("execution complete")
 
-    # 🧠 СОХРАНЕНИЕ В ПАМЯТЬ
+    # 💾 (дополнительно, можно оставить)
     save_to_memory(data)
 
     return data

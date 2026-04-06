@@ -37,16 +37,18 @@ if __name__ == "__main__":
 
     print("🚀 Запуск задачи:", task)
 
+    # 🔥 ГЛАВНЫЙ DATA-БЛОК (обновлён)
     data = {
         "task": task,
         "analysis": None,
         "decision": None,
         "result": None,
+        "evaluation": None,  # 🧠 ОЦЕНКА
         "log": [],
         "memory": []
     }
 
-    # 🔥 УВЕЛИЧИЛИ КОЛИЧЕСТВО ЦИКЛОВ
+    # 🔁 ЦИКЛ
     for i in range(7):
         print(f"\n🔁 Цикл {i+1}")
 

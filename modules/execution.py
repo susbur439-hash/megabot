@@ -1,7 +1,6 @@
 import os
 import importlib.util
 import random
-import time
 
 
 # =========================
@@ -90,6 +89,18 @@ def create_new_module():
 
 
 # =========================
+# 📊 РЕАЛЬНАЯ ОЦЕНКА
+# =========================
+def calculate_score(before, after):
+    delta = after - before
+
+    # нормализация
+    score = delta * 10 + random.randint(0, 5)
+
+    return max(0, min(100, score))
+
+
+# =========================
 # 🔥 ГЛАВНАЯ ФУНКЦИЯ
 # =========================
 def execution(data):
@@ -102,6 +113,7 @@ def execution(data):
     data.setdefault("goal", {"progress": 0})
 
     module_used = None
+    real_score = None
 
     best_module, best_score = get_best_module(data["experience"])
 
@@ -111,6 +123,7 @@ def execution(data):
     if data["decision"] == "add_module":
         module_used = create_new_module()
         data["result"] = "module created"
+        real_score = 60  # базовая оценка создания
 
     # =========================
     # 🔄 АЛЬТЕРНАТИВА
@@ -118,6 +131,7 @@ def execution(data):
     elif data["decision"] == "create_alternative":
         module_used = create_new_module()
         data["result"] = "alternative created"
+        real_score = 50
 
     # =========================
     # 🚀 ЗАПУСК
@@ -141,9 +155,8 @@ def execution(data):
 
                 after = data["goal"].get("progress", 0)
 
-                real_score = max(0, min(100, (after - before) * 10 + random.randint(0, 10)))
+                real_score = calculate_score(before, after)
 
-                data["last_score"] = real_score
                 data["result"] = f"module executed ({real_score})"
             else:
                 data["result"] = "module missing"
@@ -164,6 +177,7 @@ def execution(data):
                 module_used = create_new_module()
                 data["ideas"] = []
                 data["result"] = "idea converted to module"
+                real_score = 55
             else:
                 data["result"] = "too many modules"
         else:
@@ -174,6 +188,7 @@ def execution(data):
     # =========================
     elif data["decision"] == "improve_module":
         data["result"] = "module improved"
+        real_score = 65
 
     # =========================
     # ❌ НИЧЕГО
@@ -188,14 +203,15 @@ def execution(data):
     data["memory"] = data["memory"][-100:]
 
     # =========================
-    # 🧠 ОПЫТ
+    # 🧠 ОПЫТ (ФИКС)
     # =========================
     if module_used:
-        score = data.get("last_score", 50)
+        if real_score is None:
+            real_score = 50
 
         data["experience"].append({
             "module": module_used,
-            "score": score
+            "score": real_score
         })
 
         data["experience"] = data["experience"][-100:]
@@ -204,7 +220,7 @@ def execution(data):
     # 📊 ЛОГ
     # =========================
     data["log"].append(
-        f"execution complete (used: {module_used}, best: {best_module}, score: {best_score})"
+        f"execution complete (used: {module_used}, best: {best_module}, best_score: {best_score}, new_score: {real_score})"
     )
 
     save_to_memory(data)

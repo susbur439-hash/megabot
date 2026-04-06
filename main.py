@@ -29,19 +29,31 @@ def run_task(data):
 
 
 if __name__ == "__main__":
+    # 🔥 Получаем задачу из GitHub Actions
+    task = "развивай себя"
+
+    if len(sys.argv) > 1:
+        task = sys.argv[1]
+
+    print("🚀 Запуск задачи:", task)
+
     data = {
-        "task": "развивай себя",
+        "task": task,
         "analysis": None,
         "decision": None,
         "result": None,
         "log": [],
-        "memory": []  # 🧠 ВОТ ЭТО ГЛАВНОЕ
+        "memory": []
     }
 
     for i in range(5):
+        print(f"\n🔁 Цикл {i+1}")
+
         data = run_task(data)
 
         print("=== RESULT ===")
         print(data)
 
         time.sleep(1)
+
+    print("\n✅ Задача завершена")

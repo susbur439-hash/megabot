@@ -1,6 +1,8 @@
 def decision(data):
     memory = data.get("memory", [])
-    evaluation = data.get("evaluation")
+    evaluation = data.get("evaluation", {})
+
+    score = evaluation.get("score", 50)
 
     if data["analysis"] == "self_development":
         data["decision"] = "add_module"
@@ -10,29 +12,33 @@ def decision(data):
         improve_count = memory.count("improve_module")
         run_count = memory.count("run_module")
 
-        # 🔥 НОВОЕ: если плохо → сразу меняем стратегию
-        if evaluation == "bad":
+        # 🔥 1. если очень плохо → сразу смена
+        if score < 30:
             data["decision"] = "create_alternative"
-            data["result"] = "System switches strategy (bad result)"
+            data["result"] = "System escapes bad path"
 
-        # ✅ если хорошо → продолжаем улучшать
+        # 🛠 2. если нормально → улучшаем
         elif improve_count < 2:
             data["decision"] = "improve_module"
             data["result"] = "System improves module"
 
-        # 🚀 потом запускаем
+        # 🚀 3. потом запускаем
         elif run_count < 1:
             data["decision"] = "run_module"
             data["result"] = "System runs module"
 
-        # 🔄 потом альтернатива
+        # 🔄 4. потом ищем альтернативу
         else:
             data["decision"] = "create_alternative"
-            data["result"] = "System switches to alternative"
+            data["result"] = "System explores alternative"
+
+    elif data["analysis"] == "explore":
+        data["decision"] = "create_alternative"
+        data["result"] = "System explores new path"
 
     else:
         data["decision"] = "do_nothing"
         data["result"] = "No action"
 
-    data["log"].append("decision made")
+    data["log"].append(f"decision made (score: {score})")
     return data

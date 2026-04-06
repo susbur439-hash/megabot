@@ -5,6 +5,11 @@ def analysis(data):
     add_module_count = memory.count("add_module")
     run_count = memory.count("run_module")
 
+    # 🔥 НОВОЕ: последние действия (анализ поведения)
+    recent_actions = memory[-3:] if len(memory) >= 3 else memory
+
+    repeated_runs = recent_actions.count("run_module") >= 3
+
     # 🧠 ОЦЕНКА
     last_result = data.get("result")
 
@@ -14,7 +19,6 @@ def analysis(data):
         "score": 50
     }
 
-    # 🔥 НОВОЕ: первый запуск
     if last_result is None:
         evaluation = {
             "result": "neutral",
@@ -66,17 +70,26 @@ def analysis(data):
 
     data["evaluation"] = evaluation
 
-    # 🧠 ЛОГИКА
+    # 🧠 ЛОГИКА (УСИЛЕННАЯ)
     if "развивай" in task:
+
+        # 🔥 1. старт — строим систему
         if add_module_count < 3:
             data["analysis"] = "self_development"
 
+        # 🔥 2. если плохо → меняем стратегию
         elif evaluation["score"] < 30:
             data["analysis"] = "change_strategy"
 
+        # 🔥 3. если ещё не запускали → меняем стратегию
         elif run_count < 1:
             data["analysis"] = "change_strategy"
 
+        # 🔥 4. если застряли (повторяем одно и то же)
+        elif repeated_runs:
+            data["analysis"] = "explore"
+
+        # 🔥 5. нормальное исследование
         else:
             data["analysis"] = "explore"
 
@@ -84,7 +97,7 @@ def analysis(data):
         data["analysis"] = "unknown"
 
     data["log"].append(
-        f"analysis done (score: {evaluation['score']}, reason: {evaluation['reason']})"
+        f"analysis done (score: {evaluation['score']}, reason: {evaluation['reason']}, recent: {recent_actions})"
     )
 
     return data

@@ -1,5 +1,6 @@
 import os
 import importlib.util
+import random
 
 
 def save_to_memory(data):
@@ -24,15 +25,14 @@ def run_python_module(module_path, data):
         return data
 
 
-# 🔥 получаем список всех модулей
+# 🔥 список модулей
 def get_all_modules():
     if not os.path.exists("modules"):
         return []
-
     return [f for f in os.listdir("modules") if f.endswith(".py")]
 
 
-# 🔥 считаем лучший по среднему
+# 🔥 лучший модуль (по среднему)
 def get_best_module(experience):
     stats = {}
 
@@ -40,7 +40,6 @@ def get_best_module(experience):
         if isinstance(exp, dict):
             m = exp.get("module")
             s = exp.get("score", 0)
-
             stats.setdefault(m, []).append(s)
 
     best_module = None
@@ -55,18 +54,53 @@ def get_best_module(experience):
     return best_module, int(best_score)
 
 
-# 🔥 генерация нового модуля
+# 🔥 создание нового модуля (разные стратегии)
 def create_new_module():
     modules = get_all_modules()
     new_id = len(modules) + 1
+
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(f"""def run(data):
-    data["log"].append("module {new_id} executed")
+    module_type = random.choice([
+        "aggressive",
+        "safe",
+        "explorer",
+        "optimizer"
+    ])
+
+    if module_type == "aggressive":
+        code = f"""def run(data):
+    data["log"].append("module {new_id} aggressive")
+    data["goal"]["progress"] += 5
     return data
-""")
+"""
+
+    elif module_type == "safe":
+        code = f"""def run(data):
+    data["log"].append("module {new_id} safe")
+    data["goal"]["progress"] += 2
+    return data
+"""
+
+    elif module_type == "explorer":
+        code = f"""def run(data):
+    data["log"].append("module {new_id} exploring")
+    data["goal"]["progress"] += 3
+    return data
+"""
+
+    else:
+        code = f"""def run(data):
+    data["log"].append("module {new_id} optimizing")
+    data["goal"]["progress"] += 4
+    return data
+"""
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(code)
+
+    print(f"🧠 Создан модуль {new_id} типа: {module_type}")
 
     return name.replace(".py", "")
 
@@ -80,13 +114,13 @@ def execution(data):
 
     best_module, best_score = get_best_module(data.get("experience", []))
 
-    # 🔥 СОЗДАНИЕ (теперь настоящее)
+    # 🚀 СОЗДАНИЕ
     if data["decision"] == "add_module":
         module_used = create_new_module()
         print(f"🔥 Создан модуль: {module_used}")
         data["result"] = "module created"
 
-    # 🛠 УЛУЧШЕНИЕ (усиливаем лучший)
+    # 🛠 УЛУЧШЕНИЕ
     elif data["decision"] == "improve_module":
         if best_module:
             path = os.path.join("modules", best_module + ".py")
@@ -100,7 +134,7 @@ def execution(data):
         else:
             data["result"] = "no module to improve"
 
-    # 🔄 АЛЬТЕРНАТИВА = новый модуль
+    # 🔄 АЛЬТЕРНАТИВА
     elif data["decision"] == "create_alternative":
         module_used = create_new_module()
         print(f"🔄 Альтернатива: {module_used}")
@@ -123,6 +157,26 @@ def execution(data):
             data["result"] = "module executed"
         else:
             data["result"] = "no module to run"
+
+    # 💡 ГЕНЕРАЦИЯ ИДЕИ + ЭВОЛЮЦИЯ
+    elif data["decision"] == "generate_idea":
+        idea = f"Strategy idea based on task: {data['task']}"
+
+        if "ideas" not in data:
+            data["ideas"] = []
+
+        data["ideas"].append(idea)
+
+        print("💡 Идея:", idea)
+
+        # 🔥 превращаем идеи в модуль
+        if len(data["ideas"]) >= 3:
+            module_used = create_new_module()
+            print(f"🧠 Идея превращена в модуль: {module_used}")
+            data["ideas"] = []
+            data["result"] = "idea converted to module"
+        else:
+            data["result"] = "idea generated"
 
     else:
         print("❌ Нет действия")

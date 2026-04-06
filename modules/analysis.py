@@ -1,26 +1,43 @@
 def analysis(data):
-    task = data["task"]
+    task = data.get("task", "")
     memory = data.get("memory", [])
-    experience = data.get("experience", [])  # 🔥 ДОБАВИЛИ
+    experience = data.get("experience", [])
+    goal = data.get("goal", {"progress": 0})
 
+    data.setdefault("log", [])
+
+    # 📊 базовая статистика
     add_module_count = memory.count("add_module")
     run_count = memory.count("run_module")
+    improve_count = memory.count("improve_module")
 
-    # 🔥 последние действия (анализ поведения)
-    recent_actions = memory[-3:] if len(memory) >= 3 else memory
+    recent_actions = memory[-5:] if len(memory) >= 5 else memory
     repeated_runs = recent_actions.count("run_module") >= 3
+    repeated_nothing = recent_actions.count("do_nothing") >= 2
 
-    # 🔥 проверка: есть ли сильный модуль
-    best_score = 0
+    # 🧠 анализ опыта
+    module_stats = {}
     for exp in experience:
         if isinstance(exp, dict):
-            score = exp.get("score", 0)
-            if score > best_score:
-                best_score = score
+            m = exp.get("module")
+            s = exp.get("score", 0)
+            if m:
+                module_stats.setdefault(m, []).append(s)
 
-    has_strong_module = best_score >= 70
+    best_module = None
+    best_score = 0
 
-    # 🧠 ОЦЕНКА
+    for m, scores in module_stats.items():
+        if scores:
+            avg = sum(scores) / len(scores)
+            if avg > best_score:
+                best_score = avg
+                best_module = m
+
+    has_strong_module = best_score >= 75
+    has_any_module = len(module_stats) > 0
+
+    # 🧠 оценка результата
     last_result = data.get("result")
 
     evaluation = {
@@ -30,88 +47,81 @@ def analysis(data):
     }
 
     if last_result is None:
-        evaluation = {
-            "result": "neutral",
-            "reason": "first run",
-            "score": 60
-        }
+        evaluation = {"result": "neutral", "reason": "first run", "score": 60}
 
     elif last_result == "module created":
-        evaluation = {
-            "result": "good",
-            "reason": "created new module",
-            "score": 80
-        }
+        evaluation = {"result": "good", "reason": "created module", "score": 80}
 
     elif last_result == "module improved":
-        evaluation = {
-            "result": "good",
-            "reason": "module improved",
-            "score": 70
-        }
+        evaluation = {"result": "good", "reason": "improved module", "score": 75}
 
     elif last_result == "module executed":
-        evaluation = {
-            "result": "good",
-            "reason": "module executed",
-            "score": 85
-        }
+        evaluation = {"result": "good", "reason": "execution success", "score": 85}
 
     elif last_result == "alternative created":
-        evaluation = {
-            "result": "good",
-            "reason": "new path created",
-            "score": 75
-        }
+        evaluation = {"result": "good", "reason": "new strategy", "score": 78}
 
-    elif last_result == "module already exists":
-        evaluation = {
-            "result": "neutral",
-            "reason": "no progress",
-            "score": 40
-        }
+    elif last_result == "idea generated":
+        evaluation = {"result": "good", "reason": "thinking", "score": 65}
+
+    elif last_result == "idea converted to module":
+        evaluation = {"result": "good", "reason": "idea became module", "score": 82}
+
+    elif last_result == "no module to run":
+        evaluation = {"result": "bad", "reason": "no modules", "score": 25}
 
     elif last_result == "no action":
-        evaluation = {
-            "result": "bad",
-            "reason": "system stuck",
-            "score": 20
-        }
+        evaluation = {"result": "bad", "reason": "stuck", "score": 15}
+
+    elif last_result == "module limit reached":
+        evaluation = {"result": "neutral", "reason": "limit reached", "score": 40}
 
     data["evaluation"] = evaluation
 
-    # 🧠 ЛОГИКА (УСИЛЕННАЯ)
-    if "развивай" in task:
+    # 🎯 ПРОГРЕСС ЦЕЛИ
+    progress = goal.get("progress", 0)
 
-        # 🔥 1. старт — строим систему
-        if add_module_count < 3:
-            data["analysis"] = "self_development"
+    # 🔥 ГЛАВНЫЙ МОЗГ (решение состояния)
+    if "развивай" in task or "определи" in task:
 
-        # 🔥 2. если плохо → меняем стратегию
-        elif evaluation["score"] < 30:
-            data["analysis"] = "change_strategy"
+        # 1. ❌ система сломалась
+        if repeated_nothing or evaluation["score"] < 20:
+            data["analysis"] = "recovery"
 
-        # 🔥 3. если есть сильное решение → используем
+        # 2. 🧱 нет модулей — строим базу
+        elif not has_any_module:
+            data["analysis"] = "bootstrap"
+
+        # 3. 🧪 мало модулей — создаём
+        elif add_module_count < 5:
+            data["analysis"] = "build"
+
+        # 4. 🔥 есть сильный — используем
         elif has_strong_module and not repeated_runs:
             data["analysis"] = "exploit"
 
-        # 🔥 4. если ещё не запускали → меняем стратегию
-        elif run_count < 1:
-            data["analysis"] = "change_strategy"
+        # 5. 🛠 слабый результат — улучшаем
+        elif evaluation["score"] < 60:
+            data["analysis"] = "improve"
 
-        # 🔥 5. если застряли → исследуем
+        # 6. 🔁 зациклились — исследуем
         elif repeated_runs:
             data["analysis"] = "explore"
 
-        # 🔥 6. нормальное исследование
+        # 7. 🧠 высокий прогресс — оптимизируем
+        elif progress > 70:
+            data["analysis"] = "optimize"
+
+        # 8. 💡 нормальное развитие
         else:
             data["analysis"] = "explore"
 
     else:
         data["analysis"] = "unknown"
 
+    # 📘 лог
     data["log"].append(
-        f"analysis done (score: {evaluation['score']}, reason: {evaluation['reason']}, recent: {recent_actions}, best_score: {best_score})"
+        f"analysis: {data['analysis']} | score: {evaluation['score']} | best: {best_module}({best_score}) | recent: {recent_actions}"
     )
 
     return data

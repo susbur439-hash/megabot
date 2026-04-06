@@ -10,7 +10,7 @@ def decision(data):
     score = evaluation.get("score", 50)
     progress = goal.get("progress", 0)
 
-    # 🔥 НАХОДИМ ЛУЧШИЙ МОДУЛЬ (С ЗАЩИТОЙ)
+    # 🔥 НАХОДИМ ЛУЧШИЙ МОДУЛЬ
     best_module = None
     best_score = 0
 
@@ -23,23 +23,24 @@ def decision(data):
                 best_score = exp_score
                 best_module = exp_module
 
-    # 🧠 ФЛАГ: есть ли реально хороший модуль
     has_strong_module = best_module is not None and best_score >= 70
 
-    # 🔥 АДАПТИВНЫЙ ШАНС ИССЛЕДОВАНИЯ (улучшение)
+    # 🔥 АДАПТИВНЫЙ explore
     if progress < 30:
-        explore_chance = 0.5   # много исследуем
+        explore_chance = 0.5
     elif progress < 70:
-        explore_chance = 0.3   # баланс
+        explore_chance = 0.3
     else:
-        explore_chance = 0.1   # почти не рискуем
+        explore_chance = 0.1
 
     analysis_type = data.get("analysis")
 
+    # 🚀 1. САМОРАЗВИТИЕ
     if analysis_type == "self_development":
         data["decision"] = "add_module"
         data["result"] = "System wants to add a new module"
 
+    # 🔄 2. СМЕНА СТРАТЕГИИ
     elif analysis_type == "change_strategy":
         improve_count = memory.count("improve_module")
         run_count = memory.count("run_module")
@@ -50,15 +51,15 @@ def decision(data):
 
         elif has_strong_module:
             if random.random() < explore_chance:
-                data["decision"] = "create_alternative"
-                data["result"] = "Exploring despite good solution"
+                data["decision"] = "generate_idea"   # 🔥 ВАЖНО
+                data["result"] = "Exploring new ideas"
             else:
                 data["decision"] = "run_module"
                 data["result"] = f"Using best module: {best_module} ({best_score})"
 
         elif len(experience) < 3:
-            data["decision"] = "create_alternative"
-            data["result"] = "System gathers experience"
+            data["decision"] = "generate_idea"   # 🔥 ВАЖНО
+            data["result"] = "System gathers ideas"
 
         elif improve_count < 2:
             data["decision"] = "improve_module"
@@ -69,29 +70,30 @@ def decision(data):
             data["result"] = "System runs module"
 
         else:
-            data["decision"] = "create_alternative"
-            data["result"] = "Fallback explore"
+            data["decision"] = "generate_idea"   # 🔥 ВАЖНО
+            data["result"] = "Fallback idea generation"
 
+    # 🔍 3. ИССЛЕДОВАНИЕ (ГЛАВНОЕ ИЗМЕНЕНИЕ)
     elif analysis_type == "explore":
         if has_strong_module:
             if random.random() < explore_chance:
-                data["decision"] = "create_alternative"
-                data["result"] = "Exploring new path"
+                data["decision"] = "generate_idea"   # 🔥 КЛЮЧЕВОЕ
+                data["result"] = "Generating new idea"
             else:
                 data["decision"] = "run_module"
                 data["result"] = f"Exploit best module: {best_module} ({best_score})"
         else:
-            data["decision"] = "create_alternative"
-            data["result"] = "Exploring new path"
+            data["decision"] = "generate_idea"   # 🔥 КЛЮЧЕВОЕ
+            data["result"] = "Generating new idea"
 
-    # 🔥 НОВОЕ СОСТОЯНИЕ (из analysis)
+    # 🎯 4. ЭКСПЛУАТАЦИЯ
     elif analysis_type == "exploit":
         if has_strong_module:
             data["decision"] = "run_module"
             data["result"] = f"Focused exploit: {best_module} ({best_score})"
         else:
-            data["decision"] = "create_alternative"
-            data["result"] = "No strong module, fallback explore"
+            data["decision"] = "generate_idea"
+            data["result"] = "No strong module, generating idea"
 
     else:
         data["decision"] = "do_nothing"

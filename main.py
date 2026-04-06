@@ -8,9 +8,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from modules.analysis import analysis
 from modules.decision import decision
-from modules.action import action
 from modules.execution import execution
-from modules.goals import set_goal, update_goal  # 🔥 НОВОЕ
+from modules.goals import set_goal, update_goal
 
 
 def run_task(data):
@@ -23,10 +22,7 @@ def run_task(data):
     # 🧠 DECISION
     data = decision(data)
 
-    # ⚡ ACTION
-    data = action(data)
-
-    # 🛠 EXECUTION
+    # 🛠 EXECUTION (сразу!)
     data = execution(data)
 
     # 📈 ОБНОВЛЕНИЕ ЦЕЛИ
@@ -36,7 +32,6 @@ def run_task(data):
 
 
 if __name__ == "__main__":
-    # 🔥 Получаем задачу из GitHub Actions
     task = "развивай себя"
 
     if len(sys.argv) > 1:
@@ -44,19 +39,17 @@ if __name__ == "__main__":
 
     print("🚀 Запуск задачи:", task)
 
-    # 🔥 ГЛАВНЫЙ DATA-БЛОК
     data = {
         "task": task,
         "analysis": None,
         "decision": None,
         "result": None,
         "evaluation": None,
-        "goal": None,  # 🔥 НОВОЕ
+        "goal": None,
         "log": [],
         "memory": []
     }
 
-    # 🔁 ЦИКЛ
     for i in range(7):
         print(f"\n🔁 Цикл {i+1}")
 

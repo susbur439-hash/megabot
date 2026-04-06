@@ -94,10 +94,20 @@ def create_new_module():
 def calculate_score(before, after):
     delta = after - before
 
-    # нормализация
     score = delta * 10 + random.randint(0, 5)
 
     return max(0, min(100, score))
+
+
+# =========================
+# 🔁 ПРОВЕРКА ЗАСТРЕВАНИЯ
+# =========================
+def is_stuck(memory):
+    if len(memory) < 5:
+        return False
+
+    last = memory[-5:]
+    return len(set(last)) == 1  # все одинаковые
 
 
 # =========================
@@ -118,12 +128,22 @@ def execution(data):
     best_module, best_score = get_best_module(data["experience"])
 
     # =========================
-    # 🚀 СОЗДАНИЕ
+    # 🚀 СОЗДАНИЕ + ТЕСТ
     # =========================
     if data["decision"] == "add_module":
         module_used = create_new_module()
-        data["result"] = "module created"
-        real_score = 60  # базовая оценка создания
+
+        path = os.path.join("modules", module_used + ".py")
+
+        before = data["goal"].get("progress", 0)
+
+        data = run_python_module(path, data)
+
+        after = data["goal"].get("progress", 0)
+
+        real_score = calculate_score(before, after)
+
+        data["result"] = f"module created & tested ({real_score})"
 
     # =========================
     # 🔄 АЛЬТЕРНАТИВА
@@ -138,9 +158,16 @@ def execution(data):
     # =========================
     elif data["decision"] == "run_module":
 
-        if best_module:
-            module_used = best_module
+        # 🔥 если застряли — не используем лучший
+        if is_stuck(data["memory"]):
+            modules = get_all_modules()
+            if modules:
+                module_used = random.choice(modules).replace(".py", "")
+                data["log"].append("⚠️ anti-stuck: random module selected")
         else:
+            module_used = best_module
+
+        if not module_used:
             modules = get_all_modules()
             if modules:
                 module_used = modules[0].replace(".py", "")
@@ -175,9 +202,18 @@ def execution(data):
         if len(data["ideas"]) >= 3:
             if len(get_all_modules()) < 20:
                 module_used = create_new_module()
+
+                # 🔥 сразу тест
+                path = os.path.join("modules", module_used + ".py")
+
+                before = data["goal"].get("progress", 0)
+                data = run_python_module(path, data)
+                after = data["goal"].get("progress", 0)
+
+                real_score = calculate_score(before, after)
+
                 data["ideas"] = []
-                data["result"] = "idea converted to module"
-                real_score = 55
+                data["result"] = f"idea → module ({real_score})"
             else:
                 data["result"] = "too many modules"
         else:
@@ -203,15 +239,19 @@ def execution(data):
     data["memory"] = data["memory"][-100:]
 
     # =========================
-    # 🧠 ОПЫТ (ФИКС)
+    # 🧠 ОПЫТ
     # =========================
     if module_used:
         if real_score is None:
             real_score = 50
 
+        # 🔥 штраф за повтор
+        if module_used == best_module:
+            real_score -= 5
+
         data["experience"].append({
             "module": module_used,
-            "score": real_score
+            "score": max(0, real_score)
         })
 
         data["experience"] = data["experience"][-100:]

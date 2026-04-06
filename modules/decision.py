@@ -1,16 +1,20 @@
 def decision(data):
+    memory = data.get("memory", [])
+
     if data["analysis"] == "self_development":
         data["decision"] = "add_module"
         data["result"] = "System wants to add a new module"
 
     elif data["analysis"] == "change_strategy":
-        # 🔥 НОВОЕ ПОВЕДЕНИЕ
-        if "change_strategy" not in data.get("memory", []):
+        # 🧠 умная смена стратегии
+        improve_count = memory.count("improve_module")
+
+        if improve_count < 2:
             data["decision"] = "improve_module"
-            data["result"] = "System tries to improve existing module"
+            data["result"] = "System tries to improve module"
         else:
             data["decision"] = "create_alternative"
-            data["result"] = "System tries alternative approach"
+            data["result"] = "System switches to alternative"
 
     else:
         data["decision"] = "do_nothing"

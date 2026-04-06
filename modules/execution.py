@@ -54,7 +54,34 @@ def get_best_module(experience):
     return best_module, int(best_score)
 
 
-# 🔥 создание нового модуля (разные стратегии)
+# 🔥 УДАЛЕНИЕ СЛАБЫХ МОДУЛЕЙ (LEVEL 6)
+def cleanup_modules(experience):
+    stats = {}
+
+    for exp in experience:
+        if isinstance(exp, dict):
+            m = exp.get("module")
+            s = exp.get("score", 0)
+            stats.setdefault(m, []).append(s)
+
+    for m, scores in stats.items():
+        if len(scores) < 3:
+            continue
+
+        avg = sum(scores) / len(scores)
+
+        if avg < 50:
+            path = os.path.join("modules", m + ".py")
+
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                    print(f"🗑 Удален слабый модуль: {m} (avg={int(avg)})")
+                except Exception as e:
+                    print(f"⚠️ Ошибка удаления {m}:", e)
+
+
+# 🔥 создание нового модуля
 def create_new_module():
     modules = get_all_modules()
     new_id = len(modules) + 1
@@ -75,21 +102,18 @@ def create_new_module():
     data["goal"]["progress"] += 5
     return data
 """
-
     elif module_type == "safe":
         code = f"""def run(data):
     data["log"].append("module {new_id} safe")
     data["goal"]["progress"] += 2
     return data
 """
-
     elif module_type == "explorer":
         code = f"""def run(data):
     data["log"].append("module {new_id} exploring")
     data["goal"]["progress"] += 3
     return data
 """
-
     else:
         code = f"""def run(data):
     data["log"].append("module {new_id} optimizing")
@@ -126,11 +150,14 @@ def execution(data):
             path = os.path.join("modules", best_module + ".py")
             module_used = best_module
 
-            with open(path, "a", encoding="utf-8") as f:
-                f.write("\n# improved\n")
-
-            print(f"🛠 Улучшен: {best_module}")
-            data["result"] = "module improved"
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write("\n# improved\n")
+                print(f"🛠 Улучшен: {best_module}")
+                data["result"] = "module improved"
+            except Exception as e:
+                print("⚠️ Ошибка улучшения:", e)
+                data["result"] = "improve failed"
         else:
             data["result"] = "no module to improve"
 
@@ -158,7 +185,7 @@ def execution(data):
         else:
             data["result"] = "no module to run"
 
-    # 💡 ГЕНЕРАЦИЯ ИДЕИ + ЭВОЛЮЦИЯ
+    # 💡 ИДЕИ
     elif data["decision"] == "generate_idea":
         idea = f"Strategy idea based on task: {data['task']}"
 
@@ -169,7 +196,6 @@ def execution(data):
 
         print("💡 Идея:", idea)
 
-        # 🔥 превращаем идеи в модуль
         if len(data["ideas"]) >= 3:
             module_used = create_new_module()
             print(f"🧠 Идея превращена в модуль: {module_used}")
@@ -201,6 +227,9 @@ def execution(data):
 
         if len(data["experience"]) > 100:
             data["experience"] = data["experience"][-100:]
+
+    # 🔥 ЭВОЛЮЦИЯ (ОЧИСТКА)
+    cleanup_modules(data.get("experience", []))
 
     data["log"].append(
         f"execution complete (used: {module_used}, best: {best_module})"

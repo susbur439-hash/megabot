@@ -1,6 +1,5 @@
 def analysis(data):
     task = data["task"]
-
     memory = data.get("memory", [])
 
     # считаем, сколько раз уже делали add_module
@@ -14,5 +13,20 @@ def analysis(data):
     else:
         data["analysis"] = "unknown"
 
-    data["log"].append("analysis done")
+    # 🧠 НОВОЕ — ОЦЕНКА РЕЗУЛЬТАТА
+    last_result = data.get("result")
+
+    if last_result == "no action":
+        data["evaluation"] = "bad"
+    elif last_result in [
+        "module improved",
+        "module created",
+        "module executed",
+        "alternative created"
+    ]:
+        data["evaluation"] = "good"
+    else:
+        data["evaluation"] = "neutral"
+
+    data["log"].append(f"analysis done (eval: {data['evaluation']})")
     return data

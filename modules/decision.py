@@ -2,19 +2,26 @@ def decision(data):
     memory = data.get("memory", [])
     evaluation = data.get("evaluation", {})
     goal = data.get("goal", {})
-    experience = data.get("experience", [])  # 🔥 ДОБАВИЛИ
+    experience = data.get("experience", [])
 
     score = evaluation.get("score", 50)
     progress = goal.get("progress", 0)
 
-    # 🔥 НАХОДИМ ЛУЧШИЙ МОДУЛЬ
+    # 🔥 НАХОДИМ ЛУЧШИЙ МОДУЛЬ (С ЗАЩИТОЙ)
     best_module = None
     best_score = 0
 
     for exp in experience:
-        if exp["score"] > best_score:
-            best_score = exp["score"]
-            best_module = exp["module"]
+        if isinstance(exp, dict):
+            exp_score = exp.get("score", 0)
+            exp_module = exp.get("module")
+
+            if exp_score > best_score:
+                best_score = exp_score
+                best_module = exp_module
+
+    # 🧠 ФЛАГ: есть ли реально хороший модуль
+    has_strong_module = best_module is not None and best_score >= 70
 
     if data["analysis"] == "self_development":
         data["decision"] = "add_module"
@@ -29,35 +36,35 @@ def decision(data):
             data["decision"] = "create_alternative"
             data["result"] = "System escapes bad path"
 
-        # 🔥 2. ЕСЛИ МАЛО ОПЫТА → ИССЛЕДУЕМ
+        # 🔥 2. ЕСЛИ ЕСТЬ СИЛЬНОЕ РЕШЕНИЕ → ИСПОЛЬЗУЕМ СРАЗУ
+        elif has_strong_module:
+            data["decision"] = "run_module"
+            data["result"] = f"Using best module: {best_module} ({best_score})"
+
+        # 🔥 3. ЕСЛИ МАЛО ОПЫТА → ИССЛЕДУЕМ
         elif len(experience) < 3:
             data["decision"] = "create_alternative"
             data["result"] = "System gathers experience"
 
-        # 🛠 3. УЛУЧШАЕМ
+        # 🛠 4. УЛУЧШАЕМ
         elif improve_count < 2:
             data["decision"] = "improve_module"
             data["result"] = "System improves module"
 
-        # 🚀 4. ЗАПУСК
+        # 🚀 5. ЗАПУСК
         elif run_count < 1:
             data["decision"] = "run_module"
             data["result"] = "System runs module"
-
-        # 🔥 5. ИСПОЛЬЗУЕМ ЛУЧШЕЕ
-        elif best_module:
-            data["decision"] = "run_module"
-            data["result"] = f"Using best module: {best_module} ({best_score})"
 
         else:
             data["decision"] = "create_alternative"
             data["result"] = "Fallback explore"
 
     elif data["analysis"] == "explore":
-        # 🔥 ВАЖНО — теперь используем опыт
-        if best_module and best_score > 60:
+        # 🔥 теперь логика умнее
+        if has_strong_module:
             data["decision"] = "run_module"
-            data["result"] = f"Exploit best module: {best_module}"
+            data["result"] = f"Exploit best module: {best_module} ({best_score})"
         else:
             data["decision"] = "create_alternative"
             data["result"] = "Exploring new path"
@@ -67,7 +74,7 @@ def decision(data):
         data["result"] = "No action"
 
     data["log"].append(
-        f"decision made (score: {score}, progress: {progress}, best: {best_module})"
+        f"decision made (score: {score}, progress: {progress}, best: {best_module}, best_score: {best_score})"
     )
 
     return data

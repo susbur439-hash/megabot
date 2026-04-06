@@ -1,14 +1,24 @@
 def analysis(data):
     task = data["task"]
     memory = data.get("memory", [])
+    experience = data.get("experience", [])  # 🔥 ДОБАВИЛИ
 
     add_module_count = memory.count("add_module")
     run_count = memory.count("run_module")
 
-    # 🔥 НОВОЕ: последние действия (анализ поведения)
+    # 🔥 последние действия (анализ поведения)
     recent_actions = memory[-3:] if len(memory) >= 3 else memory
-
     repeated_runs = recent_actions.count("run_module") >= 3
+
+    # 🔥 проверка: есть ли сильный модуль
+    best_score = 0
+    for exp in experience:
+        if isinstance(exp, dict):
+            score = exp.get("score", 0)
+            if score > best_score:
+                best_score = score
+
+    has_strong_module = best_score >= 70
 
     # 🧠 ОЦЕНКА
     last_result = data.get("result")
@@ -81,15 +91,19 @@ def analysis(data):
         elif evaluation["score"] < 30:
             data["analysis"] = "change_strategy"
 
-        # 🔥 3. если ещё не запускали → меняем стратегию
+        # 🔥 3. если есть сильное решение → используем
+        elif has_strong_module and not repeated_runs:
+            data["analysis"] = "exploit"
+
+        # 🔥 4. если ещё не запускали → меняем стратегию
         elif run_count < 1:
             data["analysis"] = "change_strategy"
 
-        # 🔥 4. если застряли (повторяем одно и то же)
+        # 🔥 5. если застряли → исследуем
         elif repeated_runs:
             data["analysis"] = "explore"
 
-        # 🔥 5. нормальное исследование
+        # 🔥 6. нормальное исследование
         else:
             data["analysis"] = "explore"
 
@@ -97,7 +111,7 @@ def analysis(data):
         data["analysis"] = "unknown"
 
     data["log"].append(
-        f"analysis done (score: {evaluation['score']}, reason: {evaluation['reason']}, recent: {recent_actions})"
+        f"analysis done (score: {evaluation['score']}, reason: {evaluation['reason']}, recent: {recent_actions}, best_score: {best_score})"
     )
 
     return data

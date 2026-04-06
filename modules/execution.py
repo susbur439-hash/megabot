@@ -38,7 +38,7 @@ def execution(data):
 
     module_used = None
 
-    # 🔥 ВЫБОР ЛУЧШЕГО МОДУЛЯ (НОВОЕ)
+    # 🔥 ВЫБОР ЛУЧШЕГО МОДУЛЯ
     best_module = None
     best_score = 0
 
@@ -67,7 +67,7 @@ def execution(data):
             print("ℹ️ Модуль уже существует")
             data["result"] = "module already exists"
 
-    # 🛠 2. УЛУЧШЕНИЕ (УЛУЧШЕНО)
+    # 🛠 2. УЛУЧШЕНИЕ
     elif data["decision"] == "improve_module":
         module_path = os.path.join("modules", "new_module.py")
         module_used = "new_module"
@@ -98,10 +98,9 @@ def execution(data):
             print("ℹ️ Альтернативный модуль уже существует")
             data["result"] = "alternative exists"
 
-    # 🔥 4. ЗАПУСК (УЛУЧШЕНО)
+    # 🔥 4. ЗАПУСК
     elif data["decision"] == "run_module":
 
-        # 🔥 если есть лучший — используем его
         if best_module == "alt_module":
             module_path = os.path.join("modules", "alt_module.py")
             module_used = "alt_module"
@@ -117,6 +116,19 @@ def execution(data):
             print("⚠️ Нет модуля для запуска")
             data["result"] = "no module to run"
 
+    # 💡 5. ГЕНЕРАЦИЯ ИДЕИ (🔥 ДОБАВИЛИ)
+    elif data["decision"] == "generate_idea":
+        idea = f"Idea based on task: {data['task']}"
+
+        if "ideas" not in data:
+            data["ideas"] = []
+
+        data["ideas"].append(idea)
+
+        print("💡 Сгенерирована идея:", idea)
+
+        data["result"] = "idea generated"
+
     else:
         print("❌ Нет действия")
         data["result"] = "no action"
@@ -124,7 +136,7 @@ def execution(data):
     # 🧠 ПАМЯТЬ
     data["memory"].append(data["decision"])
 
-    # 🔥🔥🔥 ОПЫТ (УЛУЧШЕН)
+    # 🔥 ОПЫТ
     if "experience" not in data:
         data["experience"] = []
 
@@ -137,7 +149,6 @@ def execution(data):
             "score": score
         })
 
-        # 🔥 ОГРАНИЧЕНИЕ ПАМЯТИ (НОВОЕ)
         if len(data["experience"]) > 50:
             data["experience"] = data["experience"][-50:]
 

@@ -1,3 +1,6 @@
+import random  # 🔥 ДОБАВИЛИ
+
+
 def decision(data):
     memory = data.get("memory", [])
     evaluation = data.get("evaluation", {})
@@ -23,6 +26,9 @@ def decision(data):
     # 🧠 ФЛАГ: есть ли реально хороший модуль
     has_strong_module = best_module is not None and best_score >= 70
 
+    # 🔥 НОВОЕ: шанс исследования
+    explore_chance = 0.3  # 30%
+
     if data["analysis"] == "self_development":
         data["decision"] = "add_module"
         data["result"] = "System wants to add a new module"
@@ -36,10 +42,14 @@ def decision(data):
             data["decision"] = "create_alternative"
             data["result"] = "System escapes bad path"
 
-        # 🔥 2. ЕСЛИ ЕСТЬ СИЛЬНОЕ РЕШЕНИЕ → ИСПОЛЬЗУЕМ СРАЗУ
+        # 🔥 2. ЕСЛИ ЕСТЬ СИЛЬНОЕ РЕШЕНИЕ → БАЛАНС
         elif has_strong_module:
-            data["decision"] = "run_module"
-            data["result"] = f"Using best module: {best_module} ({best_score})"
+            if random.random() < explore_chance:
+                data["decision"] = "create_alternative"
+                data["result"] = "Exploring despite good solution"
+            else:
+                data["decision"] = "run_module"
+                data["result"] = f"Using best module: {best_module} ({best_score})"
 
         # 🔥 3. ЕСЛИ МАЛО ОПЫТА → ИССЛЕДУЕМ
         elif len(experience) < 3:
@@ -61,10 +71,14 @@ def decision(data):
             data["result"] = "Fallback explore"
 
     elif data["analysis"] == "explore":
-        # 🔥 теперь логика умнее
+        # 🔥 тоже баланс добавили
         if has_strong_module:
-            data["decision"] = "run_module"
-            data["result"] = f"Exploit best module: {best_module} ({best_score})"
+            if random.random() < explore_chance:
+                data["decision"] = "create_alternative"
+                data["result"] = "Exploring new path"
+            else:
+                data["decision"] = "run_module"
+                data["result"] = f"Exploit best module: {best_module} ({best_score})"
         else:
             data["decision"] = "create_alternative"
             data["result"] = "Exploring new path"

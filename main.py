@@ -10,9 +10,13 @@ from modules.analysis import analysis
 from modules.decision import decision
 from modules.action import action
 from modules.execution import execution
+from modules.goals import set_goal, update_goal  # 🔥 НОВОЕ
 
 
 def run_task(data):
+    # 🎯 УСТАНОВКА ЦЕЛИ
+    data = set_goal(data)
+
     # 🔍 ANALYSIS
     data = analysis(data)
 
@@ -24,6 +28,9 @@ def run_task(data):
 
     # 🛠 EXECUTION
     data = execution(data)
+
+    # 📈 ОБНОВЛЕНИЕ ЦЕЛИ
+    data = update_goal(data)
 
     return data
 
@@ -37,13 +44,14 @@ if __name__ == "__main__":
 
     print("🚀 Запуск задачи:", task)
 
-    # 🔥 ГЛАВНЫЙ DATA-БЛОК (обновлён)
+    # 🔥 ГЛАВНЫЙ DATA-БЛОК
     data = {
         "task": task,
         "analysis": None,
         "decision": None,
         "result": None,
-        "evaluation": None,  # 🧠 ОЦЕНКА
+        "evaluation": None,
+        "goal": None,  # 🔥 НОВОЕ
         "log": [],
         "memory": []
     }

@@ -14,7 +14,15 @@ def analysis(data):
         "score": 50
     }
 
-    if last_result == "module created":
+    # 🔥 НОВОЕ: первый запуск
+    if last_result is None:
+        evaluation = {
+            "result": "neutral",
+            "reason": "first run",
+            "score": 60
+        }
+
+    elif last_result == "module created":
         evaluation = {
             "result": "good",
             "reason": "created new module",

@@ -46,7 +46,8 @@ if __name__ == "__main__":
         "memory": []
     }
 
-    for i in range(5):
+    # 🔥 УВЕЛИЧИЛИ КОЛИЧЕСТВО ЦИКЛОВ
+    for i in range(7):
         print(f"\n🔁 Цикл {i+1}")
 
         data = run_task(data)

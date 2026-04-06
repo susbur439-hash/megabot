@@ -3,8 +3,6 @@ import importlib.util
 import random
 import time
 
-from modules.decision import decision
-
 
 # =========================
 # 💾 СОХРАНЕНИЕ
@@ -77,9 +75,11 @@ def create_new_module():
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
+    boost = random.randint(2, 8)
+
     code = f"""def run(data):
-    data["log"].append("module {new_id} running")
-    data["goal"]["progress"] = data["goal"].get("progress", 0) + {random.randint(2,6)}
+    data["log"].append("module {new_id} running (boost {boost})")
+    data["goal"]["progress"] = data["goal"].get("progress", 0) + {boost}
     return data
 """
 
@@ -100,11 +100,6 @@ def execution(data):
     data.setdefault("memory", [])
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
-
-    # =========================
-    # 🧠 DECISION
-    # =========================
-    data = decision(data)
 
     module_used = None
 
@@ -140,8 +135,16 @@ def execution(data):
             path = os.path.join("modules", module_used + ".py")
 
             if os.path.exists(path):
+                before = data["goal"].get("progress", 0)
+
                 data = run_python_module(path, data)
-                data["result"] = "module executed"
+
+                after = data["goal"].get("progress", 0)
+
+                real_score = max(0, min(100, (after - before) * 10 + random.randint(0, 10)))
+
+                data["last_score"] = real_score
+                data["result"] = f"module executed ({real_score})"
             else:
                 data["result"] = "module missing"
         else:
@@ -157,9 +160,12 @@ def execution(data):
         data["ideas"].append(idea)
 
         if len(data["ideas"]) >= 3:
-            module_used = create_new_module()
-            data["ideas"] = []
-            data["result"] = "idea converted to module"
+            if len(get_all_modules()) < 20:
+                module_used = create_new_module()
+                data["ideas"] = []
+                data["result"] = "idea converted to module"
+            else:
+                data["result"] = "too many modules"
         else:
             data["result"] = "idea generated"
 
@@ -185,9 +191,11 @@ def execution(data):
     # 🧠 ОПЫТ
     # =========================
     if module_used:
+        score = data.get("last_score", 50)
+
         data["experience"].append({
             "module": module_used,
-            "score": data.get("evaluation", {}).get("score", 50)
+            "score": score
         })
 
         data["experience"] = data["experience"][-100:]

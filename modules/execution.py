@@ -1,9 +1,30 @@
 import os
+import importlib.util  # 🔥 ДОБАВИЛИ
 
 
 def save_to_memory(data):
     with open("memory.txt", "a", encoding="utf-8") as f:
         f.write(str(data) + "\n")
+
+
+# 🔥 ДОБАВИЛИ ФУНКЦИЮ ЗАПУСКА
+def run_python_module(module_path, data):
+    try:
+        spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        if hasattr(module, "new_module"):
+            return module.new_module(data)
+        elif hasattr(module, "alt_module"):
+            return module.alt_module(data)
+        else:
+            print("⚠️ Нет функции для запуска")
+            return data
+
+    except Exception as e:
+        print("❌ Ошибка при запуске модуля:", e)
+        return data
 
 
 def execution(data):
@@ -60,6 +81,18 @@ def execution(data):
         else:
             print("ℹ️ Альтернативный модуль уже существует")
             data["result"] = "alternative exists"
+
+    # 🔥 4. ЗАПУСК МОДУЛЯ (НОВОЕ)
+    elif data["decision"] == "run_module":
+        module_path = os.path.join("modules", "new_module.py")
+
+        if os.path.exists(module_path):
+            print("🚀 Запускаю модуль...")
+            data = run_python_module(module_path, data)
+            data["result"] = "module executed"
+        else:
+            print("⚠️ Нет модуля для запуска")
+            data["result"] = "no module to run"
 
     else:
         print("❌ Нет действия")

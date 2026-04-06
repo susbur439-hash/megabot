@@ -1,5 +1,5 @@
 import os
-import importlib.util  # 🔥 ДОБАВИЛИ
+import importlib.util
 
 
 def save_to_memory(data):
@@ -7,7 +7,6 @@ def save_to_memory(data):
         f.write(str(data) + "\n")
 
 
-# 🔥 ДОБАВИЛИ ФУНКЦИЮ ЗАПУСКА
 def run_python_module(module_path, data):
     try:
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
@@ -34,12 +33,24 @@ def execution(data):
     with open("logs.txt", "a", encoding="utf-8") as f:
         f.write(str(data) + "\n")
 
-    # 📁 гарантируем, что папка есть
+    # 📁 гарантируем папку
     os.makedirs("modules", exist_ok=True)
 
-    module_used = None  # 🔥 НОВОЕ (для опыта)
+    module_used = None
 
-    # 🚀 1. СОЗДАНИЕ МОДУЛЯ
+    # 🔥 ВЫБОР ЛУЧШЕГО МОДУЛЯ (НОВОЕ)
+    best_module = None
+    best_score = 0
+
+    for exp in data.get("experience", []):
+        if isinstance(exp, dict):
+            s = exp.get("score", 0)
+            m = exp.get("module")
+            if s > best_score:
+                best_score = s
+                best_module = m
+
+    # 🚀 1. СОЗДАНИЕ
     if data["decision"] == "add_module":
         module_path = os.path.join("modules", "new_module.py")
         module_used = "new_module"
@@ -56,14 +67,14 @@ def execution(data):
             print("ℹ️ Модуль уже существует")
             data["result"] = "module already exists"
 
-    # 🛠 2. УЛУЧШЕНИЕ
+    # 🛠 2. УЛУЧШЕНИЕ (УЛУЧШЕНО)
     elif data["decision"] == "improve_module":
         module_path = os.path.join("modules", "new_module.py")
         module_used = "new_module"
 
         if os.path.exists(module_path):
             with open(module_path, "a", encoding="utf-8") as f:
-                f.write("\n# improvement added\n")
+                f.write(f"\n# improvement score boost attempt\n")
             print("🛠 Улучшил модуль")
             data["result"] = "module improved"
         else:
@@ -87,13 +98,19 @@ def execution(data):
             print("ℹ️ Альтернативный модуль уже существует")
             data["result"] = "alternative exists"
 
-    # 🔥 4. ЗАПУСК МОДУЛЯ
+    # 🔥 4. ЗАПУСК (УЛУЧШЕНО)
     elif data["decision"] == "run_module":
-        module_path = os.path.join("modules", "new_module.py")
-        module_used = "new_module"
+
+        # 🔥 если есть лучший — используем его
+        if best_module == "alt_module":
+            module_path = os.path.join("modules", "alt_module.py")
+            module_used = "alt_module"
+        else:
+            module_path = os.path.join("modules", "new_module.py")
+            module_used = "new_module"
 
         if os.path.exists(module_path):
-            print("🚀 Запускаю модуль...")
+            print(f"🚀 Запускаю модуль: {module_used}")
             data = run_python_module(module_path, data)
             data["result"] = "module executed"
         else:
@@ -107,7 +124,7 @@ def execution(data):
     # 🧠 ПАМЯТЬ
     data["memory"].append(data["decision"])
 
-    # 🔥🔥🔥 НОВОЕ — ОПЫТ (САМОЕ ВАЖНОЕ)
+    # 🔥🔥🔥 ОПЫТ (УЛУЧШЕН)
     if "experience" not in data:
         data["experience"] = []
 
@@ -120,7 +137,11 @@ def execution(data):
             "score": score
         })
 
-    data["log"].append("execution complete")
+        # 🔥 ОГРАНИЧЕНИЕ ПАМЯТИ (НОВОЕ)
+        if len(data["experience"]) > 50:
+            data["experience"] = data["experience"][-50:]
+
+    data["log"].append(f"execution complete (used: {module_used}, best: {best_module})")
 
     # 💾 файл памяти
     save_to_memory(data)

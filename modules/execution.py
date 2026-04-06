@@ -63,6 +63,25 @@ def get_best_module(experience):
 
 
 # =========================
+# 🧠 ХУДШИЙ МОДУЛЬ
+# =========================
+def get_worst_module(experience):
+    worst_module = None
+    worst_score = 999
+
+    for exp in experience:
+        if isinstance(exp, dict):
+            score = exp.get("score", 0)
+            module = exp.get("module")
+
+            if score < worst_score:
+                worst_score = score
+                worst_module = module
+
+    return worst_module, worst_score
+
+
+# =========================
 # 🧠 СОЗДАНИЕ МОДУЛЯ
 # =========================
 def create_new_module():
@@ -74,11 +93,12 @@ def create_new_module():
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    boost = random.randint(2, 8)
+    boost = random.randint(1, 10)
 
     code = f"""def run(data):
-    data["log"].append("module {new_id} running (boost {boost})")
-    data["goal"]["progress"] = data["goal"].get("progress", 0) + {boost}
+    boost = {boost}
+    data["log"].append(f"module {new_id} running (boost {{boost}})")
+    data["goal"]["progress"] = data["goal"].get("progress", 0) + boost
     return data
 """
 
@@ -89,25 +109,34 @@ def create_new_module():
 
 
 # =========================
-# 📊 РЕАЛЬНАЯ ОЦЕНКА
+# 📊 ОЦЕНКА
 # =========================
 def calculate_score(before, after):
     delta = after - before
 
-    score = delta * 10 + random.randint(0, 5)
+    score = delta * 10
+
+    # шум (чтобы не было одинаково)
+    score += random.randint(-5, 5)
 
     return max(0, min(100, score))
 
 
 # =========================
-# 🔁 ПРОВЕРКА ЗАСТРЕВАНИЯ
+# 🧹 УДАЛЕНИЕ СЛАБЫХ МОДУЛЕЙ
 # =========================
-def is_stuck(memory):
-    if len(memory) < 5:
-        return False
+def cleanup_modules(data):
+    if len(data["experience"]) < 5:
+        return
 
-    last = memory[-5:]
-    return len(set(last)) == 1  # все одинаковые
+    worst_module, worst_score = get_worst_module(data["experience"])
+
+    if worst_score < 20:
+        path = os.path.join("modules", worst_module + ".py")
+
+        if os.path.exists(path):
+            os.remove(path)
+            data["log"].append(f"🗑 removed weak module: {worst_module}")
 
 
 # =========================
@@ -128,103 +157,61 @@ def execution(data):
     best_module, best_score = get_best_module(data["experience"])
 
     # =========================
-    # 🚀 СОЗДАНИЕ + ТЕСТ
+    # 🧠 РЕЖИМ: ИССЛЕДОВАНИЕ / ИСПОЛЬЗОВАНИЕ
     # =========================
-    if data["decision"] == "add_module":
-        module_used = create_new_module()
+    explore = random.random() < 0.3  # 30% исследует
 
+    # =========================
+    # 🚀 СОЗДАНИЕ
+    # =========================
+    if data["decision"] == "add_module" or explore:
+        module_used = create_new_module()
+        data["result"] = "module created"
+
+        # сразу тестим
         path = os.path.join("modules", module_used + ".py")
 
         before = data["goal"].get("progress", 0)
-
         data = run_python_module(path, data)
-
         after = data["goal"].get("progress", 0)
 
         real_score = calculate_score(before, after)
-
-        data["result"] = f"module created & tested ({real_score})"
-
-    # =========================
-    # 🔄 АЛЬТЕРНАТИВА
-    # =========================
-    elif data["decision"] == "create_alternative":
-        module_used = create_new_module()
-        data["result"] = "alternative created"
-        real_score = 50
+        data["result"] += f" & tested ({real_score})"
 
     # =========================
-    # 🚀 ЗАПУСК
+    # 🚀 ЗАПУСК ЛУЧШЕГО
     # =========================
     elif data["decision"] == "run_module":
 
-        # 🔥 если застряли — не используем лучший
-        if is_stuck(data["memory"]):
-            modules = get_all_modules()
-            if modules:
-                module_used = random.choice(modules).replace(".py", "")
-                data["log"].append("⚠️ anti-stuck: random module selected")
-        else:
+        if best_module:
             module_used = best_module
-
-        if not module_used:
-            modules = get_all_modules()
-            if modules:
-                module_used = modules[0].replace(".py", "")
 
         if module_used:
             path = os.path.join("modules", module_used + ".py")
 
-            if os.path.exists(path):
-                before = data["goal"].get("progress", 0)
+            before = data["goal"].get("progress", 0)
+            data = run_python_module(path, data)
+            after = data["goal"].get("progress", 0)
 
-                data = run_python_module(path, data)
-
-                after = data["goal"].get("progress", 0)
-
-                real_score = calculate_score(before, after)
-
-                data["result"] = f"module executed ({real_score})"
-            else:
-                data["result"] = "module missing"
-        else:
-            data["result"] = "no module to run"
+            real_score = calculate_score(before, after)
+            data["result"] = f"best module executed ({real_score})"
 
     # =========================
     # 💡 ИДЕИ
     # =========================
     elif data["decision"] == "generate_idea":
-
         idea = f"Strategy: {data.get('task')}"
         data.setdefault("ideas", [])
         data["ideas"].append(idea)
 
-        if len(data["ideas"]) >= 3:
-            if len(get_all_modules()) < 20:
-                module_used = create_new_module()
-
-                # 🔥 сразу тест
-                path = os.path.join("modules", module_used + ".py")
-
-                before = data["goal"].get("progress", 0)
-                data = run_python_module(path, data)
-                after = data["goal"].get("progress", 0)
-
-                real_score = calculate_score(before, after)
-
-                data["ideas"] = []
-                data["result"] = f"idea → module ({real_score})"
-            else:
-                data["result"] = "too many modules"
-        else:
-            data["result"] = "idea generated"
+        data["result"] = "idea generated"
 
     # =========================
     # 🛠 УЛУЧШЕНИЕ
     # =========================
     elif data["decision"] == "improve_module":
         data["result"] = "module improved"
-        real_score = 65
+        real_score = best_score + 5
 
     # =========================
     # ❌ НИЧЕГО
@@ -245,16 +232,17 @@ def execution(data):
         if real_score is None:
             real_score = 50
 
-        # 🔥 штраф за повтор
-        if module_used == best_module:
-            real_score -= 5
-
         data["experience"].append({
             "module": module_used,
-            "score": max(0, real_score)
+            "score": real_score
         })
 
         data["experience"] = data["experience"][-100:]
+
+    # =========================
+    # 🧹 ЧИСТКА
+    # =========================
+    cleanup_modules(data)
 
     # =========================
     # 📊 ЛОГ

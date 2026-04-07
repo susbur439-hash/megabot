@@ -1,6 +1,8 @@
 import sys
 import os
 import time
+import copy
+import random
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -25,7 +27,7 @@ def run_task(data):
     # 🛠 EXECUTION
     data = execution(data)
 
-    # 🔥 СИНХРОНИЗАЦИЯ РЕАЛЬНОГО DELTA
+    # 🔥 СИНХРОНИЗАЦИЯ REAL DELTA
     if "evaluation" in data:
         if "last_delta" in data:
             data["evaluation"]["delta"] = data["last_delta"]
@@ -55,10 +57,30 @@ if __name__ == "__main__":
         "memory": []
     }
 
+    # 🧠 ЛУЧШИЙ РЕЗУЛЬТАТ
+    best_score = -1
+    best_data = None
+
     for i in range(7):
         print(f"\n🔁 Цикл {i+1}")
 
+        # 🔥 EXPLOIT / EXPLORE
+        if best_data and random.random() < 0.7:
+            print("♻️ Используем лучший найденный результат (exploit)")
+            data = copy.deepcopy(best_data)
+
         data = run_task(data)
+
+        # 📊 ТЕКУЩИЙ SCORE
+        current_score = 0
+        if data.get("evaluation"):
+            current_score = data["evaluation"].get("score", 0)
+
+        # 🏆 ОБНОВЛЕНИЕ ЛУЧШЕГО
+        if current_score > best_score:
+            best_score = current_score
+            best_data = copy.deepcopy(data)
+            print(f"🏆 Новый лучший результат: {best_score}")
 
         print("=== RESULT ===")
         print(data)
@@ -66,3 +88,4 @@ if __name__ == "__main__":
         time.sleep(1)
 
     print("\n✅ Задача завершена")
+    print(f"🏁 Лучший результат за запуск: {best_score}")

@@ -22,8 +22,13 @@ def run_task(data):
     # 🧠 DECISION
     data = decision(data)
 
-    # 🛠 EXECUTION (сразу!)
+    # 🛠 EXECUTION
     data = execution(data)
+
+    # 🔥 СИНХРОНИЗАЦИЯ РЕАЛЬНОГО DELTA
+    if "evaluation" in data:
+        if "last_delta" in data:
+            data["evaluation"]["delta"] = data["last_delta"]
 
     # 📈 ОБНОВЛЕНИЕ ЦЕЛИ
     data = update_goal(data)

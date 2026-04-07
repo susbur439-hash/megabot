@@ -24,23 +24,21 @@ def run_task(data):
     # 🧠 DECISION
     data = decision(data)
 
-    # 🛑 АНТИ-ЗАСТРЕВАНИЕ (умный штраф)
+    # 🛑 АНТИ-ЗАСТРЕВАНИЕ (умный)
     if "last_decision" in data:
         if data["decision"] == data["last_decision"]:
             data["repeat_count"] = data.get("repeat_count", 0) + 1
 
-            # увеличиваем штраф постепенно
             penalty_value = -5 * data["repeat_count"]
             data["penalty"] = penalty_value
 
-            data["log"].append(f"⚠️ penalty: repeated decision x{data['repeat_count']}")
+            data["log"].append(f"⚠️ repeat x{data['repeat_count']}")
 
-            # 🔥 ЖЕСТКИЙ СЛОМ ЗАЦИКЛИВАНИЯ
+            # 🔥 НЕ ломаем decision, а даем сигнал системе
             if data["repeat_count"] >= 3:
-                data["decision"] = "generate_idea"
-                data["log"].append("🧠 forced switch: generate_idea")
+                data["force_explore"] = True
+                data["log"].append("🧪 force explore mode")
         else:
-            # сброс если сменилось поведение
             data["repeat_count"] = 0
             data["penalty"] = 0
 
@@ -49,16 +47,14 @@ def run_task(data):
     # 🛠 EXECUTION
     data = execution(data)
 
-    # 🔥 СИНХРОНИЗАЦИЯ REAL DELTA
+    # 🔥 СИНХРОНИЗАЦИЯ
     if "evaluation" in data:
         if "last_delta" in data:
             data["evaluation"]["delta"] = data["last_delta"]
 
-        # 🔥 ПРИМЕНЕНИЕ ШТРАФА (но ограниченное)
         if "penalty" in data:
             data["evaluation"]["score"] += data["penalty"]
 
-            # ограничение, чтобы не убить систему
             if data["evaluation"]["score"] < 0:
                 data["evaluation"]["score"] = 0
 
@@ -78,10 +74,8 @@ if __name__ == "__main__":
 
     print("🚀 Запуск задачи:", task)
 
-    # 🔥 MULTI-TASK РАЗДЕЛЕНИЕ
     tasks = [t.strip() for t in task.split(",")]
 
-    # 🧠 ЛУЧШИЙ РЕЗУЛЬТАТ (глобально)
     best_score = -1
     best_data = None
 
@@ -98,31 +92,43 @@ if __name__ == "__main__":
             "evaluation": None,
             "goal": None,
             "log": [],
-            "memory": []
+            "memory": [],
+            "repeat_count": 0,
+            "force_explore": False
         }
 
         for i in range(7):
             print(f"\n🔁 Цикл {i+1}")
 
-            # 🔥 ДИНАМИЧЕСКИЙ EXPLOIT / EXPLORE
             exploit_chance = 0.6
 
-            # если застряли → уменьшаем exploit
+            # 🔥 если застряли → режем exploit
             if data.get("repeat_count", 0) >= 2:
                 exploit_chance = 0.2
 
-            if best_data and random.random() < exploit_chance:
-                print("♻️ Используем лучший найденный результат (exploit)")
-                data = copy.deepcopy(best_data)
+            if best_data:
+                if data.get("force_explore"):
+                    print("🧪 Принудительное исследование")
+                    data["force_explore"] = False
+
+                elif random.random() < exploit_chance:
+                    print("♻️ Частичный exploit")
+
+                    best_copy = copy.deepcopy(best_data)
+
+                    # ❗ копируем только опыт (а не всё состояние)
+                    data["experience"] = best_copy.get("experience", [])
+                    data["memory"] = best_copy.get("memory", [])
+
+                else:
+                    print("🧪 Исследование")
 
             data = run_task(data)
 
-            # 📊 ТЕКУЩИЙ SCORE
             current_score = 0
             if data.get("evaluation"):
                 current_score = data["evaluation"].get("score", 0)
 
-            # 🏆 ОБНОВЛЕНИЕ ЛУЧШЕГО
             if current_score > best_score:
                 best_score = current_score
                 best_data = copy.deepcopy(data)

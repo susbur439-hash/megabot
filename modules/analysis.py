@@ -53,7 +53,6 @@ def analysis(data):
         if sc:
             avg = sum(sc) / len(sc)
 
-            # 🔥 анти-доминирование (если слишком мало данных)
             if len(sc) < 2:
                 avg *= 0.9
 
@@ -65,7 +64,7 @@ def analysis(data):
     has_strong_module = best_score >= 75
 
     # =========================
-    # 📈 TREND (улучшенный)
+    # 📈 TREND
     # =========================
     trend = "stable"
     stagnation = False
@@ -78,28 +77,29 @@ def analysis(data):
         elif last3[2] < last3[1] <= last3[0]:
             trend = "down"
         else:
-            # 🔥 stagnation если почти нет изменений
-            diff = max(last3) - min(last3)
-            if diff <= 5:
+            if max(last3) - min(last3) <= 5:
                 stagnation = True
 
     data["local_trend"] = trend
 
     # =========================
+    # 🔥 РЕАЛЬНЫЙ DELTA (ФИКС)
+    # =========================
+    prev_progress = data.get("prev_progress", goal.get("progress", 0))
+    current_progress = goal.get("progress", 0)
+
+    last_delta = current_progress - prev_progress
+    data["last_delta"] = last_delta
+    data["prev_progress"] = current_progress
+
+    # =========================
     # 🧠 ОЦЕНКА
     # =========================
-    last_delta = data.get("last_delta", 0)
-    success = data.get("success", True)
-
     is_first_run = len(memory) == 0
 
     if is_first_run:
         score = 60
         reason = "first run"
-
-    elif not success:
-        score = 20
-        reason = "execution failed"
 
     elif last_delta >= 15:
         score = 95
@@ -111,7 +111,7 @@ def analysis(data):
 
     elif last_delta > 0:
         score = 75
-        reason = "positive progress"
+        reason = "progress"
 
     elif last_delta == 0:
         score = 45
@@ -145,7 +145,7 @@ def analysis(data):
     data["behavior"] = behavior
 
     # =========================
-    # 🔥 DECISION MODE (усилен)
+    # 🔥 MODE
     # =========================
     progress = goal.get("progress", 0)
 
@@ -162,10 +162,7 @@ def analysis(data):
         mode = "improve"
 
     elif task_type == "development":
-
-        if behavior == "aggressive":
-            mode = "explore"
-        elif behavior == "explore":
+        if behavior in ["aggressive", "explore"]:
             mode = "explore"
         elif behavior == "exploit":
             mode = "exploit"
@@ -175,7 +172,6 @@ def analysis(data):
             mode = "build"
 
     elif task_type == "analysis":
-
         if not has_any_module:
             mode = "build"
         elif not has_strong_module:

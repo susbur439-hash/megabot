@@ -11,12 +11,12 @@ def save_to_memory(data):
     try:
         with open("memory.json", "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except Exception as e:
+        print("Save error:", e)
 
 
 # =========================
-# 🚀 RUN MODULE (С ЗАЩИТОЙ)
+# 🚀 SAFE MODULE RUN
 # =========================
 def run_python_module(module_path, data):
     try:
@@ -25,9 +25,16 @@ def run_python_module(module_path, data):
         spec.loader.exec_module(module)
 
         if hasattr(module, "run"):
-            return module.run(data), True
+            result = module.run(data)
+
+            # защита от None
+            if result is None:
+                data["log"].append("⚠️ module returned None")
+                return data, False
+
+            return result, True
         else:
-            data["log"].append("⚠️ no run()")
+            data["log"].append("⚠️ module has no run()")
             return data, False
 
     except Exception as e:
@@ -36,7 +43,7 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 📁 MODULES
+# 📁 MODULE LIST
 # =========================
 def get_all_modules():
     if not os.path.exists("modules"):
@@ -45,18 +52,19 @@ def get_all_modules():
 
 
 # =========================
-# 🧠 BEST
+# 🧠 BEST MODULE
 # =========================
 def get_best_module(experience):
     valid = [e for e in experience if isinstance(e, dict)]
     if not valid:
         return None, 0
+
     best = max(valid, key=lambda x: x.get("score", 0))
     return best.get("module"), best.get("score", 0)
 
 
 # =========================
-# 🧬 CREATE (С ЭВОЛЮЦИЕЙ)
+# 🧬 CREATE MODULE
 # =========================
 def create_new_module(parent=None):
     os.makedirs("modules", exist_ok=True)
@@ -79,12 +87,17 @@ def create_new_module(parent=None):
     boost = {boost}
     behavior = "{behavior}"
 
+    if "goal" not in data:
+        data["goal"] = {{"progress": 0}}
+
     if behavior == "aggressive":
         boost = int(boost * 1.5)
     elif behavior == "safe":
         boost = int(boost * 0.7)
 
     data["goal"]["progress"] += boost
+
+    data.setdefault("log", [])
     data["log"].append(f"module {new_id} | behavior={{behavior}} | boost={{boost}}")
 
     return data
@@ -124,8 +137,7 @@ def improve_existing_module(module_name):
     with open(path, "r", encoding="utf-8") as f:
         code = f.read()
 
-    # безопасная мутация
-    if "boost" not in code:
+    if "progress" not in code:
         return False
 
     new_code = code.replace(
@@ -140,18 +152,16 @@ def improve_existing_module(module_name):
 
 
 # =========================
-# 🧹 CLEANUP (С УДАЛЕНИЕМ)
+# 🧹 CLEANUP
 # =========================
 def cleanup_modules(data):
     if len(data["experience"]) < 5:
         return
 
-    # оставляем только нормальные
     good = [e for e in data["experience"] if e["score"] >= 40]
-
-    # удаляем слабые файлы
     bad = [e for e in data["experience"] if e["score"] < 40]
 
+    # удаляем слабые файлы
     for b in bad:
         path = os.path.join("modules", b["module"] + ".py")
         if os.path.exists(path):
@@ -162,7 +172,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION
+# 🔥 EXECUTION CORE
 # =========================
 def execution(data):
 
@@ -176,10 +186,10 @@ def execution(data):
 
     best_module, best_score = get_best_module(data["experience"])
 
-    # 🎯 ВЫБОР ДЕЙСТВИЯ
-    if data["decision"] == "run_module" and best_module:
+    # 🎯 ACTION SELECT
+    if data.get("decision") == "run_module" and best_module:
         action = "run"
-    elif data["decision"] == "improve_module" and best_module:
+    elif data.get("decision") == "improve_module" and best_module:
         action = "improve"
     else:
         action = "create"
@@ -187,18 +197,15 @@ def execution(data):
     before = data["goal"].get("progress", 0)
 
     # =========================
-    # CREATE (С РОДИТЕЛЕМ)
+    # CREATE
     # =========================
     if action == "create":
-        parent = None
-        if best_module:
-            parent = {"module": best_module, "score": best_score}
+        parent = {"module": best_module, "score": best_score} if best_module else None
 
         module_used = create_new_module(parent)
-
         path = os.path.join("modules", module_used + ".py")
-        data, success = run_python_module(path, data)
 
+        data, success = run_python_module(path, data)
         data["result"] = "module created"
 
     # =========================
@@ -206,10 +213,9 @@ def execution(data):
     # =========================
     elif action == "run":
         module_used = best_module
-
         path = os.path.join("modules", module_used + ".py")
-        data, success = run_python_module(path, data)
 
+        data, success = run_python_module(path, data)
         data["result"] = "module executed"
 
     # =========================
@@ -226,14 +232,16 @@ def execution(data):
 
     after = data["goal"].get("progress", 0)
 
-    # 📊 SCORE
+    # =========================
+    # SCORE
+    # =========================
     score = calculate_score(before, after)
 
     if not success:
         score = max(5, score - 20)
 
     # =========================
-    # 🧠 EXPERIENCE
+    # EXPERIENCE
     # =========================
     if module_used:
         data["experience"].append({
@@ -243,18 +251,18 @@ def execution(data):
         })
 
     # =========================
-    # 🧹 CLEANUP
+    # CLEANUP
     # =========================
     cleanup_modules(data)
 
     # =========================
-    # 🧠 MEMORY
+    # MEMORY
     # =========================
-    data["memory"].append(data["decision"])
+    data["memory"].append(data.get("decision"))
     data["memory"] = data["memory"][-100:]
 
     # =========================
-    # 📘 LOG
+    # LOG
     # =========================
     data["log"].append(
         f"execution: {action} | module: {module_used} | success: {success} | delta: {after - before} | score: {score}"

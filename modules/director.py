@@ -6,7 +6,8 @@ from modules.analysis import analysis
 from modules.decision import decision
 from modules.execution import execution
 from modules.goals import set_goal, update_goal
-from modules.system_guard import system_guard  # ✅ НОВОЕ
+from modules.system_guard import system_guard
+from modules.self_improver import self_improver  # 🔥 НОВОЕ
 
 
 # =========================
@@ -14,14 +15,30 @@ from modules.system_guard import system_guard  # ✅ НОВОЕ
 # =========================
 
 def run_task(data):
+    data.setdefault("log", [])
+
+    # =========================
+    # 🎯 GOAL
+    # =========================
     data["last_layer"] = "goal"
     data = set_goal(data)
 
+    # =========================
+    # 🧠 ANALYSIS
+    # =========================
     data["last_layer"] = "analysis"
     data = analysis(data)
 
+    # =========================
+    # 🧠 DECISION
+    # =========================
     data["last_layer"] = "decision"
     data = decision(data)
+
+    # =========================
+    # 🧠 SELF IMPROVER (🔥)
+    # =========================
+    data = self_improver(data)
 
     # =========================
     # 🧠 META-STRATEGY
@@ -59,12 +76,12 @@ def run_task(data):
 
     elif strategy == "exploit":
         if data.get("best_module"):
-            data["decision"] = "run_best_module"
-        else:
             data["decision"] = "run_module"
+        else:
+            data["decision"] = "generate_idea"
 
     elif strategy == "optimize":
-        if data["decision"] == "add_module":
+        if data.get("decision") == "add_module":
             data["decision"] = "improve_module"
 
     # =========================
@@ -128,7 +145,7 @@ def run_task(data):
     data = execution(data)
 
     # =========================
-    # 🛡 SYSTEM GUARD (🔥 КЛЮЧЕВОЕ)
+    # 🛡 SYSTEM GUARD
     # =========================
 
     data = system_guard(data)
@@ -149,6 +166,10 @@ def run_task(data):
 
             data["log"].append(f"penalty applied: {data['penalty']}")
 
+    # =========================
+    # 🎯 GOAL UPDATE
+    # =========================
+
     data["last_layer"] = "goal_update"
     data = update_goal(data)
 
@@ -165,7 +186,7 @@ def analyze_experience(data):
     if not exp:
         return data
 
-    best = max(exp, key=lambda x: x["score"])
+    best = max(exp, key=lambda x: x.get("score", 0))
 
     data["best_module"] = best
     data["log"].append(f"🏆 best module: {best['module']} ({best['score']})")
@@ -174,7 +195,7 @@ def analyze_experience(data):
 
 
 # =========================
-# 🎛 DIRECTOR v3
+# 🎛 DIRECTOR v3 FINAL
 # =========================
 
 def run(task):
@@ -241,11 +262,9 @@ def run(task):
 
             data = run_task(data)
 
-            current_score = 0
-            if data.get("evaluation"):
-                current_score = data["evaluation"].get("score", 0)
+            current_score = data.get("evaluation", {}).get("score", 0)
 
-            # 🛑 анти-деградация
+            # 🛑 АНТИ-ДЕГРАДАЦИЯ
             if best_data and current_score < best_score - 20:
                 print("🛑 ДЕГРАДАЦИЯ → ОТКАТ")
                 data = copy.deepcopy(best_data)

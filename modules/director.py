@@ -6,6 +6,7 @@ from modules.analysis import analysis
 from modules.decision import decision
 from modules.execution import execution
 from modules.goals import set_goal, update_goal
+from modules.system_guard import system_guard  # ✅ добавили
 
 
 # =========================
@@ -45,7 +46,7 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🎯 DECISION CONTROL (УСИЛЕННЫЙ)
+    # 🎯 DECISION CONTROL
     # =========================
 
     if strategy == "explore":
@@ -121,6 +122,12 @@ def run_task(data):
     data = execution(data)
 
     # =========================
+    # 🛡 SYSTEM GUARD (🔥 ГЛАВНОЕ ДОБАВЛЕНИЕ)
+    # =========================
+
+    data = system_guard(data)
+
+    # =========================
     # 🔥 SYNC
     # =========================
 
@@ -142,7 +149,7 @@ def run_task(data):
 
 
 # =========================
-# 🧠 EXPERIENCE ANALYSIS (НОВОЕ)
+# 🧠 EXPERIENCE ANALYSIS
 # =========================
 
 def analyze_experience(data):
@@ -160,7 +167,7 @@ def analyze_experience(data):
 
 
 # =========================
-# 🎛 DIRECTOR v2 (УСИЛЕННЫЙ)
+# 🎛 DIRECTOR v3
 # =========================
 
 def run(task):
@@ -191,15 +198,10 @@ def run(task):
             "penalty": 0
         }
 
-        for i in range(10):  # 🔥 увеличили глубину
+        for i in range(10):
             print(f"\n🔁 Цикл {i+1}")
 
-            # 🧠 анализ опыта
             data = analyze_experience(data)
-
-            # =========================
-            # 🎯 ADAPTIVE EXPLOIT SYSTEM
-            # =========================
 
             exploit_chance = 0.6
 
@@ -212,10 +214,6 @@ def run(task):
 
             elif best_score > 80:
                 exploit_chance = 0.75
-
-            # =========================
-            # ♻️ SMART EXPLOIT (УЛУЧШЕН)
-            # =========================
 
             if best_data and random.random() < exploit_chance:
                 print("♻️ SMART EXPLOIT")
@@ -234,21 +232,12 @@ def run(task):
             else:
                 print("🧪 EXPLORE")
 
-            # =========================
-            # 🚀 RUN
-            # =========================
-
             data = run_task(data)
-
-            # =========================
-            # 🏆 BEST TRACKING + АНТИ-ДЕГРАДАЦИЯ
-            # =========================
 
             current_score = 0
             if data.get("evaluation"):
                 current_score = data["evaluation"].get("score", 0)
 
-            # 🛑 защита
             if best_data and current_score < best_score - 20:
                 print("🛑 ДЕГРАДАЦИЯ → ОТКАТ")
                 data = copy.deepcopy(best_data)

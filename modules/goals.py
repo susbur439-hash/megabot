@@ -5,12 +5,14 @@ def set_goal(data):
 
     goal = data["goal"]
 
-    # 🔥 убрали жёсткую привязку имени
     goal.setdefault("name", data.get("task_type", "adaptive_goal"))
     goal.setdefault("progress", 0)
     goal.setdefault("level", 1)
     goal.setdefault("target", 100)
     goal.setdefault("history", [])
+
+    # 🔥 добавляем предыдущее значение
+    data.setdefault("prev_progress", goal["progress"])
 
     return data
 
@@ -22,17 +24,22 @@ def update_goal(data):
     score = evaluation.get("score", 50)
 
     progress = goal.get("progress", 0)
+    prev_progress = data.get("prev_progress", progress)
+
     level = goal.get("level", 1)
     target = goal.get("target", 100)
 
     data.setdefault("log", [])
 
     # =========================
-    # 🔥 ОСНОВА = РЕАЛЬНЫЙ DELTA (фикс)
+    # 🔥 РЕАЛЬНЫЙ DELTA (ФИКС)
     # =========================
-    real_delta = data.get("last_delta", 0)
+    real_delta = progress - prev_progress
+    data["last_delta"] = real_delta  # сохраняем
 
-    # 🔥 НЕ пересчитываем сильно — только корректируем
+    # =========================
+    # 🔥 УМНАЯ КОРРЕКЦИЯ
+    # =========================
     if score >= 85:
         delta = real_delta + 2
     elif score >= 70:
@@ -66,12 +73,11 @@ def update_goal(data):
     data["trend"] = trend
 
     # =========================
-    # 🔥 LEVEL SYSTEM (фикс)
+    # 🔥 LEVEL SYSTEM
     # =========================
     if progress >= target:
         level += 1
 
-        # ✅ сохраняем остаток (а не обнуляем)
         progress = progress - target
 
         data["log"].append(f"🚀 LEVEL UP → {level}")
@@ -105,8 +111,11 @@ def update_goal(data):
 
     data["goal"] = goal
 
+    # 🔥 ОБНОВЛЯЕМ prev_progress
+    data["prev_progress"] = goal["progress"]
+
     # =========================
-    # 📘 LOG (фикс имени)
+    # 📘 LOG
     # =========================
     data["log"].append(
         f"{goal['name']}: {goal['progress']}/{target} | level: {level} | trend: {trend} | state: {state} | delta: {delta} | real: {real_delta}"

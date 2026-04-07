@@ -35,7 +35,7 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 📁 СПИСОК МОДУЛЕЙ
+# 📁 СПИСОК
 # =========================
 def get_all_modules():
     if not os.path.exists("modules"):
@@ -44,35 +44,27 @@ def get_all_modules():
 
 
 # =========================
-# 🧠 ЛУЧШИЕ МОДУЛИ (ТОП)
+# 🧠 ТОП МОДУЛИ
 # =========================
 def get_top_modules(experience, n=3):
     valid = [e for e in experience if isinstance(e, dict)]
-    sorted_exp = sorted(valid, key=lambda x: x.get("score", 0), reverse=True)
-    return sorted_exp[:n]
+    return sorted(valid, key=lambda x: x.get("score", 0), reverse=True)[:n]
 
 
 # =========================
-# 🧠 ХУДШИЙ МОДУЛЬ
+# 🧠 ХУДШИЙ
 # =========================
 def get_worst_module(experience):
-    worst_module = None
-    worst_score = 999
+    valid = [e for e in experience if isinstance(e, dict)]
+    if not valid:
+        return None, None
 
-    for exp in experience:
-        if isinstance(exp, dict):
-            score = exp.get("score", 0)
-            module = exp.get("module")
-
-            if score < worst_score:
-                worst_score = score
-                worst_module = module
-
-    return worst_module, worst_score
+    worst = min(valid, key=lambda x: x.get("score", 0))
+    return worst.get("module"), worst.get("score")
 
 
 # =========================
-# 🧬 СОЗДАНИЕ МОДУЛЯ (ЭВОЛЮЦИЯ)
+# 🧬 СОЗДАНИЕ (МУТАЦИЯ)
 # =========================
 def create_new_module(parent=None):
     os.makedirs("modules", exist_ok=True)
@@ -83,9 +75,10 @@ def create_new_module(parent=None):
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    if parent and isinstance(parent, dict):
-        base_boost = parent.get("boost", 5)
-        boost = max(1, int(base_boost + random.randint(-2, 3)))
+    # 🎯 наследование
+    if parent:
+        base = parent.get("score", 50)
+        boost = max(1, int(base / 10 + random.randint(-3, 5)))
     else:
         boost = random.randint(2, 10)
 
@@ -96,13 +89,15 @@ def create_new_module(parent=None):
     behavior = "{behavior}"
 
     if behavior == "aggressive":
-        boost *= 1.5
+        boost *= 1.6
     elif behavior == "safe":
-        boost *= 0.7
+        boost *= 0.6
 
     boost = int(boost)
 
     data["log"].append(f"module {new_id} | behavior={{behavior}} | boost={{boost}}")
+
+    # 🎯 влияние на цель
     data["goal"]["progress"] = data["goal"].get("progress", 0) + boost
 
     return data
@@ -111,15 +106,11 @@ def create_new_module(parent=None):
     with open(path, "w", encoding="utf-8") as f:
         f.write(code)
 
-    return {
-        "name": name.replace(".py", ""),
-        "boost": boost,
-        "behavior": behavior
-    }
+    return name.replace(".py", "")
 
 
 # =========================
-# 📊 ОЦЕНКА
+# 📊 СКОРА
 # =========================
 def calculate_score(before, after):
     delta = after - before
@@ -128,7 +119,29 @@ def calculate_score(before, after):
 
 
 # =========================
-# 🧹 УДАЛЕНИЕ СЛАБЫХ
+# 🛠 УЛУЧШЕНИЕ (РЕАЛЬНОЕ)
+# =========================
+def improve_existing_module(module_name):
+    path = os.path.join("modules", module_name + ".py")
+
+    if not os.path.exists(path):
+        return False
+
+    # простая мутация — усиливаем код
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    code = code.replace("boost =", "boost = int(")
+    code = code.replace("return data", "boost += 1\n    return data")
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(code)
+
+    return True
+
+
+# =========================
+# 🧹 ЧИСТКА (ЖЁСТЧЕ)
 # =========================
 def cleanup_modules(data):
     if len(data["experience"]) < 5:
@@ -136,7 +149,7 @@ def cleanup_modules(data):
 
     worst_module, worst_score = get_worst_module(data["experience"])
 
-    if worst_score < 20 and worst_module:
+    if worst_score is not None and worst_score < 30:
         path = os.path.join("modules", worst_module + ".py")
 
         if os.path.exists(path):
@@ -145,7 +158,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 ГЛАВНАЯ ФУНКЦИЯ
+# 🔥 EXECUTION
 # =========================
 def execution(data):
 
@@ -163,21 +176,18 @@ def execution(data):
     best_module = top_modules[0]["module"] if top_modules else None
     best_score = top_modules[0]["score"] if top_modules else 0
 
-    explore = random.random() < 0.3  # 30% исследование
+    explore = random.random() < 0.25
 
     # =========================
     # 🚀 СОЗДАНИЕ / ЭВОЛЮЦИЯ
     # =========================
     if data["decision"] == "add_module" or explore:
 
-        parent = None
-        if top_modules:
-            parent = random.choice(top_modules)
+        parent = random.choice(top_modules) if top_modules else None
 
         module_used = create_new_module(parent)
-        module_name = module_used["name"]
 
-        path = os.path.join("modules", module_name + ".py")
+        path = os.path.join("modules", module_used + ".py")
 
         before = data["goal"].get("progress", 0)
         data = run_python_module(path, data)
@@ -187,7 +197,7 @@ def execution(data):
         data["result"] = f"module evolved & tested ({real_score})"
 
     # =========================
-    # 🚀 ИСПОЛЬЗОВАНИЕ ЛУЧШЕГО
+    # 🚀 ЗАПУСК
     # =========================
     elif data["decision"] == "run_module":
 
@@ -204,47 +214,49 @@ def execution(data):
             data["result"] = f"best module executed ({real_score})"
 
     # =========================
-    # 💡 ИДЕИ
+    # 💡 ИДЕИ → СРАЗУ В МОДУЛЬ
     # =========================
     elif data["decision"] == "generate_idea":
-        idea = f"Strategy: {data.get('task')}"
-        data.setdefault("ideas", [])
-        data["ideas"].append(idea)
-        data["result"] = "idea generated"
+
+        parent = random.choice(top_modules) if top_modules else None
+        module_used = create_new_module(parent)
+
+        data["result"] = "idea → module"
 
     # =========================
     # 🛠 УЛУЧШЕНИЕ
     # =========================
     elif data["decision"] == "improve_module":
-        data["result"] = "module improved"
-        real_score = best_score + 5
+
+        if best_module and improve_existing_module(best_module):
+            module_used = best_module
+            real_score = best_score + 10
+            data["result"] = "module improved (real)"
+
+        else:
+            data["result"] = "improve failed"
 
     # =========================
-    # ❌ НИЧЕГО
+    # ❌ FALLBACK
     # =========================
     else:
         data["result"] = "no action"
 
     # =========================
-    # 🧠 ПАМЯТЬ
+    # 🧠 MEMORY
     # =========================
     data["memory"].append(data["decision"])
     data["memory"] = data["memory"][-100:]
 
     # =========================
-    # 🧠 ОПЫТ (УЛУЧШЕННЫЙ)
+    # 🧠 EXPERIENCE
     # =========================
     if module_used:
-        if isinstance(module_used, dict):
-            module_name = module_used["name"]
-        else:
-            module_name = module_used
-
         if real_score is None:
             real_score = 50
 
         data["experience"].append({
-            "module": module_name,
+            "module": module_used,
             "score": real_score,
             "time": len(data["memory"])
         })
@@ -261,7 +273,7 @@ def execution(data):
     cleanup_modules(data)
 
     # =========================
-    # 📊 ЛОГ
+    # 📊 LOG
     # =========================
     data["log"].append(
         f"execution complete (used: {module_used}, best: {best_module}, best_score: {best_score}, new_score: {real_score})"

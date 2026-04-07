@@ -21,33 +21,106 @@ def run_task(data):
     # 🔍 ANALYSIS
     data = analysis(data)
 
-    # 🧠 DECISION
+    # 🧠 DECISION (базовое)
     data = decision(data)
 
-    # 🛑 АНТИ-ЗАСТРЕВАНИЕ (умный)
+    # =========================
+    # 🧠 META-STRATEGY LAYER
+    # =========================
+
+    if "strategy" not in data:
+        data["strategy"] = "build"
+
+    score = data.get("evaluation", {}).get("score", 0)
+    repeat = data.get("repeat_count", 0)
+
+    if data.get("force_explore"):
+        data["strategy"] = "explore"
+
+    elif repeat >= 2:
+        data["strategy"] = "explore"
+
+    elif score > 85:
+        data["strategy"] = "exploit"
+
+    elif score < 50:
+        data["strategy"] = "build"
+
+    else:
+        data["strategy"] = "optimize"
+
+    data["log"].append(f"strategy: {data['strategy']}")
+
+    # 🎯 КОРРЕКЦИЯ DECISION
+    if data["strategy"] == "explore":
+        data["decision"] = "generate_idea"
+
+    elif data["strategy"] == "exploit":
+        data["decision"] = "run_module"
+
+    elif data["strategy"] == "optimize":
+        if data["decision"] == "add_module":
+            data["decision"] = "improve_module"
+
+    # 🎭 MODE
+    if "mode" not in data:
+        data["mode"] = "balanced"
+
+    if data["strategy"] == "explore":
+        data["mode"] = "aggressive"
+
+    elif data["strategy"] == "exploit":
+        data["mode"] = "balanced"
+
+    elif data["strategy"] == "optimize":
+        data["mode"] = "safe"
+
+    data["log"].append(f"mode: {data['mode']}")
+
+    # =========================
+    # 🛑 АНТИ-ЗАСТРЕВАНИЕ
+    # =========================
+
     if "last_decision" in data:
         if data["decision"] == data["last_decision"]:
             data["repeat_count"] = data.get("repeat_count", 0) + 1
 
-            penalty_value = -5 * data["repeat_count"]
-            data["penalty"] = penalty_value
+            penalty_step = -5 * data["repeat_count"]
+            data["penalty"] = data.get("penalty", 0) + penalty_step
 
-            data["log"].append(f"⚠️ repeat x{data['repeat_count']}")
+            data["log"].append(
+                f"⚠️ repeat x{data['repeat_count']} (penalty {penalty_step})"
+            )
 
-            # 🔥 НЕ ломаем decision, а даем сигнал системе
             if data["repeat_count"] >= 3:
                 data["force_explore"] = True
-                data["log"].append("🧪 force explore mode")
+                data["log"].append("🧠 FORCE EXPLORE MODE")
+
         else:
             data["repeat_count"] = 0
             data["penalty"] = 0
+            data["force_explore"] = False
 
     data["last_decision"] = data["decision"]
+
+    # =========================
+    # ⚡ MODE → BOOST
+    # =========================
+
+    if data["mode"] == "aggressive":
+        data["boost"] = 1.5
+    elif data["mode"] == "safe":
+        data["boost"] = 0.7
+    else:
+        data["boost"] = 1.0
 
     # 🛠 EXECUTION
     data = execution(data)
 
+    # =========================
     # 🔥 СИНХРОНИЗАЦИЯ
+    # =========================
+
     if "evaluation" in data:
         if "last_delta" in data:
             data["evaluation"]["delta"] = data["last_delta"]
@@ -80,9 +153,9 @@ if __name__ == "__main__":
     best_data = None
 
     for t_index, single_task in enumerate(tasks):
-        print(f"\n==============================")
+        print("\n==============================")
         print(f"🎯 ЗАДАЧА {t_index+1}: {single_task}")
-        print(f"==============================")
+        print("==============================")
 
         data = {
             "task": single_task,
@@ -94,7 +167,8 @@ if __name__ == "__main__":
             "log": [],
             "memory": [],
             "repeat_count": 0,
-            "force_explore": False
+            "force_explore": False,
+            "penalty": 0
         }
 
         for i in range(7):
@@ -102,26 +176,30 @@ if __name__ == "__main__":
 
             exploit_chance = 0.6
 
-            # 🔥 если застряли → режем exploit
-            if data.get("repeat_count", 0) >= 2:
+            if data.get("force_explore"):
+                exploit_chance = 0.0
+                print("🧪 FORCED EXPLORE")
+
+            elif data.get("repeat_count", 0) >= 2:
                 exploit_chance = 0.2
 
-            if best_data:
-                if data.get("force_explore"):
-                    print("🧪 Принудительное исследование")
-                    data["force_explore"] = False
+            if best_data and random.random() < exploit_chance:
+                print("♻️ SAFE EXPLOIT")
 
-                elif random.random() < exploit_chance:
-                    print("♻️ Частичный exploit")
+                best_copy = copy.deepcopy(best_data)
 
-                    best_copy = copy.deepcopy(best_data)
+                # копируем только опыт
+                data["experience"] = best_copy.get("experience", [])
+                data["memory"] = best_copy.get("memory", [])
 
-                    # ❗ копируем только опыт (а не всё состояние)
-                    data["experience"] = best_copy.get("experience", [])
-                    data["memory"] = best_copy.get("memory", [])
+                # чистим опасное
+                data["repeat_count"] = 0
+                data["penalty"] = 0
+                data["force_explore"] = False
+                data["last_decision"] = None
 
-                else:
-                    print("🧪 Исследование")
+            else:
+                print("🧪 EXPLORE")
 
             data = run_task(data)
 

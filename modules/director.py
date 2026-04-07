@@ -21,58 +21,62 @@ def run_task(data):
     # 🧠 META-STRATEGY
     # =========================
 
-    if "strategy" not in data:
-        data["strategy"] = "build"
-
     score = data.get("evaluation", {}).get("score", 0)
     repeat = data.get("repeat_count", 0)
 
+    # 👉 дефолт
+    strategy = "build"
+
     if data.get("force_explore"):
-        data["strategy"] = "explore"
+        strategy = "explore"
 
     elif repeat >= 2:
-        data["strategy"] = "explore"
+        strategy = "explore"
 
     elif score > 85:
-        data["strategy"] = "exploit"
+        strategy = "exploit"
 
     elif score < 50:
-        data["strategy"] = "build"
+        strategy = "build"
 
     else:
-        data["strategy"] = "optimize"
+        strategy = "optimize"
 
-    data["log"].append(f"strategy: {data['strategy']}")
+    data["strategy"] = strategy
+    data["log"].append(f"strategy: {strategy}")
 
-    # 🎯 decision override
-    if data["strategy"] == "explore":
+    # =========================
+    # 🎯 DECISION CONTROL
+    # =========================
+
+    if strategy == "explore":
         data["decision"] = "generate_idea"
 
-    elif data["strategy"] == "exploit":
+    elif strategy == "exploit":
         data["decision"] = "run_module"
 
-    elif data["strategy"] == "optimize":
+    elif strategy == "optimize":
         if data["decision"] == "add_module":
             data["decision"] = "improve_module"
 
     # =========================
-    # 🎭 MODE
+    # 🎭 MODE SYSTEM
     # =========================
 
-    if "mode" not in data:
-        data["mode"] = "balanced"
+    if strategy == "explore":
+        mode = "aggressive"
+    elif strategy == "exploit":
+        mode = "balanced"
+    elif strategy == "optimize":
+        mode = "safe"
+    else:
+        mode = "balanced"
 
-    if data["strategy"] == "explore":
-        data["mode"] = "aggressive"
-    elif data["strategy"] == "exploit":
-        data["mode"] = "balanced"
-    elif data["strategy"] == "optimize":
-        data["mode"] = "safe"
-
-    data["log"].append(f"mode: {data['mode']}")
+    data["mode"] = mode
+    data["log"].append(f"mode: {mode}")
 
     # =========================
-    # 🛑 ANTI-LOOP
+    # 🛑 ANTI-LOOP SYSTEM
     # =========================
 
     if "last_decision" in data:
@@ -80,7 +84,7 @@ def run_task(data):
             data["repeat_count"] = data.get("repeat_count", 0) + 1
 
             penalty_step = -5 * data["repeat_count"]
-            data["penalty"] += penalty_step
+            data["penalty"] = data.get("penalty", 0) + penalty_step
 
             data["log"].append(
                 f"⚠️ repeat x{data['repeat_count']} (penalty {penalty_step})"
@@ -101,9 +105,9 @@ def run_task(data):
     # ⚡ MODE → BOOST
     # =========================
 
-    if data["mode"] == "aggressive":
+    if mode == "aggressive":
         data["boost"] = 1.5
-    elif data["mode"] == "safe":
+    elif mode == "safe":
         data["boost"] = 0.7
     else:
         data["boost"] = 1.0
@@ -136,7 +140,7 @@ def run_task(data):
 
 
 # =========================
-# 🎛 DIRECTOR
+# 🎛 DIRECTOR v2
 # =========================
 
 def run(task):
@@ -161,6 +165,7 @@ def run(task):
             "goal": None,
             "log": [],
             "memory": [],
+            "experience": [],
             "repeat_count": 0,
             "force_explore": False,
             "penalty": 0
@@ -168,6 +173,10 @@ def run(task):
 
         for i in range(7):
             print(f"\n🔁 Цикл {i+1}")
+
+            # =========================
+            # 🎯 ADAPTIVE EXPLOIT SYSTEM
+            # =========================
 
             exploit_chance = 0.6
 
@@ -178,14 +187,22 @@ def run(task):
             elif data.get("repeat_count", 0) >= 2:
                 exploit_chance = 0.2
 
+            elif best_score > 80:
+                exploit_chance = 0.75  # усиливаем использование опыта
+
+            # =========================
+            # ♻️ EXPERIENCE TRANSFER
+            # =========================
+
             if best_data and random.random() < exploit_chance:
-                print("♻️ SAFE EXPLOIT")
+                print("♻️ SMART EXPLOIT")
 
                 best_copy = copy.deepcopy(best_data)
 
                 data["experience"] = best_copy.get("experience", [])
                 data["memory"] = best_copy.get("memory", [])
 
+                # очистка риска зацикливания
                 data["repeat_count"] = 0
                 data["penalty"] = 0
                 data["force_explore"] = False
@@ -194,7 +211,15 @@ def run(task):
             else:
                 print("🧪 EXPLORE")
 
+            # =========================
+            # 🚀 RUN
+            # =========================
+
             data = run_task(data)
+
+            # =========================
+            # 🏆 BEST TRACKING
+            # =========================
 
             current_score = 0
             if data.get("evaluation"):

@@ -27,7 +27,6 @@ def run_python_module(module_path, data):
         if hasattr(module, "run"):
             result = module.run(data)
 
-            # защита от None
             if result is None:
                 data["log"].append("⚠️ module returned None")
                 return data, False
@@ -161,7 +160,6 @@ def cleanup_modules(data):
     good = [e for e in data["experience"] if e["score"] >= 40]
     bad = [e for e in data["experience"] if e["score"] < 40]
 
-    # удаляем слабые файлы
     for b in bad:
         path = os.path.join("modules", b["module"] + ".py")
         if os.path.exists(path):
@@ -186,7 +184,7 @@ def execution(data):
 
     best_module, best_score = get_best_module(data["experience"])
 
-    # 🎯 ACTION SELECT
+    # 🎯 ACTION
     if data.get("decision") == "run_module" and best_module:
         action = "run"
     elif data.get("decision") == "improve_module" and best_module:
@@ -233,6 +231,13 @@ def execution(data):
     after = data["goal"].get("progress", 0)
 
     # =========================
+    # 🔥 КРИТИЧЕСКИЙ ФИКС
+    # =========================
+    delta = after - before
+    data["last_delta"] = delta
+    data["success"] = success
+
+    # =========================
     # SCORE
     # =========================
     score = calculate_score(before, after)
@@ -265,7 +270,7 @@ def execution(data):
     # LOG
     # =========================
     data["log"].append(
-        f"execution: {action} | module: {module_used} | success: {success} | delta: {after - before} | score: {score}"
+        f"execution: {action} | module: {module_used} | success: {success} | delta: {delta} | score: {score}"
     )
 
     save_to_memory(data)

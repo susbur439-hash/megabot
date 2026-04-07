@@ -21,14 +21,19 @@ def save_to_memory(data):
 def run_python_module(module_path, data):
     try:
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
+
+        if spec is None or spec.loader is None:
+            data["log"].append("❌ failed to load module")
+            return data, False
+
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
         if hasattr(module, "run"):
             result = module.run(data)
 
-            if result is None:
-                data["log"].append("⚠️ module returned None")
+            if not isinstance(result, dict):
+                data["log"].append("⚠️ module returned invalid data")
                 return data, False
 
             return result, True
@@ -55,6 +60,7 @@ def get_all_modules():
 # =========================
 def get_best_module(experience):
     valid = [e for e in experience if isinstance(e, dict)]
+
     if not valid:
         return None, 0
 
@@ -69,7 +75,14 @@ def create_new_module(parent=None):
     os.makedirs("modules", exist_ok=True)
 
     modules = get_all_modules()
-    new_id = len(modules) + 1
+
+    # 🔥 уникальный id (фикс дублей)
+    existing_ids = [
+        int(m.replace("module_", "").replace(".py", ""))
+        for m in modules if m.startswith("module_")
+    ]
+
+    new_id = max(existing_ids, default=0) + 1
 
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
@@ -133,40 +146,50 @@ def improve_existing_module(module_name):
     if not os.path.exists(path):
         return False
 
-    with open(path, "r", encoding="utf-8") as f:
-        code = f.read()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            code = f.read()
 
-    if "progress" not in code:
+        if "progress" not in code:
+            return False
+
+        new_code = code.replace(
+            "data[\"goal\"][\"progress\"] += boost",
+            "data[\"goal\"][\"progress\"] += boost + 1"
+        )
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new_code)
+
+        return True
+
+    except Exception:
         return False
-
-    new_code = code.replace(
-        "data[\"goal\"][\"progress\"] += boost",
-        "data[\"goal\"][\"progress\"] += boost + 1"
-    )
-
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(new_code)
-
-    return True
 
 
 # =========================
 # 🧹 CLEANUP
 # =========================
 def cleanup_modules(data):
-    if len(data["experience"]) < 5:
+    exp = [e for e in data.get("experience", []) if isinstance(e, dict)]
+
+    if len(exp) < 5:
         return
 
-    good = [e for e in data["experience"] if e["score"] >= 40]
-    bad = [e for e in data["experience"] if e["score"] < 40]
+    good = [e for e in exp if e.get("score", 0) >= 40]
+    bad = [e for e in exp if e.get("score", 0) < 40]
 
     for b in bad:
-        path = os.path.join("modules", b["module"] + ".py")
+        path = os.path.join("modules", b.get("module", "") + ".py")
         if os.path.exists(path):
             os.remove(path)
-            data["log"].append(f"🗑 removed {b['module']}")
+            data["log"].append(f"🗑 removed {b.get('module')}")
 
-    data["experience"] = sorted(good, key=lambda x: x["score"], reverse=True)[:20]
+    data["experience"] = sorted(
+        good,
+        key=lambda x: x.get("score", 0),
+        reverse=True
+    )[:20]
 
 
 # =========================
@@ -265,6 +288,9 @@ def execution(data):
     # =========================
     data["memory"].append(data.get("decision"))
     data["memory"] = data["memory"][-100:]
+
+    # 🔥 ограничение логов
+    data["log"] = data["log"][-200:]
 
     # =========================
     # LOG

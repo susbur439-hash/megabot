@@ -84,21 +84,6 @@ def get_best_module(experience):
 
 
 # =========================
-# 🧠 RECENT STATS
-# =========================
-def get_recent_module_stats(experience, module_name, last_n=5):
-    if not module_name:
-        return 0
-
-    recent = [e for e in experience if e.get("module") == module_name][-last_n:]
-
-    if not recent:
-        return 0
-
-    return sum(e.get("score", 0) for e in recent) / len(recent)
-
-
-# =========================
 # 💡 IDEA
 # =========================
 def generate_idea_module():
@@ -117,7 +102,7 @@ def get_all_modules():
 
 
 # =========================
-# 🧬 CREATE MODULE (🔥 улучшен)
+# 🧬 CREATE MODULE
 # =========================
 def create_new_module(parent=None):
     os.makedirs("modules", exist_ok=True)
@@ -153,7 +138,6 @@ def create_new_module(parent=None):
     elif behavior == "safe":
         boost = int(boost * 0.7)
 
-    # 🔥 учитываем глобальный буст системы
     system_boost = data.get("boost", 1.0)
     boost = int(boost * system_boost)
 
@@ -172,7 +156,7 @@ def create_new_module(parent=None):
 
 
 # =========================
-# 🛠 IMPROVE (🔥 усилен)
+# 🛠 IMPROVE
 # =========================
 def improve_existing_module(module_name):
     path = os.path.join("modules", module_name + ".py")
@@ -187,7 +171,6 @@ def improve_existing_module(module_name):
         if "progress" not in code:
             return False
 
-        # 🔥 усиливаем сильнее, не +1 а +2
         new_code = code.replace(
             "data[\"goal\"][\"progress\"] += boost",
             "data[\"goal\"][\"progress\"] += boost + 2"
@@ -203,24 +186,20 @@ def improve_existing_module(module_name):
 
 
 # =========================
-# 📊 SCORE (🔥 ПОЛНОСТЬЮ ПЕРЕДЕЛАН)
+# 📊 SCORE
 # =========================
-def calculate_score(before, after, result, success=True):
+def calculate_score(before, after, success=True):
     if not success:
         return 5
 
     delta = after - before
 
-    # 🔥 главный фактор — реальный рост
     if delta <= 0:
         return 20
-
     elif delta < 5:
         return 50
-
     elif delta < 10:
         return 75
-
     else:
         return 100
 
@@ -247,7 +226,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION (FIXED)
+# 🔥 EXECUTION (ЧИСТЫЙ FIX)
 # =========================
 def execution(data):
 
@@ -256,41 +235,21 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
 
+    decision = data.get("decision")
+
+    before = data["goal"].get("progress", 0)
+
     module_used = None
     success = False
     data["result"] = None
 
     best_module, best_score = get_best_module(data["experience"])
-    recent_score = get_recent_module_stats(data["experience"], best_module)
-
-    decision = data.get("decision")
-    recent = data["memory"][-5:]
-    too_many_improves = recent.count("improve_module") >= 3
-
-    before = data["goal"].get("progress", 0)
-
-    # 🔥 УМНЫЙ ВЫБОР ДЕЙСТВИЯ
-    if random.random() < 0.05:
-        action = "create"
-
-    elif recent_score < 40 or not best_module:
-        action = "create"
-
-    elif decision == "run_module":
-        action = "run"
-
-    elif decision == "improve_module":
-        action = "improve"
-
-    elif decision == "generate_idea":
-        action = "idea"
-
-    else:
-        action = "run"
 
     # =========================
+    # 🔥 ГЛАВНОЕ: execution СЛУШАЕТ decision
+    # =========================
 
-    if action == "idea":
+    if decision == "generate_idea":
         boost, behavior = generate_idea_module()
 
         if behavior == "aggressive":
@@ -305,32 +264,48 @@ def execution(data):
         module_used = "idea"
         data["result"] = "idea generated"
 
-    elif action == "create":
-        module_used = create_new_module({"module": best_module, "score": best_score} if best_module else None)
+    elif decision == "add_module":
+        module_used = create_new_module(
+            {"module": best_module, "score": best_score} if best_module else None
+        )
         path = os.path.join("modules", module_used + ".py")
         data, success = run_python_module(path, data)
         data["result"] = "module created"
 
-    elif action == "run":
-        module_used = best_module
-        path = os.path.join("modules", best_module + ".py")
-        data, success = run_python_module(path, data)
-        data["result"] = "module executed"
+    elif decision == "run_module":
+        if best_module:
+            module_used = best_module
+            path = os.path.join("modules", best_module + ".py")
+            data, success = run_python_module(path, data)
+            data["result"] = "module executed"
+        else:
+            data["result"] = "no module"
+            success = False
 
-    elif action == "improve":
-        if improve_existing_module(best_module):
+    elif decision == "improve_module":
+        if best_module and improve_existing_module(best_module):
             module_used = best_module
             data["goal"]["progress"] += 4
             success = True
             data["result"] = "module improved"
         else:
-            action = "create"
+            data["result"] = "improve failed"
+            success = False
+
+    else:
+        data["result"] = "no action"
+        success = False
 
     # =========================
-
+    # 🔥 FIX DELTA
+    # =========================
     after = data["goal"].get("progress", 0)
+    data["last_delta"] = after - before
 
-    score = calculate_score(before, after, data["result"], success)
+    # =========================
+    # 📊 SCORE
+    # =========================
+    score = calculate_score(before, after, success)
 
     if module_used:
         data["experience"].append({
@@ -339,12 +314,16 @@ def execution(data):
             "time": len(data["memory"])
         })
 
-    cleanup_modules(data)
+    # =========================
+    # 🧠 MEMORY FIX
+    # =========================
+    if decision:
+        data["memory"].append(decision)
 
-    data["memory"].append(decision)
     data["memory"] = data["memory"][-100:]
     data["log"] = data["log"][-200:]
 
+    cleanup_modules(data)
     save_to_memory(data)
 
     return data

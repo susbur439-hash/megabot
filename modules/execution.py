@@ -64,7 +64,6 @@ def get_best_module(experience):
     for e in valid:
         name = e.get("module")
         score = e.get("score", 0)
-
         module_scores.setdefault(name, []).append(score)
 
     best_module = None
@@ -199,22 +198,22 @@ def improve_existing_module(module_name):
 
 
 # =========================
-# 📊 SCORE
+# 📊 NEW SCORE (ВАЖНО)
 # =========================
-def calculate_score(before, after, success=True):
-    delta = after - before
-
+def calculate_score(result, success=True):
     if not success:
         return 10
 
-    if delta <= 0:
-        return 20
-    elif delta < 5:
-        return 50
-    elif delta < 10:
-        return 75
-    else:
+    if result == "module created":
+        return 90
+    elif result == "module executed":
         return 100
+    elif result == "module improved":
+        return 95
+    elif result == "idea generated":
+        return 50
+    else:
+        return 30
 
 
 # =========================
@@ -318,7 +317,9 @@ def execution(data):
             data["result"] = "module created (fallback)"
 
     after = data["goal"].get("progress", 0)
-    score = calculate_score(before, after, success)
+
+    # 🔥 НОВАЯ ОЦЕНКА
+    score = calculate_score(data["result"], success)
 
     if module_used:
         data["experience"].append({

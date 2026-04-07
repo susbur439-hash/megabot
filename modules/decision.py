@@ -32,10 +32,11 @@ def decision(data):
     best_score = 0
 
     for m, scores in module_scores.items():
-        avg = sum(scores) / len(scores)
-        if avg > best_score:
-            best_score = avg
-            best_module = m
+        if scores:
+            avg = sum(scores) / len(scores)
+            if avg > best_score:
+                best_score = avg
+                best_module = m
 
     has_strong_module = best_score >= 75
     has_any_module = len(module_scores) > 0
@@ -43,7 +44,7 @@ def decision(data):
     # =========================
     # 🧠 АНТИ-ЗАЦИКЛИВАНИЕ
     # =========================
-    recent = memory[-5:]
+    recent = memory[-5:] if len(memory) >= 5 else memory
 
     too_many_ideas = recent.count("generate_idea") >= 3
     too_many_adds = recent.count("add_module") >= 4
@@ -76,7 +77,7 @@ def decision(data):
         elif has_strong_module:
             action = "run_module"
         else:
-            action = "add_module"
+            action = "improve_module"
 
     # 🧱 BOOTSTRAP
     elif analysis_type == "bootstrap":
@@ -148,10 +149,18 @@ def decision(data):
             action = "generate_idea"
 
     # =========================
-    # 🔥 ЗАЩИТА
+    # 🔥 ЗАЩИТА (важный фикс)
     # =========================
     if action == "do_nothing":
         action = "generate_idea"
+
+    # защита от зацикливания на идеях
+    if too_many_ideas and action == "generate_idea":
+        action = "add_module"
+
+    # защита от бесконечного добавления
+    if too_many_adds and action == "add_module":
+        action = "run_module"
 
     data["decision"] = action
 

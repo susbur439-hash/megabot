@@ -226,7 +226,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION (ЧИСТЫЙ FIX)
+# 🔥 EXECUTION FIX FINAL
 # =========================
 def execution(data):
 
@@ -236,7 +236,6 @@ def execution(data):
     data.setdefault("goal", {"progress": 0})
 
     decision = data.get("decision")
-
     before = data["goal"].get("progress", 0)
 
     module_used = None
@@ -246,7 +245,7 @@ def execution(data):
     best_module, best_score = get_best_module(data["experience"])
 
     # =========================
-    # 🔥 ГЛАВНОЕ: execution СЛУШАЕТ decision
+    # 🔥 ЛОГИКА
     # =========================
 
     if decision == "generate_idea":
@@ -261,8 +260,10 @@ def execution(data):
 
         data["goal"]["progress"] += boost
         success = True
-        module_used = "idea"
         data["result"] = "idea generated"
+
+        # ❗ НЕ считаем идею модулем
+        module_used = None
 
     elif decision == "add_module":
         module_used = create_new_module(
@@ -279,8 +280,8 @@ def execution(data):
             data, success = run_python_module(path, data)
             data["result"] = "module executed"
         else:
-            data["result"] = "no module"
             success = False
+            data["result"] = "no module"
 
     elif decision == "improve_module":
         if best_module and improve_existing_module(best_module):
@@ -289,15 +290,15 @@ def execution(data):
             success = True
             data["result"] = "module improved"
         else:
-            data["result"] = "improve failed"
             success = False
+            data["result"] = "improve failed"
 
     else:
-        data["result"] = "no action"
         success = False
+        data["result"] = "no action"
 
     # =========================
-    # 🔥 FIX DELTA
+    # 📊 DELTA
     # =========================
     after = data["goal"].get("progress", 0)
     data["last_delta"] = after - before
@@ -307,6 +308,7 @@ def execution(data):
     # =========================
     score = calculate_score(before, after, success)
 
+    # ❗ сохраняем ТОЛЬКО реальные модули
     if module_used:
         data["experience"].append({
             "module": module_used,
@@ -315,7 +317,7 @@ def execution(data):
         })
 
     # =========================
-    # 🧠 MEMORY FIX
+    # 💾 MEMORY
     # =========================
     if decision:
         data["memory"].append(decision)

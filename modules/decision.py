@@ -13,7 +13,7 @@ def decision(data):
     progress = goal.get("progress", 0)
     analysis_type = data.get("analysis")
     behavior = data.get("behavior", "balanced")
-    trend = data.get("local_trend", "stable")  # 🔥 FIX
+    trend = data.get("local_trend", "stable")
 
     # =========================
     # 🧠 ОПЫТ
@@ -37,7 +37,6 @@ def decision(data):
         if scores:
             avg = sum(scores) / len(scores)
 
-            # 🔥 анти-доминирование
             if len(scores) < 2:
                 avg *= 0.9
 
@@ -54,7 +53,7 @@ def decision(data):
     recent = memory[-5:]
 
     too_many_ideas = recent.count("generate_idea") >= 3
-    too_many_adds = recent.count("add_module") >= 4
+    too_many_creates = recent.count("create_module") >= 4
     too_many_runs = recent.count("run_module") >= 3
     too_many_improves = recent.count("improve_module") >= 3
 
@@ -65,25 +64,13 @@ def decision(data):
     )
 
     # =========================
-    # 🎲 ДИНАМИКА
-    # =========================
-    if behavior == "aggressive":
-        explore_chance = 0.75
-    elif behavior == "exploit":
-        explore_chance = 0.1
-    elif behavior == "explore":
-        explore_chance = 0.9
-    else:
-        explore_chance = 0.3
-
-    # =========================
     # 🔥 ЛОГИКА
     # =========================
 
     # 🚨 RECOVERY
     if analysis_type == "recovery":
         if not has_any_module:
-            action = "add_module"
+            action = "create_module"
         elif has_strong_module:
             action = "run_module"
         else:
@@ -91,32 +78,29 @@ def decision(data):
 
     # 🧱 BOOTSTRAP
     elif analysis_type == "bootstrap":
-        action = "add_module"
+        action = "create_module"
 
     # 🏗 BUILD
     elif analysis_type == "build":
-        if too_many_adds:
+        if too_many_creates:
             action = "run_module"
         else:
-            action = "add_module"
+            action = "create_module"
 
     # 🔍 EXPLORE
     elif analysis_type == "explore":
 
         if stagnation:
-            action = "add_module"
+            action = "create_module"
 
         elif too_many_ideas:
-            action = "add_module"
+            action = "create_module"
 
-        elif has_strong_module and random.random() > explore_chance:
+        elif has_strong_module:
             action = "run_module"
 
         else:
-            action = random.choice([
-                "generate_idea",
-                "add_module"
-            ])  # 🔥 усилено
+            action = "generate_idea"
 
     # 🎯 EXPLOIT
     elif analysis_type == "exploit":
@@ -129,7 +113,7 @@ def decision(data):
                 action = "run_module"
 
         else:
-            action = "add_module"
+            action = "create_module"
 
     # 🛠 IMPROVE
     elif analysis_type == "improve":
@@ -140,29 +124,24 @@ def decision(data):
             else:
                 action = "improve_module"
         else:
-            action = "add_module"
+            action = "create_module"
 
     # ⚡ OPTIMIZE
     elif analysis_type == "optimize":
 
         if has_strong_module:
-
-            if behavior == "exploit":
-                action = "run_module"
-            else:
-                action = "improve_module"
-
+            action = "run_module"
         else:
-            action = "add_module"
+            action = "create_module"
 
     # ❓ FALLBACK
     else:
         if not has_any_module:
-            action = "add_module"
+            action = "create_module"
         elif score < 50:
             action = "improve_module"
         else:
-            action = "generate_idea"
+            action = "run_module"
 
     # =========================
     # 🛡 ЗАЩИТА
@@ -171,9 +150,9 @@ def decision(data):
         action = "generate_idea"
 
     if too_many_ideas and action == "generate_idea":
-        action = "add_module"
+        action = "create_module"
 
-    if too_many_adds and action == "add_module":
+    if too_many_creates and action == "create_module":
         action = "run_module"
 
     if too_many_runs and action == "run_module":

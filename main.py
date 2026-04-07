@@ -24,6 +24,14 @@ def run_task(data):
     # 🧠 DECISION
     data = decision(data)
 
+    # 🛑 АНТИ-ЗАСТРЕВАНИЕ (штраф за повтор)
+    if "last_decision" in data:
+        if data["decision"] == data["last_decision"]:
+            data["penalty"] = data.get("penalty", 0) - 5
+            data["log"].append("⚠️ penalty: repeated decision")
+
+    data["last_decision"] = data["decision"]
+
     # 🛠 EXECUTION
     data = execution(data)
 
@@ -31,6 +39,11 @@ def run_task(data):
     if "evaluation" in data:
         if "last_delta" in data:
             data["evaluation"]["delta"] = data["last_delta"]
+
+        # 🔥 ПРИМЕНЕНИЕ ШТРАФА
+        if "penalty" in data:
+            data["evaluation"]["score"] += data["penalty"]
+            data["log"].append(f"penalty applied: {data['penalty']}")
 
     # 📈 ОБНОВЛЕНИЕ ЦЕЛИ
     data = update_goal(data)
@@ -46,46 +59,54 @@ if __name__ == "__main__":
 
     print("🚀 Запуск задачи:", task)
 
-    data = {
-        "task": task,
-        "analysis": None,
-        "decision": None,
-        "result": None,
-        "evaluation": None,
-        "goal": None,
-        "log": [],
-        "memory": []
-    }
+    # 🔥 MULTI-TASK РАЗДЕЛЕНИЕ
+    tasks = [t.strip() for t in task.split(",")]
 
-    # 🧠 ЛУЧШИЙ РЕЗУЛЬТАТ
+    # 🧠 ЛУЧШИЙ РЕЗУЛЬТАТ (глобально)
     best_score = -1
     best_data = None
 
-    for i in range(7):
-        print(f"\n🔁 Цикл {i+1}")
+    for t_index, single_task in enumerate(tasks):
+        print(f"\n==============================")
+        print(f"🎯 ЗАДАЧА {t_index+1}: {single_task}")
+        print(f"==============================")
 
-        # 🔥 EXPLOIT / EXPLORE
-        if best_data and random.random() < 0.7:
-            print("♻️ Используем лучший найденный результат (exploit)")
-            data = copy.deepcopy(best_data)
+        data = {
+            "task": single_task,
+            "analysis": None,
+            "decision": None,
+            "result": None,
+            "evaluation": None,
+            "goal": None,
+            "log": [],
+            "memory": []
+        }
 
-        data = run_task(data)
+        for i in range(7):
+            print(f"\n🔁 Цикл {i+1}")
 
-        # 📊 ТЕКУЩИЙ SCORE
-        current_score = 0
-        if data.get("evaluation"):
-            current_score = data["evaluation"].get("score", 0)
+            # 🔥 EXPLOIT / EXPLORE
+            if best_data and random.random() < 0.6:
+                print("♻️ Используем лучший найденный результат (exploit)")
+                data = copy.deepcopy(best_data)
 
-        # 🏆 ОБНОВЛЕНИЕ ЛУЧШЕГО
-        if current_score > best_score:
-            best_score = current_score
-            best_data = copy.deepcopy(data)
-            print(f"🏆 Новый лучший результат: {best_score}")
+            data = run_task(data)
 
-        print("=== RESULT ===")
-        print(data)
+            # 📊 ТЕКУЩИЙ SCORE
+            current_score = 0
+            if data.get("evaluation"):
+                current_score = data["evaluation"].get("score", 0)
 
-        time.sleep(1)
+            # 🏆 ОБНОВЛЕНИЕ ЛУЧШЕГО
+            if current_score > best_score:
+                best_score = current_score
+                best_data = copy.deepcopy(data)
+                print(f"🏆 Новый лучший результат: {best_score}")
 
-    print("\n✅ Задача завершена")
+            print("=== RESULT ===")
+            print(data)
+
+            time.sleep(1)
+
+    print("\n✅ Все задачи завершены")
     print(f"🏁 Лучший результат за запуск: {best_score}")

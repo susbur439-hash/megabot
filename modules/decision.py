@@ -12,9 +12,11 @@ def decision(data):
     score = evaluation.get("score", 50)
     progress = goal.get("progress", 0)
     analysis_type = data.get("analysis")
+    behavior = data.get("behavior", "balanced")
+    trend = data.get("trend", "stable")
 
     # =========================
-    # 🧠 СТАТИСТИКА ОПЫТА
+    # 🧠 ОПЫТ
     # =========================
     module_scores = {}
 
@@ -39,7 +41,7 @@ def decision(data):
     has_any_module = len(module_scores) > 0
 
     # =========================
-    # 🧠 ПОВЕДЕНИЕ (анти-зацикливание)
+    # 🧠 АНТИ-ЗАЦИКЛИВАНИЕ
     # =========================
     recent = memory[-5:]
 
@@ -47,64 +49,77 @@ def decision(data):
     too_many_adds = recent.count("add_module") >= 4
     too_many_runs = recent.count("run_module") >= 3
 
+    stagnation = (
+        trend == "stable"
+        and score < 70
+        and too_many_runs
+    )
+
     # =========================
-    # 🎲 ДИНАМИЧЕСКИЙ EXPLORE
+    # 🎲 ДИНАМИКА ИССЛЕДОВАНИЯ
     # =========================
-    if progress < 30:
-        explore_chance = 0.6
-    elif progress < 70:
-        explore_chance = 0.3
-    else:
+    if behavior == "aggressive":
+        explore_chance = 0.7
+    elif behavior == "exploit":
         explore_chance = 0.1
+    else:
+        explore_chance = 0.3
 
     # =========================
-    # 🔥 ЛОГИКА РЕШЕНИЙ
+    # 🔥 ЛОГИКА
     # =========================
 
-    # 🚨 RECOVERY (выход из тупика)
+    # 🚨 RECOVERY
     if analysis_type == "recovery":
         if not has_any_module:
             action = "add_module"
         elif has_strong_module:
             action = "run_module"
         else:
-            action = "generate_idea"
+            action = "add_module"
 
     # 🧱 BOOTSTRAP
     elif analysis_type == "bootstrap":
         action = "add_module"
 
-    # 🏗 BUILD (создание системы)
+    # 🏗 BUILD
     elif analysis_type == "build":
         if too_many_adds:
             action = "run_module"
         else:
             action = "add_module"
 
-    # 🔍 EXPLORE (поиск нового)
+    # 🔍 EXPLORE
     elif analysis_type == "explore":
-        if too_many_ideas:
+
+        if stagnation:
             action = "add_module"
+
+        elif too_many_ideas:
+            action = "add_module"
+
         elif has_strong_module and random.random() > explore_chance:
             action = "run_module"
-        else:
-            action = random.choice([
-                "generate_idea",
-                "add_module"
-            ])
 
-    # 🎯 EXPLOIT (использование лучшего)
+        else:
+            action = "generate_idea"
+
+    # 🎯 EXPLOIT
     elif analysis_type == "exploit":
+
         if has_strong_module:
-            if too_many_runs:
+
+            if too_many_runs or stagnation:
                 action = "improve_module"
             else:
                 action = "run_module"
+
         else:
             action = "add_module"
 
     # 🛠 IMPROVE
     elif analysis_type == "improve":
+
         if has_strong_module:
             action = "improve_module"
         else:
@@ -112,11 +127,14 @@ def decision(data):
 
     # ⚡ OPTIMIZE
     elif analysis_type == "optimize":
+
         if has_strong_module:
-            action = random.choice([
-                "run_module",
-                "improve_module"
-            ])
+
+            if behavior == "exploit":
+                action = "run_module"
+            else:
+                action = "improve_module"
+
         else:
             action = "add_module"
 
@@ -124,13 +142,13 @@ def decision(data):
     else:
         if not has_any_module:
             action = "add_module"
-        elif score < 40:
+        elif score < 50:
             action = "improve_module"
         else:
             action = "generate_idea"
 
     # =========================
-    # 🔥 ФИНАЛЬНАЯ ЗАЩИТА
+    # 🔥 ЗАЩИТА
     # =========================
     if action == "do_nothing":
         action = "generate_idea"
@@ -141,7 +159,7 @@ def decision(data):
     # 📘 ЛОГ
     # =========================
     data["log"].append(
-        f"decision: {action} | analysis: {analysis_type} | score: {score} | best: {best_module}({best_score})"
+        f"decision: {action} | analysis: {analysis_type} | behavior: {behavior} | trend: {trend} | score: {score} | best: {best_module}({best_score})"
     )
 
     return data

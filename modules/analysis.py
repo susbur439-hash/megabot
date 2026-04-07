@@ -7,7 +7,7 @@ def analysis(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🧠 TASK INTERPRETER (NEW)
+    # 🧠 TASK INTERPRETER
     # =========================
     if any(word in task for word in ["развивай", "улучшай", "создавай"]):
         task_type = "development"
@@ -33,16 +33,20 @@ def analysis(data):
     repeated_nothing = recent_actions.count("do_nothing") >= 2
 
     # =========================
-    # 🧠 ОПЫТ
+    # 🧠 ОПЫТ + ДИНАМИКА
     # =========================
     module_stats = {}
+    score_trend = []
 
     for exp in experience:
         if isinstance(exp, dict):
             m = exp.get("module")
             s = exp.get("score", 0)
+
             if m:
                 module_stats.setdefault(m, []).append(s)
+
+            score_trend.append(s)
 
     best_module = None
     best_score = 0
@@ -56,6 +60,16 @@ def analysis(data):
 
     has_strong_module = best_score >= 75
     has_any_module = len(module_stats) > 0
+
+    # 📈 ТРЕНД (очень важно)
+    trend = "stable"
+    if len(score_trend) >= 3:
+        if score_trend[-1] > score_trend[-2] > score_trend[-3]:
+            trend = "up"
+        elif score_trend[-1] < score_trend[-2] < score_trend[-3]:
+            trend = "down"
+
+    data["trend"] = trend
 
     # =========================
     # 🧠 ОЦЕНКА
@@ -71,32 +85,17 @@ def analysis(data):
     if last_result is None:
         evaluation = {"result": "neutral", "reason": "first run", "score": 60}
 
-    elif last_result == "module created":
-        evaluation = {"result": "good", "reason": "created module", "score": 80}
+    elif "tested" in str(last_result):
+        evaluation = {"result": "good", "reason": "module tested", "score": 70}
 
-    elif last_result == "module improved":
-        evaluation = {"result": "good", "reason": "improved module", "score": 75}
-
-    elif last_result == "module executed":
+    elif "executed" in str(last_result):
         evaluation = {"result": "good", "reason": "execution success", "score": 85}
-
-    elif last_result == "alternative created":
-        evaluation = {"result": "good", "reason": "new strategy", "score": 78}
 
     elif last_result == "idea generated":
         evaluation = {"result": "good", "reason": "thinking", "score": 65}
 
-    elif last_result == "idea → module":
-        evaluation = {"result": "good", "reason": "idea became module", "score": 82}
-
-    elif last_result == "no module":
-        evaluation = {"result": "bad", "reason": "no modules", "score": 25}
-
     elif last_result == "no action":
         evaluation = {"result": "bad", "reason": "stuck", "score": 15}
-
-    elif last_result == "limit reached":
-        evaluation = {"result": "neutral", "reason": "limit reached", "score": 40}
 
     data["evaluation"] = evaluation
 
@@ -106,60 +105,67 @@ def analysis(data):
     progress = goal.get("progress", 0)
 
     # =========================
+    # 🧠 РЕЖИМ ПОВЕДЕНИЯ (NEW 🔥)
+    # =========================
+    if trend == "down":
+        behavior = "aggressive"   # ломаем старое, ищем новое
+    elif trend == "up":
+        behavior = "exploit"      # усиливаем лучшее
+    else:
+        behavior = "balanced"     # стандарт
+
+    data["behavior"] = behavior
+
+    # =========================
     # 🔥 ГЛАВНАЯ ЛОГИКА
     # =========================
 
-    # 🚨 1. ВЫХОД ИЗ ТУПИКА (приоритет №1)
+    # 🚨 1. ВЫХОД ИЗ ТУПИКА
     if repeated_nothing or evaluation["score"] < 20:
         data["analysis"] = "recovery"
 
-    # 🧱 2. СТАРТ СИСТЕМЫ
+    # 🧱 2. СТАРТ
     elif not has_any_module:
         data["analysis"] = "bootstrap"
 
-    # 🔧 3. FIX режим
+    # 🔧 3. FIX
     elif task_type == "fix":
         data["analysis"] = "improve"
 
-    # 🚀 4. РАЗВИТИЕ
+    # 🚀 4. DEVELOPMENT
     elif task_type == "development":
 
-        if add_module_count < 5:
-            data["analysis"] = "build"
-
-        elif has_strong_module and not repeated_runs:
-            data["analysis"] = "exploit"
-
-        elif repeated_runs:
+        if behavior == "aggressive":
             data["analysis"] = "explore"
 
-        elif progress > 70:
+        elif behavior == "exploit":
+            data["analysis"] = "exploit"
+
+        elif add_module_count < 5:
+            data["analysis"] = "build"
+
+        elif progress > 80:
             data["analysis"] = "optimize"
 
         else:
             data["analysis"] = "explore"
 
-    # 🧠 5. АНАЛИЗ (новый режим)
+    # 🧠 5. ANALYSIS
     elif task_type == "analysis":
 
         if not has_any_module:
             data["analysis"] = "build"
-
         elif not has_strong_module:
             data["analysis"] = "explore"
-
         else:
             data["analysis"] = "exploit"
 
-    # ❓ 6. FALLBACK (ВАЖНО — больше нет тупика)
+    # ❓ 6. FALLBACK
     else:
-
         if not has_any_module:
             data["analysis"] = "bootstrap"
-
         elif evaluation["score"] < 50:
             data["analysis"] = "improve"
-
         else:
             data["analysis"] = "explore"
 
@@ -167,7 +173,7 @@ def analysis(data):
     # 📘 ЛОГ
     # =========================
     data["log"].append(
-        f"analysis: {data['analysis']} | task_type: {task_type} | score: {evaluation['score']} | best: {best_module}({best_score}) | recent: {recent_actions}"
+        f"analysis: {data['analysis']} | behavior: {behavior} | trend: {trend} | score: {evaluation['score']} | best: {best_module}({best_score}) | recent: {recent_actions}"
     )
 
     return data

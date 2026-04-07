@@ -6,7 +6,7 @@ from modules.analysis import analysis
 from modules.decision import decision
 from modules.execution import execution
 from modules.goals import set_goal, update_goal
-from modules.system_guard import system_guard  # ✅ добавили
+from modules.system_guard import system_guard  # ✅ НОВОЕ
 
 
 # =========================
@@ -14,8 +14,13 @@ from modules.system_guard import system_guard  # ✅ добавили
 # =========================
 
 def run_task(data):
+    data["last_layer"] = "goal"
     data = set_goal(data)
+
+    data["last_layer"] = "analysis"
     data = analysis(data)
+
+    data["last_layer"] = "decision"
     data = decision(data)
 
     # =========================
@@ -119,10 +124,11 @@ def run_task(data):
     # 🛠 EXECUTION
     # =========================
 
+    data["last_layer"] = "execution"
     data = execution(data)
 
     # =========================
-    # 🛡 SYSTEM GUARD (🔥 ГЛАВНОЕ ДОБАВЛЕНИЕ)
+    # 🛡 SYSTEM GUARD (🔥 КЛЮЧЕВОЕ)
     # =========================
 
     data = system_guard(data)
@@ -143,6 +149,7 @@ def run_task(data):
 
             data["log"].append(f"penalty applied: {data['penalty']}")
 
+    data["last_layer"] = "goal_update"
     data = update_goal(data)
 
     return data
@@ -238,6 +245,7 @@ def run(task):
             if data.get("evaluation"):
                 current_score = data["evaluation"].get("score", 0)
 
+            # 🛑 анти-деградация
             if best_data and current_score < best_score - 20:
                 print("🛑 ДЕГРАДАЦИЯ → ОТКАТ")
                 data = copy.deepcopy(best_data)

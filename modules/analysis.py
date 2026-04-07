@@ -23,7 +23,7 @@ def analysis(data):
     # =========================
     # 📊 RECENT
     # =========================
-    recent = memory[-5:]
+    recent = memory[-5:] if len(memory) >= 5 else memory
     repeated_runs = recent.count("run_module") >= 3
     repeated_nothing = recent.count("do_nothing") >= 2
 
@@ -47,10 +47,11 @@ def analysis(data):
     best_score = 0
 
     for m, sc in module_stats.items():
-        avg = sum(sc) / len(sc)
-        if avg > best_score:
-            best_score = avg
-            best_module = m
+        if sc:
+            avg = sum(sc) / len(sc)
+            if avg > best_score:
+                best_score = avg
+                best_module = m
 
     has_any_module = len(module_stats) > 0
     has_strong_module = best_score >= 75
@@ -72,13 +73,18 @@ def analysis(data):
     data["trend"] = trend
 
     # =========================
-    # 🧠 НАСТОЯЩАЯ ОЦЕНКА
+    # 🧠 ОЦЕНКА (ФИКС 🔥)
     # =========================
-    last_result = str(data.get("result", ""))
-    last_delta = data.get("last_delta", 0)   # 🔥 теперь используем реальный результат
-    success = data.get("success", False)
+    last_delta = data.get("last_delta")
+    success = data.get("success")
 
-    if not last_result:
+    # fallback если execution не передал данные
+    if last_delta is None:
+        last_delta = 0
+    if success is None:
+        success = True
+
+    if not data.get("result"):
         score = 60
         reason = "first run"
 
@@ -91,8 +97,8 @@ def analysis(data):
         reason = "strong improvement"
 
     elif last_delta > 0:
-        score = 70
-        reason = "positive result"
+        score = 75
+        reason = "positive progress"
 
     elif last_delta == 0:
         score = 40
@@ -105,7 +111,8 @@ def analysis(data):
     evaluation = {
         "result": "good" if score >= 70 else "neutral" if score >= 40 else "bad",
         "score": score,
-        "reason": reason
+        "reason": reason,
+        "delta": last_delta
     }
 
     data["evaluation"] = evaluation
@@ -127,7 +134,7 @@ def analysis(data):
     # =========================
     progress = goal.get("progress", 0)
 
-    if repeated_nothing or evaluation["score"] < 20:
+    if repeated_nothing or score < 20:
         mode = "recovery"
 
     elif not has_any_module:
@@ -160,7 +167,7 @@ def analysis(data):
             mode = "exploit"
 
     else:
-        if evaluation["score"] < 50:
+        if score < 50:
             mode = "improve"
         else:
             mode = "explore"
@@ -171,7 +178,7 @@ def analysis(data):
     # 📘 LOG
     # =========================
     data["log"].append(
-        f"analysis: {mode} | behavior: {behavior} | trend: {trend} | stagnation: {stagnation} | score: {score} | reason: {reason} | best: {best_module}({best_score})"
+        f"analysis: {mode} | behavior: {behavior} | trend: {trend} | stagnation: {stagnation} | score: {score} | delta: {last_delta} | best: {best_module}({best_score})"
     )
 
     return data

@@ -7,7 +7,7 @@ from modules.decision import decision
 from modules.execution import execution
 from modules.goals import set_goal, update_goal
 from modules.system_guard import system_guard
-from modules.self_improver import self_improver  # 🔥 НОВОЕ
+from modules.self_improver import self_improver
 
 
 # =========================
@@ -17,39 +17,33 @@ from modules.self_improver import self_improver  # 🔥 НОВОЕ
 def run_task(data):
     data.setdefault("log", [])
 
-    # =========================
     # 🎯 GOAL
-    # =========================
     data["last_layer"] = "goal"
     data = set_goal(data)
 
-    # =========================
     # 🧠 ANALYSIS
-    # =========================
     data["last_layer"] = "analysis"
     data = analysis(data)
 
-    # =========================
     # 🧠 DECISION
-    # =========================
     data["last_layer"] = "decision"
     data = decision(data)
 
-    # =========================
-    # 🧠 SELF IMPROVER (🔥)
-    # =========================
+    # 🔥 SELF IMPROVER
     data = self_improver(data)
 
     # =========================
-    # 🧠 META-STRATEGY
+    # 🧠 META-STRATEGY (FIX)
     # =========================
 
     score = data.get("evaluation", {}).get("score", 0)
     repeat = data.get("repeat_count", 0)
 
-    strategy = "build"
+    # ❗ FIX: если нет прогресса → explore
+    if data.get("last_delta", 0) <= 0:
+        strategy = "explore"
 
-    if data.get("force_explore"):
+    elif data.get("force_explore"):
         strategy = "explore"
 
     elif repeat >= 2:
@@ -59,7 +53,7 @@ def run_task(data):
         strategy = "exploit"
 
     elif score < 50:
-        strategy = "build"
+        strategy = "explore"   # ❗ было build → ошибка
 
     else:
         strategy = "optimize"
@@ -68,7 +62,7 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🎯 DECISION CONTROL
+    # 🎯 DECISION CONTROL (FIX)
     # =========================
 
     if strategy == "explore":
@@ -81,7 +75,11 @@ def run_task(data):
             data["decision"] = "generate_idea"
 
     elif strategy == "optimize":
-        if data.get("decision") == "add_module":
+        # ❗ FIX: не залипать на generate_idea
+        if data.get("decision") == "generate_idea":
+            data["decision"] = "run_module"
+
+        elif data.get("decision") == "add_module":
             data["decision"] = "improve_module"
 
     # =========================
@@ -151,12 +149,16 @@ def run_task(data):
     data = system_guard(data)
 
     # =========================
-    # 🔥 SYNC
+    # 🔥 SYNC (FIX)
     # =========================
 
     if "evaluation" in data:
-        if "last_delta" in data:
-            data["evaluation"]["delta"] = data["last_delta"]
+
+        # ❗ FIX: delta считать автоматически
+        before = data.get("goal", {}).get("history", [0])[-1] if data.get("goal", {}).get("history") else 0
+        after = data.get("goal", {}).get("progress", 0)
+
+        data["evaluation"]["delta"] = after - before
 
         if "penalty" in data:
             data["evaluation"]["score"] += data["penalty"]
@@ -195,7 +197,7 @@ def analyze_experience(data):
 
 
 # =========================
-# 🎛 DIRECTOR v3 FINAL
+# 🎛 DIRECTOR v3 FINAL (FIXED)
 # =========================
 
 def run(task):
@@ -216,7 +218,7 @@ def run(task):
             "analysis": None,
             "decision": None,
             "result": None,
-            "evaluation": None,
+            "evaluation": {"score": 0, "delta": 0},
             "goal": None,
             "log": [],
             "memory": [],
@@ -264,8 +266,8 @@ def run(task):
 
             current_score = data.get("evaluation", {}).get("score", 0)
 
-            # 🛑 АНТИ-ДЕГРАДАЦИЯ
-            if best_data and current_score < best_score - 20:
+            # 🛑 АНТИ-ДЕГРАДАЦИЯ (усилен)
+            if best_data and current_score < best_score - 15:
                 print("🛑 ДЕГРАДАЦИЯ → ОТКАТ")
                 data = copy.deepcopy(best_data)
                 continue

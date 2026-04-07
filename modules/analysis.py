@@ -57,7 +57,7 @@ def analysis(data):
     has_strong_module = best_score >= 75
 
     # =========================
-    # 📈 TREND
+    # 📈 TREND (локальный)
     # =========================
     trend = "stable"
     stagnation = False
@@ -70,21 +70,17 @@ def analysis(data):
         else:
             stagnation = True
 
-    data["trend"] = trend
+    data["local_trend"] = trend  # 🔥 НЕ ПЕРЕЗАТИРАЕМ global trend
 
     # =========================
-    # 🧠 ОЦЕНКА (ФИКС 🔥)
+    # 🧠 ОЦЕНКА
     # =========================
-    last_delta = data.get("last_delta")
-    success = data.get("success")
+    last_delta = data.get("last_delta", 0)
+    success = data.get("success", True)
 
-    # fallback если execution не передал данные
-    if last_delta is None:
-        last_delta = 0
-    if success is None:
-        success = True
+    is_first_run = len(memory) == 0
 
-    if not data.get("result"):
+    if is_first_run:
         score = 60
         reason = "first run"
 
@@ -92,7 +88,7 @@ def analysis(data):
         score = 20
         reason = "execution failed"
 
-    elif last_delta > 10:
+    elif last_delta >= 10:
         score = 90
         reason = "strong improvement"
 
@@ -137,6 +133,9 @@ def analysis(data):
     if repeated_nothing or score < 20:
         mode = "recovery"
 
+    elif repeated_runs:
+        mode = "optimize"  # 🔥 добавили использование
+
     elif not has_any_module:
         mode = "bootstrap"
 
@@ -147,13 +146,10 @@ def analysis(data):
 
         if behavior == "aggressive":
             mode = "explore"
-
         elif behavior == "exploit":
             mode = "exploit"
-
         elif progress > 85:
             mode = "optimize"
-
         else:
             mode = "build"
 
@@ -167,18 +163,17 @@ def analysis(data):
             mode = "exploit"
 
     else:
-        if score < 50:
-            mode = "improve"
-        else:
-            mode = "explore"
+        mode = "explore" if score >= 50 else "improve"
 
     data["analysis"] = mode
 
     # =========================
     # 📘 LOG
     # =========================
+    best_str = f"{best_module}({round(best_score,1)})" if best_module else "None"
+
     data["log"].append(
-        f"analysis: {mode} | behavior: {behavior} | trend: {trend} | stagnation: {stagnation} | score: {score} | delta: {last_delta} | best: {best_module}({best_score})"
+        f"analysis: {mode} | behavior: {behavior} | trend: {trend} | stagnation: {stagnation} | score: {score} | delta: {last_delta} | best: {best_str}"
     )
 
     return data

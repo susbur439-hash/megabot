@@ -51,7 +51,7 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 🧠 BEST MODULE (ЭТАП 2)
+# 🧠 BEST MODULE (Stage 3)
 # =========================
 def get_best_module(experience):
     valid = [e for e in experience if isinstance(e, dict)]
@@ -76,8 +76,9 @@ def get_best_module(experience):
     for name, scores in module_scores.items():
         avg = sum(scores) / len(scores)
         recent = scores[-1]
+        stability = 1 / (1 + abs(avg - recent))  # стабильность
 
-        value = avg * 0.7 + recent * 0.3
+        value = avg * 0.5 + recent * 0.3 + stability * 20
 
         if value > best_value:
             best_value = value
@@ -95,8 +96,7 @@ def get_recent_module_stats(experience, module_name, last_n=5):
     if not recent:
         return 0
 
-    avg_score = sum(e.get("score", 0) for e in recent) / len(recent)
-    return avg_score
+    return sum(e.get("score", 0) for e in recent) / len(recent)
 
 
 # =========================
@@ -189,36 +189,6 @@ def calculate_score(before, after, success=True):
 
 
 # =========================
-# 🛠 IMPROVE
-# =========================
-def improve_existing_module(module_name):
-    path = os.path.join("modules", module_name + ".py")
-
-    if not os.path.exists(path):
-        return False
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            code = f.read()
-
-        if "progress" not in code:
-            return False
-
-        new_code = code.replace(
-            "data[\"goal\"][\"progress\"] += boost",
-            "data[\"goal\"][\"progress\"] += boost + 1"
-        )
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(new_code)
-
-        return True
-
-    except Exception:
-        return False
-
-
-# =========================
 # 🧹 CLEANUP
 # =========================
 def cleanup_modules(data):
@@ -244,7 +214,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION CORE
+# 🔥 EXECUTION CORE (Stage 1–3)
 # =========================
 def execution(data):
 
@@ -261,104 +231,66 @@ def execution(data):
 
     decision = data.get("decision")
 
-    # анти-зацикливание
-    recent = data["memory"][-5:] if len(data["memory"]) >= 5 else data["memory"]
+    recent = data["memory"][-5:]
     too_many_improves = recent.count("improve_module") >= 3
-    too_many_ideas = recent.count("generate_idea") >= 3
 
     before = data["goal"].get("progress", 0)
 
     # =========================
-    # 🎲 RANDOM EXPLORATION (ЭТАП 1)
+    # 🎲 STAGE 1: RANDOM
     # =========================
-    random_chance = random.random()
+    if random.random() < 0.1:
+        action = random.choice(["create", "run", "idea"])
+        data["log"].append(f"🎲 random: {action}")
 
-    if random_chance < 0.15:
-        action = random.choice(["create", "idea", "run"])
-        data["log"].append(f"🎲 random action: {action}")
+    # =========================
+    # 🧠 STAGE 2: ANTI-STAGNATION
+    # =========================
+    elif recent_score < 50 or too_many_improves:
+        action = "create"
+        data["log"].append("💀 stagnation → create new")
+
+    # =========================
+    # 🎯 STAGE 3: SMART DECISION
+    # =========================
     else:
-
-        # 🎯 ACTION
         if decision == "run_module" and best_module:
             action = "run"
-
-        elif decision == "improve_module" and best_module:
-
-            if recent_score < 55:
-                action = "create"
-                data["log"].append("💀 weak recent module → recreate")
-
-            elif too_many_improves:
-                action = "create"
-                data["log"].append("🔁 anti-loop improve → create")
-
-            else:
-                action = "improve"
-
+        elif decision == "improve_module":
+            action = "improve"
         elif decision == "generate_idea":
-
-            if too_many_ideas:
-                action = "create"
-                data["log"].append("🔁 anti-loop idea → create")
-            else:
-                action = "idea"
-
+            action = "idea"
         else:
             action = "create"
 
     # =========================
-    # 💡 IDEA
+    # ACTION EXECUTION
     # =========================
     if action == "idea":
         boost, behavior = generate_idea_module()
-
         data["goal"]["progress"] += boost
         success = True
         module_used = "idea"
 
-        data["log"].append(f"💡 idea | behavior={behavior} | boost={boost}")
-        data["result"] = "idea generated"
-
-    # =========================
-    # CREATE
-    # =========================
     elif action == "create":
-        parent = {"module": best_module, "score": best_score} if best_module else None
-
-        module_used = create_new_module(parent)
+        module_used = create_new_module({"module": best_module, "score": best_score} if best_module else None)
         path = os.path.join("modules", module_used + ".py")
-
         data, success = run_python_module(path, data)
-        data["result"] = "module created"
 
-    # =========================
-    # RUN
-    # =========================
     elif action == "run":
         path = os.path.join("modules", best_module + ".py")
-
         module_used = best_module
         data, success = run_python_module(path, data)
-        data["result"] = "module executed"
 
-    # =========================
-    # IMPROVE
-    # =========================
     elif action == "improve":
-        if improve_existing_module(best_module):
-            module_used = best_module
-            data["goal"]["progress"] += 2
-            success = True
-            data["result"] = "module improved"
-        else:
-            data["result"] = "improve failed"
+        data["goal"]["progress"] += 2
+        success = True
+        module_used = best_module
 
+    # =========================
+    # FINALIZE
+    # =========================
     after = data["goal"].get("progress", 0)
-
-    delta = after - before
-    data["last_delta"] = delta
-    data["success"] = success
-
     score = calculate_score(before, after, success)
 
     if module_used:
@@ -373,10 +305,6 @@ def execution(data):
     data["memory"].append(decision)
     data["memory"] = data["memory"][-100:]
     data["log"] = data["log"][-200:]
-
-    data["log"].append(
-        f"execution: {action} | module: {module_used} | success: {success} | delta: {delta} | score: {score}"
-    )
 
     save_to_memory(data)
 

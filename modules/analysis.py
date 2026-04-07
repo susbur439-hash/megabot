@@ -7,13 +7,13 @@ def analysis(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🧠 TASK INTERPRETER
+    # 🧠 TASK TYPE
     # =========================
-    if any(word in task for word in ["развивай", "улучшай", "создавай"]):
+    if any(w in task for w in ["развивай", "улучшай", "создавай"]):
         task_type = "development"
-    elif any(word in task for word in ["исправь", "ошибка", "fix"]):
+    elif any(w in task for w in ["исправь", "ошибка", "fix"]):
         task_type = "fix"
-    elif any(word in task for word in ["определи", "анализируй"]):
+    elif any(w in task for w in ["анализ", "определи"]):
         task_type = "analysis"
     else:
         task_type = "unknown"
@@ -21,14 +21,14 @@ def analysis(data):
     data["task_type"] = task_type
 
     # =========================
-    # 📊 СТАТИСТИКА
+    # 📊 RECENT
     # =========================
-    recent_actions = memory[-5:]
-    repeated_runs = recent_actions.count("run_module") >= 3
-    repeated_nothing = recent_actions.count("do_nothing") >= 2
+    recent = memory[-5:]
+    repeated_runs = recent.count("run_module") >= 3
+    repeated_nothing = recent.count("do_nothing") >= 2
 
     # =========================
-    # 🧠 ОПЫТ
+    # 🧠 EXPERIENCE
     # =========================
     module_stats = {}
     scores = []
@@ -43,7 +43,6 @@ def analysis(data):
 
             scores.append(s)
 
-    # лучший модуль
     best_module = None
     best_score = 0
 
@@ -57,7 +56,7 @@ def analysis(data):
     has_strong_module = best_score >= 75
 
     # =========================
-    # 📈 TREND + STAGNATION
+    # 📈 TREND
     # =========================
     trend = "stable"
     stagnation = False
@@ -73,43 +72,46 @@ def analysis(data):
     data["trend"] = trend
 
     # =========================
-    # 🧠 ОЦЕНКА (УЛУЧШЕННАЯ)
+    # 🧠 НАСТОЯЩАЯ ОЦЕНКА
     # =========================
     last_result = str(data.get("result", ""))
+    last_delta = data.get("last_delta", 0)   # 🔥 теперь используем реальный результат
+    success = data.get("success", False)
 
-    score = 50
-
-    if "executed" in last_result:
-        score = 85
-    elif "tested" in last_result:
-        score = 70
-    elif "improved" in last_result:
-        score = 75
-    elif "idea" in last_result:
+    if not last_result:
         score = 60
-    elif "no action" in last_result:
-        score = 10
+        reason = "first run"
 
-    # 🔥 если есть числовой результат — усиливаем
-    import re
-    numbers = re.findall(r"\d+", last_result)
-    if numbers:
-        score = int(numbers[-1])
+    elif not success:
+        score = 20
+        reason = "execution failed"
+
+    elif last_delta > 10:
+        score = 90
+        reason = "strong improvement"
+
+    elif last_delta > 0:
+        score = 70
+        reason = "positive result"
+
+    elif last_delta == 0:
+        score = 40
+        reason = "no progress"
+
+    else:
+        score = 10
+        reason = "regression"
 
     evaluation = {
-        "result": "auto",
-        "score": max(0, min(100, score))
+        "result": "good" if score >= 70 else "neutral" if score >= 40 else "bad",
+        "score": score,
+        "reason": reason
     }
 
     data["evaluation"] = evaluation
 
     # =========================
-    # 🎯 ПРОГРЕСС
-    # =========================
-    progress = goal.get("progress", 0)
-
-    # =========================
-    # 🧠 ПОВЕДЕНИЕ
+    # 🧠 BEHAVIOR
     # =========================
     if trend == "down" or stagnation:
         behavior = "aggressive"
@@ -121,8 +123,9 @@ def analysis(data):
     data["behavior"] = behavior
 
     # =========================
-    # 🔥 ГЛАВНАЯ ЛОГИКА
+    # 🔥 DECISION MODE
     # =========================
+    progress = goal.get("progress", 0)
 
     if repeated_nothing or evaluation["score"] < 20:
         mode = "recovery"
@@ -165,10 +168,10 @@ def analysis(data):
     data["analysis"] = mode
 
     # =========================
-    # 📘 ЛОГ
+    # 📘 LOG
     # =========================
     data["log"].append(
-        f"analysis: {mode} | behavior: {behavior} | trend: {trend} | stagnation: {stagnation} | score: {evaluation['score']} | best: {best_module}({best_score})"
+        f"analysis: {mode} | behavior: {behavior} | trend: {trend} | stagnation: {stagnation} | score: {score} | reason: {reason} | best: {best_module}({best_score})"
     )
 
     return data

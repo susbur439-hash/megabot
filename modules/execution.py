@@ -51,7 +51,7 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 🧠 BEST MODULE (улучшено)
+# 🧠 BEST MODULE (ЭТАП 2)
 # =========================
 def get_best_module(experience):
     valid = [e for e in experience if isinstance(e, dict)]
@@ -59,14 +59,35 @@ def get_best_module(experience):
     if not valid:
         return None, 0
 
-    # 🔥 берём лучший за всё время
-    best = max(valid, key=lambda x: x.get("score", 0))
+    module_scores = {}
 
-    return best.get("module"), best.get("score", 0)
+    for e in valid:
+        name = e.get("module")
+        score = e.get("score", 0)
+
+        if name not in module_scores:
+            module_scores[name] = []
+
+        module_scores[name].append(score)
+
+    best_module = None
+    best_value = -1
+
+    for name, scores in module_scores.items():
+        avg = sum(scores) / len(scores)
+        recent = scores[-1]
+
+        value = avg * 0.7 + recent * 0.3
+
+        if value > best_value:
+            best_value = value
+            best_module = name
+
+    return best_module, best_value
 
 
 # =========================
-# 🧠 RECENT ANALYSIS (🔥 НОВОЕ)
+# 🧠 RECENT ANALYSIS
 # =========================
 def get_recent_module_stats(experience, module_name, last_n=5):
     recent = [e for e in experience if e.get("module") == module_name][-last_n:]
@@ -198,7 +219,7 @@ def improve_existing_module(module_name):
 
 
 # =========================
-# 🧹 CLEANUP (чуть усилен)
+# 🧹 CLEANUP
 # =========================
 def cleanup_modules(data):
     exp = [e for e in data.get("experience", []) if isinstance(e, dict)]
@@ -247,35 +268,47 @@ def execution(data):
 
     before = data["goal"].get("progress", 0)
 
-    # 🎯 ACTION (улучшен)
-    if decision == "run_module" and best_module:
-        action = "run"
+    # =========================
+    # 🎲 RANDOM EXPLORATION (ЭТАП 1)
+    # =========================
+    random_chance = random.random()
 
-    elif decision == "improve_module" and best_module:
-
-        if recent_score < 55:
-            action = "create"
-            data["log"].append("💀 weak recent module → recreate")
-
-        elif too_many_improves:
-            action = "create"
-            data["log"].append("🔁 anti-loop improve → create")
-
-        else:
-            action = "improve"
-
-    elif decision == "generate_idea":
-
-        if too_many_ideas:
-            action = "create"
-            data["log"].append("🔁 anti-loop idea → create")
-        else:
-            action = "idea"
-
+    if random_chance < 0.15:
+        action = random.choice(["create", "idea", "run"])
+        data["log"].append(f"🎲 random action: {action}")
     else:
-        action = "create"
 
+        # 🎯 ACTION
+        if decision == "run_module" and best_module:
+            action = "run"
+
+        elif decision == "improve_module" and best_module:
+
+            if recent_score < 55:
+                action = "create"
+                data["log"].append("💀 weak recent module → recreate")
+
+            elif too_many_improves:
+                action = "create"
+                data["log"].append("🔁 anti-loop improve → create")
+
+            else:
+                action = "improve"
+
+        elif decision == "generate_idea":
+
+            if too_many_ideas:
+                action = "create"
+                data["log"].append("🔁 anti-loop idea → create")
+            else:
+                action = "idea"
+
+        else:
+            action = "create"
+
+    # =========================
     # 💡 IDEA
+    # =========================
     if action == "idea":
         boost, behavior = generate_idea_module()
 
@@ -286,7 +319,9 @@ def execution(data):
         data["log"].append(f"💡 idea | behavior={behavior} | boost={boost}")
         data["result"] = "idea generated"
 
+    # =========================
     # CREATE
+    # =========================
     elif action == "create":
         parent = {"module": best_module, "score": best_score} if best_module else None
 
@@ -296,7 +331,9 @@ def execution(data):
         data, success = run_python_module(path, data)
         data["result"] = "module created"
 
+    # =========================
     # RUN
+    # =========================
     elif action == "run":
         path = os.path.join("modules", best_module + ".py")
 
@@ -304,7 +341,9 @@ def execution(data):
         data, success = run_python_module(path, data)
         data["result"] = "module executed"
 
+    # =========================
     # IMPROVE
+    # =========================
     elif action == "improve":
         if improve_existing_module(best_module):
             module_used = best_module

@@ -1,6 +1,3 @@
-# =========================
-# 🎯 УСТАНОВКА ЦЕЛИ
-# =========================
 def set_goal(data):
 
     if "goal" not in data or not isinstance(data["goal"], dict):
@@ -14,7 +11,6 @@ def set_goal(data):
 
     goal = data["goal"]
 
-    # защита
     goal.setdefault("name", "evolve_system")
     goal.setdefault("progress", 0)
     goal.setdefault("level", 1)
@@ -24,9 +20,6 @@ def set_goal(data):
     return data
 
 
-# =========================
-# 📈 ОБНОВЛЕНИЕ ЦЕЛИ
-# =========================
 def update_goal(data):
 
     goal = data.get("goal", {})
@@ -40,28 +33,30 @@ def update_goal(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🧠 ДИНАМИЧЕСКИЙ РОСТ
+    # 🔥 ОСНОВА = РЕАЛЬНЫЙ РЕЗУЛЬТАТ
     # =========================
+    real_delta = data.get("last_delta", 0)
 
+    # усиливаем или ослабляем
     if score >= 85:
-        delta = 15
+        delta = real_delta + 5
     elif score >= 70:
-        delta = 10
+        delta = real_delta + 2
     elif score >= 50:
-        delta = 4
+        delta = real_delta
     elif score >= 30:
-        delta = 1
+        delta = real_delta - 2
     else:
-        delta = -8
+        delta = real_delta - 5
 
     progress += delta
 
     # =========================
-    # 📊 ТРЕНД (важно)
+    # 📊 ТРЕНД
     # =========================
     history = goal.get("history", [])
     history.append(score)
-    history = history[-10:]  # последние 10
+    history = history[-10:]
 
     avg = sum(history) / len(history) if history else 50
 
@@ -76,7 +71,7 @@ def update_goal(data):
     data["trend"] = trend
 
     # =========================
-    # 🔥 УРОВНЕВАЯ СИСТЕМА
+    # 🔥 LEVEL SYSTEM
     # =========================
     if progress >= target:
         level += 1
@@ -84,15 +79,14 @@ def update_goal(data):
 
         data["log"].append(f"🚀 LEVEL UP → {level}")
 
-        # 💥 усложнение
-        goal["target"] = int(target * 1.2)  # каждый уровень сложнее
+        goal["target"] = int(target * 1.2)
         data["difficulty"] = level
 
     elif progress < 0:
         progress = 0
 
     # =========================
-    # 🧠 СОСТОЯНИЕ СИСТЕМЫ
+    # 🧠 STATE
     # =========================
     if trend == "down":
         state = "crisis"
@@ -106,7 +100,7 @@ def update_goal(data):
     goal["state"] = state
 
     # =========================
-    # 📦 СОХРАНЕНИЕ
+    # 📦 SAVE
     # =========================
     goal["progress"] = min(progress, target)
     goal["level"] = level
@@ -114,10 +108,10 @@ def update_goal(data):
     data["goal"] = goal
 
     # =========================
-    # 📘 ЛОГ
+    # 📘 LOG
     # =========================
     data["log"].append(
-        f"goal: {progress}/{target} | level: {level} | trend: {trend} | state: {state} | delta: {delta}"
+        f"goal: {progress}/{target} | level: {level} | trend: {trend} | state: {state} | delta: {delta} | real: {real_delta}"
     )
 
     return data

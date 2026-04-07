@@ -1,17 +1,12 @@
 def set_goal(data):
 
     if "goal" not in data or not isinstance(data["goal"], dict):
-        data["goal"] = {
-            "name": "evolve_system",
-            "progress": 0,
-            "level": 1,
-            "target": 100,
-            "history": []
-        }
+        data["goal"] = {}
 
     goal = data["goal"]
 
-    goal.setdefault("name", "evolve_system")
+    # 🔥 убрали жёсткую привязку имени
+    goal.setdefault("name", data.get("task_type", "adaptive_goal"))
     goal.setdefault("progress", 0)
     goal.setdefault("level", 1)
     goal.setdefault("target", 100)
@@ -33,21 +28,21 @@ def update_goal(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🔥 ОСНОВА = РЕАЛЬНЫЙ РЕЗУЛЬТАТ
+    # 🔥 ОСНОВА = РЕАЛЬНЫЙ DELTA (фикс)
     # =========================
     real_delta = data.get("last_delta", 0)
 
-    # усиливаем или ослабляем
+    # 🔥 НЕ пересчитываем сильно — только корректируем
     if score >= 85:
-        delta = real_delta + 5
-    elif score >= 70:
         delta = real_delta + 2
+    elif score >= 70:
+        delta = real_delta + 1
     elif score >= 50:
         delta = real_delta
     elif score >= 30:
-        delta = real_delta - 2
+        delta = real_delta - 1
     else:
-        delta = real_delta - 5
+        delta = real_delta - 3
 
     progress += delta
 
@@ -71,15 +66,18 @@ def update_goal(data):
     data["trend"] = trend
 
     # =========================
-    # 🔥 LEVEL SYSTEM
+    # 🔥 LEVEL SYSTEM (фикс)
     # =========================
     if progress >= target:
         level += 1
-        progress = 0
+
+        # ✅ сохраняем остаток (а не обнуляем)
+        progress = progress - target
 
         data["log"].append(f"🚀 LEVEL UP → {level}")
 
-        goal["target"] = int(target * 1.2)
+        target = int(target * 1.2)
+        goal["target"] = target
         data["difficulty"] = level
 
     elif progress < 0:
@@ -108,10 +106,10 @@ def update_goal(data):
     data["goal"] = goal
 
     # =========================
-    # 📘 LOG
+    # 📘 LOG (фикс имени)
     # =========================
     data["log"].append(
-        f"goal: {progress}/{target} | level: {level} | trend: {trend} | state: {state} | delta: {delta} | real: {real_delta}"
+        f"{goal['name']}: {goal['progress']}/{target} | level: {level} | trend: {trend} | state: {state} | delta: {delta} | real: {real_delta}"
     )
 
     return data

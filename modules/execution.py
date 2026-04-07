@@ -51,7 +51,7 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 🧠 BEST MODULE
+# 🧠 BEST MODULE (улучшено)
 # =========================
 def get_best_module(experience):
     valid = [e for e in experience if isinstance(e, dict)]
@@ -59,8 +59,23 @@ def get_best_module(experience):
     if not valid:
         return None, 0
 
+    # 🔥 берём лучший за всё время
     best = max(valid, key=lambda x: x.get("score", 0))
+
     return best.get("module"), best.get("score", 0)
+
+
+# =========================
+# 🧠 RECENT ANALYSIS (🔥 НОВОЕ)
+# =========================
+def get_recent_module_stats(experience, module_name, last_n=5):
+    recent = [e for e in experience if e.get("module") == module_name][-last_n:]
+
+    if not recent:
+        return 0
+
+    avg_score = sum(e.get("score", 0) for e in recent) / len(recent)
+    return avg_score
 
 
 # =========================
@@ -183,7 +198,7 @@ def improve_existing_module(module_name):
 
 
 # =========================
-# 🧹 CLEANUP
+# 🧹 CLEANUP (чуть усилен)
 # =========================
 def cleanup_modules(data):
     exp = [e for e in data.get("experience", []) if isinstance(e, dict)]
@@ -191,8 +206,8 @@ def cleanup_modules(data):
     if len(exp) < 5:
         return
 
-    good = [e for e in exp if e.get("score", 0) >= 40]
-    bad = [e for e in exp if e.get("score", 0) < 40]
+    good = [e for e in exp if e.get("score", 0) >= 50]
+    bad = [e for e in exp if e.get("score", 0) < 50]
 
     for b in bad:
         path = os.path.join("modules", b.get("module", "") + ".py")
@@ -221,24 +236,26 @@ def execution(data):
     success = False
 
     best_module, best_score = get_best_module(data["experience"])
+    recent_score = get_recent_module_stats(data["experience"], best_module) if best_module else 0
+
     decision = data.get("decision")
 
-    # 🧠 анти-зацикливание
+    # анти-зацикливание
     recent = data["memory"][-5:] if len(data["memory"]) >= 5 else data["memory"]
     too_many_improves = recent.count("improve_module") >= 3
     too_many_ideas = recent.count("generate_idea") >= 3
 
     before = data["goal"].get("progress", 0)
 
-    # 🎯 ACTION
+    # 🎯 ACTION (улучшен)
     if decision == "run_module" and best_module:
         action = "run"
 
     elif decision == "improve_module" and best_module:
 
-        if best_score < 60:
+        if recent_score < 55:
             action = "create"
-            data["log"].append("🔁 weak module → recreate")
+            data["log"].append("💀 weak recent module → recreate")
 
         elif too_many_improves:
             action = "create"

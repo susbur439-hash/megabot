@@ -11,94 +11,137 @@ def decision(data):
 
     score = evaluation.get("score", 50)
     progress = goal.get("progress", 0)
+    analysis_type = data.get("analysis")
 
-    # 🧠 лучший модуль
-    best_module = None
-    best_score = 0
+    # =========================
+    # 🧠 СТАТИСТИКА ОПЫТА
+    # =========================
+    module_scores = {}
 
     for exp in experience:
         if isinstance(exp, dict):
-            if exp.get("score", 0) > best_score:
-                best_score = exp["score"]
-                best_module = exp.get("module")
+            m = exp.get("module")
+            s = exp.get("score", 0)
 
-    has_strong_module = best_module is not None and best_score >= 70
+            if m:
+                module_scores.setdefault(m, []).append(s)
 
-    # 🎲 explore шанс
+    best_module = None
+    best_score = 0
+
+    for m, scores in module_scores.items():
+        avg = sum(scores) / len(scores)
+        if avg > best_score:
+            best_score = avg
+            best_module = m
+
+    has_strong_module = best_score >= 75
+    has_any_module = len(module_scores) > 0
+
+    # =========================
+    # 🧠 ПОВЕДЕНИЕ (анти-зацикливание)
+    # =========================
+    recent = memory[-5:]
+
+    too_many_ideas = recent.count("generate_idea") >= 3
+    too_many_adds = recent.count("add_module") >= 4
+    too_many_runs = recent.count("run_module") >= 3
+
+    # =========================
+    # 🎲 ДИНАМИЧЕСКИЙ EXPLORE
+    # =========================
     if progress < 30:
-        explore_chance = 0.5
+        explore_chance = 0.6
     elif progress < 70:
         explore_chance = 0.3
     else:
         explore_chance = 0.1
 
-    analysis_type = data.get("analysis")
+    # =========================
+    # 🔥 ЛОГИКА РЕШЕНИЙ
+    # =========================
 
-    # =====================================================
-    # 🔥 RECOVERY
-    # =====================================================
+    # 🚨 RECOVERY (выход из тупика)
     if analysis_type == "recovery":
-        if len(experience) == 0:
-            data["decision"] = "add_module"
+        if not has_any_module:
+            action = "add_module"
         elif has_strong_module:
-            data["decision"] = "run_module"
+            action = "run_module"
         else:
-            data["decision"] = "create_alternative"
+            action = "generate_idea"
 
-    # =====================================================
     # 🧱 BOOTSTRAP
-    # =====================================================
     elif analysis_type == "bootstrap":
-        data["decision"] = "add_module"
+        action = "add_module"
 
-    # =====================================================
-    # 🏗 BUILD
-    # =====================================================
+    # 🏗 BUILD (создание системы)
     elif analysis_type == "build":
-        data["decision"] = "add_module"
-
-    # =====================================================
-    # 🔍 EXPLORE
-    # =====================================================
-    elif analysis_type == "explore":
-        if has_strong_module and random.random() > explore_chance:
-            data["decision"] = "run_module"
+        if too_many_adds:
+            action = "run_module"
         else:
-            data["decision"] = "generate_idea"
+            action = "add_module"
 
-    # =====================================================
-    # 🎯 EXPLOIT
-    # =====================================================
+    # 🔍 EXPLORE (поиск нового)
+    elif analysis_type == "explore":
+        if too_many_ideas:
+            action = "add_module"
+        elif has_strong_module and random.random() > explore_chance:
+            action = "run_module"
+        else:
+            action = random.choice([
+                "generate_idea",
+                "add_module"
+            ])
+
+    # 🎯 EXPLOIT (использование лучшего)
     elif analysis_type == "exploit":
         if has_strong_module:
-            data["decision"] = "run_module"
+            if too_many_runs:
+                action = "improve_module"
+            else:
+                action = "run_module"
         else:
-            data["decision"] = "generate_idea"
+            action = "add_module"
 
-    # =====================================================
     # 🛠 IMPROVE
-    # =====================================================
     elif analysis_type == "improve":
-        data["decision"] = "improve_module"
+        if has_strong_module:
+            action = "improve_module"
+        else:
+            action = "add_module"
 
-    # =====================================================
     # ⚡ OPTIMIZE
-    # =====================================================
     elif analysis_type == "optimize":
-        data["decision"] = "improve_module"
+        if has_strong_module:
+            action = random.choice([
+                "run_module",
+                "improve_module"
+            ])
+        else:
+            action = "add_module"
 
-    # =====================================================
-    # ❌ НИКОГДА НЕ do_nothing
-    # =====================================================
+    # ❓ FALLBACK
     else:
-        data["decision"] = "generate_idea"
+        if not has_any_module:
+            action = "add_module"
+        elif score < 40:
+            action = "improve_module"
+        else:
+            action = "generate_idea"
 
-    # 🔥 ЗАЩИТА
-    if data["decision"] == "do_nothing":
-        data["decision"] = "generate_idea"
+    # =========================
+    # 🔥 ФИНАЛЬНАЯ ЗАЩИТА
+    # =========================
+    if action == "do_nothing":
+        action = "generate_idea"
 
+    data["decision"] = action
+
+    # =========================
+    # 📘 ЛОГ
+    # =========================
     data["log"].append(
-        f"decision: {data['decision']} | analysis: {analysis_type} | score: {score}"
+        f"decision: {action} | analysis: {analysis_type} | score: {score} | best: {best_module}({best_score})"
     )
 
     return data

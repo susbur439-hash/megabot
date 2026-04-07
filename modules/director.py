@@ -24,7 +24,6 @@ def run_task(data):
     score = data.get("evaluation", {}).get("score", 0)
     repeat = data.get("repeat_count", 0)
 
-    # 👉 дефолт
     strategy = "build"
 
     if data.get("force_explore"):
@@ -46,14 +45,17 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🎯 DECISION CONTROL
+    # 🎯 DECISION CONTROL (УСИЛЕННЫЙ)
     # =========================
 
     if strategy == "explore":
         data["decision"] = "generate_idea"
 
     elif strategy == "exploit":
-        data["decision"] = "run_module"
+        if data.get("best_module"):
+            data["decision"] = "run_best_module"
+        else:
+            data["decision"] = "run_module"
 
     elif strategy == "optimize":
         if data["decision"] == "add_module":
@@ -140,7 +142,25 @@ def run_task(data):
 
 
 # =========================
-# 🎛 DIRECTOR v2
+# 🧠 EXPERIENCE ANALYSIS (НОВОЕ)
+# =========================
+
+def analyze_experience(data):
+    exp = data.get("experience", [])
+
+    if not exp:
+        return data
+
+    best = max(exp, key=lambda x: x["score"])
+
+    data["best_module"] = best
+    data["log"].append(f"🏆 best module: {best['module']} ({best['score']})")
+
+    return data
+
+
+# =========================
+# 🎛 DIRECTOR v2 (УСИЛЕННЫЙ)
 # =========================
 
 def run(task):
@@ -171,8 +191,11 @@ def run(task):
             "penalty": 0
         }
 
-        for i in range(7):
+        for i in range(10):  # 🔥 увеличили глубину
             print(f"\n🔁 Цикл {i+1}")
+
+            # 🧠 анализ опыта
+            data = analyze_experience(data)
 
             # =========================
             # 🎯 ADAPTIVE EXPLOIT SYSTEM
@@ -188,10 +211,10 @@ def run(task):
                 exploit_chance = 0.2
 
             elif best_score > 80:
-                exploit_chance = 0.75  # усиливаем использование опыта
+                exploit_chance = 0.75
 
             # =========================
-            # ♻️ EXPERIENCE TRANSFER
+            # ♻️ SMART EXPLOIT (УЛУЧШЕН)
             # =========================
 
             if best_data and random.random() < exploit_chance:
@@ -201,8 +224,8 @@ def run(task):
 
                 data["experience"] = best_copy.get("experience", [])
                 data["memory"] = best_copy.get("memory", [])
+                data["best_module"] = best_copy.get("best_module")
 
-                # очистка риска зацикливания
                 data["repeat_count"] = 0
                 data["penalty"] = 0
                 data["force_explore"] = False
@@ -218,12 +241,18 @@ def run(task):
             data = run_task(data)
 
             # =========================
-            # 🏆 BEST TRACKING
+            # 🏆 BEST TRACKING + АНТИ-ДЕГРАДАЦИЯ
             # =========================
 
             current_score = 0
             if data.get("evaluation"):
                 current_score = data["evaluation"].get("score", 0)
+
+            # 🛑 защита
+            if best_data and current_score < best_score - 20:
+                print("🛑 ДЕГРАДАЦИЯ → ОТКАТ")
+                data = copy.deepcopy(best_data)
+                continue
 
             if current_score > best_score:
                 best_score = current_score

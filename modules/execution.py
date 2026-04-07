@@ -117,7 +117,7 @@ def get_all_modules():
 
 
 # =========================
-# 🧬 CREATE MODULE
+# 🧬 CREATE MODULE (🔥 улучшен)
 # =========================
 def create_new_module(parent=None):
     os.makedirs("modules", exist_ok=True)
@@ -135,7 +135,7 @@ def create_new_module(parent=None):
 
     if parent:
         base = parent.get("score", 50)
-        boost = max(2, int(base / 10 + random.randint(-3, 4)))
+        boost = max(3, int(base / 8 + random.randint(-2, 5)))
     else:
         boost, _ = generate_idea_module()
 
@@ -149,9 +149,13 @@ def create_new_module(parent=None):
         data["goal"] = {{"progress": 0}}
 
     if behavior == "aggressive":
-        boost = int(boost * 1.5)
+        boost = int(boost * 1.6)
     elif behavior == "safe":
         boost = int(boost * 0.7)
+
+    # 🔥 учитываем глобальный буст системы
+    system_boost = data.get("boost", 1.0)
+    boost = int(boost * system_boost)
 
     data["goal"]["progress"] += boost
 
@@ -168,7 +172,7 @@ def create_new_module(parent=None):
 
 
 # =========================
-# 🛠 IMPROVE
+# 🛠 IMPROVE (🔥 усилен)
 # =========================
 def improve_existing_module(module_name):
     path = os.path.join("modules", module_name + ".py")
@@ -183,9 +187,10 @@ def improve_existing_module(module_name):
         if "progress" not in code:
             return False
 
+        # 🔥 усиливаем сильнее, не +1 а +2
         new_code = code.replace(
             "data[\"goal\"][\"progress\"] += boost",
-            "data[\"goal\"][\"progress\"] += boost + 1"
+            "data[\"goal\"][\"progress\"] += boost + 2"
         )
 
         with open(path, "w", encoding="utf-8") as f:
@@ -198,22 +203,26 @@ def improve_existing_module(module_name):
 
 
 # =========================
-# 📊 NEW SCORE (ВАЖНО)
+# 📊 SCORE (🔥 ПОЛНОСТЬЮ ПЕРЕДЕЛАН)
 # =========================
-def calculate_score(result, success=True):
+def calculate_score(before, after, result, success=True):
     if not success:
-        return 10
+        return 5
 
-    if result == "module created":
-        return 90
-    elif result == "module executed":
-        return 100
-    elif result == "module improved":
-        return 95
-    elif result == "idea generated":
+    delta = after - before
+
+    # 🔥 главный фактор — реальный рост
+    if delta <= 0:
+        return 20
+
+    elif delta < 5:
         return 50
+
+    elif delta < 10:
+        return 75
+
     else:
-        return 30
+        return 100
 
 
 # =========================
@@ -238,7 +247,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION
+# 🔥 EXECUTION (FIXED)
 # =========================
 def execution(data):
 
@@ -260,27 +269,36 @@ def execution(data):
 
     before = data["goal"].get("progress", 0)
 
-    if random.random() < 0.1:
-        action = random.choice(["create", "run", "idea"])
-    elif recent_score < 50 or too_many_improves or not best_module:
+    # 🔥 УМНЫЙ ВЫБОР ДЕЙСТВИЯ
+    if random.random() < 0.05:
         action = "create"
+
+    elif recent_score < 40 or not best_module:
+        action = "create"
+
+    elif decision == "run_module":
+        action = "run"
+
+    elif decision == "improve_module":
+        action = "improve"
+
+    elif decision == "generate_idea":
+        action = "idea"
+
     else:
-        if decision == "run_module" and best_module:
-            action = "run"
-        elif decision == "improve_module" and best_module:
-            action = "improve"
-        elif decision == "generate_idea":
-            action = "idea"
-        else:
-            action = "run" if best_module else "create"
+        action = "run"
+
+    # =========================
 
     if action == "idea":
         boost, behavior = generate_idea_module()
 
         if behavior == "aggressive":
-            boost = int(boost * 1.4)
+            boost = int(boost * 1.5)
         elif behavior == "safe":
             boost = int(boost * 0.8)
+
+        boost = int(boost * data.get("boost", 1.0))
 
         data["goal"]["progress"] += boost
         success = True
@@ -294,32 +312,25 @@ def execution(data):
         data["result"] = "module created"
 
     elif action == "run":
-        if not best_module:
-            module_used = create_new_module()
-            path = os.path.join("modules", module_used + ".py")
-        else:
-            module_used = best_module
-            path = os.path.join("modules", best_module + ".py")
-
+        module_used = best_module
+        path = os.path.join("modules", best_module + ".py")
         data, success = run_python_module(path, data)
         data["result"] = "module executed"
 
     elif action == "improve":
-        if best_module and improve_existing_module(best_module):
+        if improve_existing_module(best_module):
             module_used = best_module
-            data["goal"]["progress"] += 3
+            data["goal"]["progress"] += 4
             success = True
             data["result"] = "module improved"
         else:
-            module_used = create_new_module()
-            path = os.path.join("modules", module_used + ".py")
-            data, success = run_python_module(path, data)
-            data["result"] = "module created (fallback)"
+            action = "create"
+
+    # =========================
 
     after = data["goal"].get("progress", 0)
 
-    # 🔥 НОВАЯ ОЦЕНКА
-    score = calculate_score(data["result"], success)
+    score = calculate_score(before, after, data["result"], success)
 
     if module_used:
         data["experience"].append({

@@ -1,8 +1,8 @@
 def analysis(data):
-    task = data.get("task", "").lower()
-    memory = data.get("memory", [])
-    experience = data.get("experience", [])
-    goal = data.get("goal", {"progress": 0})
+    task = str(data.get("task", "")).lower()
+    memory = data.get("memory", []) or []
+    experience = data.get("experience", []) or []
+    goal = data.get("goal", {"progress": 0}) or {"progress": 0}
 
     data.setdefault("log", [])
 
@@ -23,7 +23,7 @@ def analysis(data):
     # =========================
     # 📊 RECENT
     # =========================
-    recent = memory[-5:] if len(memory) >= 5 else memory
+    recent = memory[-5:]
     repeated_runs = recent.count("run_module") >= 3
     repeated_nothing = recent.count("do_nothing") >= 2
 
@@ -34,14 +34,17 @@ def analysis(data):
     scores = []
 
     for exp in experience:
-        if isinstance(exp, dict):
-            m = exp.get("module")
-            s = exp.get("score", 0)
+        if not isinstance(exp, dict):
+            continue
 
-            if m:
-                module_stats.setdefault(m, []).append(s)
+        m = exp.get("module")
+        s = exp.get("score", 0)
 
+        if isinstance(s, (int, float)):
             scores.append(s)
+
+        if m and isinstance(s, (int, float)):
+            module_stats.setdefault(m, []).append(s)
 
     best_module = None
     best_score = 0
@@ -49,6 +52,11 @@ def analysis(data):
     for m, sc in module_stats.items():
         if sc:
             avg = sum(sc) / len(sc)
+
+            # 🔥 анти-доминирование (если слишком мало данных)
+            if len(sc) < 2:
+                avg *= 0.9
+
             if avg > best_score:
                 best_score = avg
                 best_module = m
@@ -57,20 +65,25 @@ def analysis(data):
     has_strong_module = best_score >= 75
 
     # =========================
-    # 📈 TREND (локальный)
+    # 📈 TREND (улучшенный)
     # =========================
     trend = "stable"
     stagnation = False
 
     if len(scores) >= 3:
-        if scores[-1] > scores[-2] > scores[-3]:
+        last3 = scores[-3:]
+
+        if last3[2] > last3[1] >= last3[0]:
             trend = "up"
-        elif scores[-1] < scores[-2] < scores[-3]:
+        elif last3[2] < last3[1] <= last3[0]:
             trend = "down"
         else:
-            stagnation = True
+            # 🔥 stagnation если почти нет изменений
+            diff = max(last3) - min(last3)
+            if diff <= 5:
+                stagnation = True
 
-    data["local_trend"] = trend  # 🔥 НЕ ПЕРЕЗАТИРАЕМ global trend
+    data["local_trend"] = trend
 
     # =========================
     # 🧠 ОЦЕНКА
@@ -88,6 +101,10 @@ def analysis(data):
         score = 20
         reason = "execution failed"
 
+    elif last_delta >= 15:
+        score = 95
+        reason = "high improvement"
+
     elif last_delta >= 10:
         score = 90
         reason = "strong improvement"
@@ -97,15 +114,15 @@ def analysis(data):
         reason = "positive progress"
 
     elif last_delta == 0:
-        score = 40
+        score = 45
         reason = "no progress"
 
     else:
-        score = 10
+        score = 15
         reason = "regression"
 
     evaluation = {
-        "result": "good" if score >= 70 else "neutral" if score >= 40 else "bad",
+        "result": "good" if score >= 70 else "neutral" if score >= 45 else "bad",
         "score": score,
         "reason": reason,
         "delta": last_delta
@@ -116,8 +133,10 @@ def analysis(data):
     # =========================
     # 🧠 BEHAVIOR
     # =========================
-    if trend == "down" or stagnation:
+    if trend == "down":
         behavior = "aggressive"
+    elif stagnation:
+        behavior = "explore"
     elif trend == "up":
         behavior = "exploit"
     else:
@@ -126,7 +145,7 @@ def analysis(data):
     data["behavior"] = behavior
 
     # =========================
-    # 🔥 DECISION MODE
+    # 🔥 DECISION MODE (усилен)
     # =========================
     progress = goal.get("progress", 0)
 
@@ -134,7 +153,7 @@ def analysis(data):
         mode = "recovery"
 
     elif repeated_runs:
-        mode = "optimize"  # 🔥 добавили использование
+        mode = "optimize"
 
     elif not has_any_module:
         mode = "bootstrap"
@@ -145,6 +164,8 @@ def analysis(data):
     elif task_type == "development":
 
         if behavior == "aggressive":
+            mode = "explore"
+        elif behavior == "explore":
             mode = "explore"
         elif behavior == "exploit":
             mode = "exploit"

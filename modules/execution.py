@@ -20,6 +20,10 @@ def save_to_memory(data):
 # =========================
 def run_python_module(module_path, data):
     try:
+        if not os.path.exists(module_path):
+            data["log"].append("❌ module file not found")
+            return data, False
+
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
 
         if spec is None or spec.loader is None:
@@ -69,6 +73,16 @@ def get_best_module(experience):
 
 
 # =========================
+# 🧠 IDEA GENERATOR (🔥 НОВОЕ)
+# =========================
+def generate_idea_module():
+    boost = random.randint(4, 12)
+    behavior = random.choice(["aggressive", "balanced", "safe"])
+
+    return boost, behavior
+
+
+# =========================
 # 🧬 CREATE MODULE
 # =========================
 def create_new_module(parent=None):
@@ -76,7 +90,6 @@ def create_new_module(parent=None):
 
     modules = get_all_modules()
 
-    # 🔥 уникальный id (фикс дублей)
     existing_ids = [
         int(m.replace("module_", "").replace(".py", ""))
         for m in modules if m.startswith("module_")
@@ -87,11 +100,12 @@ def create_new_module(parent=None):
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
+    # 🔥 идея генерации
     if parent:
         base = parent.get("score", 50)
-        boost = max(2, int(base / 10 + random.randint(-2, 3)))
+        boost = max(2, int(base / 10 + random.randint(-3, 4)))
     else:
-        boost = random.randint(3, 10)
+        boost, _ = generate_idea_module()
 
     behavior = random.choice(["aggressive", "balanced", "safe"])
 
@@ -124,15 +138,18 @@ def create_new_module(parent=None):
 # =========================
 # 📊 SCORE
 # =========================
-def calculate_score(before, after):
+def calculate_score(before, after, success=True):
     delta = after - before
 
+    if not success:
+        return 10
+
     if delta <= 0:
-        return 5
+        return 20
     elif delta < 5:
-        return 40
+        return 50
     elif delta < 10:
-        return 70
+        return 75
     else:
         return 100
 
@@ -206,21 +223,39 @@ def execution(data):
     success = False
 
     best_module, best_score = get_best_module(data["experience"])
-
-    # 🎯 ACTION
-    if data.get("decision") == "run_module" and best_module:
-        action = "run"
-    elif data.get("decision") == "improve_module" and best_module:
-        action = "improve"
-    else:
-        action = "create"
+    decision = data.get("decision")
 
     before = data["goal"].get("progress", 0)
 
     # =========================
+    # 🎯 ACTION MAPPING
+    # =========================
+    if decision == "run_module" and best_module:
+        action = "run"
+    elif decision == "improve_module" and best_module:
+        action = "improve"
+    elif decision == "generate_idea":
+        action = "idea"
+    else:
+        action = "create"
+
+    # =========================
+    # 💡 IDEA
+    # =========================
+    if action == "idea":
+        boost, behavior = generate_idea_module()
+
+        data["goal"]["progress"] += boost
+        success = True
+        module_used = "idea"
+
+        data["log"].append(f"💡 idea | behavior={behavior} | boost={boost}")
+        data["result"] = "idea generated"
+
+    # =========================
     # CREATE
     # =========================
-    if action == "create":
+    elif action == "create":
         parent = {"module": best_module, "score": best_score} if best_module else None
 
         module_used = create_new_module(parent)
@@ -233,9 +268,9 @@ def execution(data):
     # RUN
     # =========================
     elif action == "run":
-        module_used = best_module
-        path = os.path.join("modules", module_used + ".py")
+        path = os.path.join("modules", best_module + ".py")
 
+        module_used = best_module
         data, success = run_python_module(path, data)
         data["result"] = "module executed"
 
@@ -253,9 +288,6 @@ def execution(data):
 
     after = data["goal"].get("progress", 0)
 
-    # =========================
-    # 🔥 КРИТИЧЕСКИЙ ФИКС
-    # =========================
     delta = after - before
     data["last_delta"] = delta
     data["success"] = success
@@ -263,14 +295,8 @@ def execution(data):
     # =========================
     # SCORE
     # =========================
-    score = calculate_score(before, after)
+    score = calculate_score(before, after, success)
 
-    if not success:
-        score = max(5, score - 20)
-
-    # =========================
-    # EXPERIENCE
-    # =========================
     if module_used:
         data["experience"].append({
             "module": module_used,
@@ -278,23 +304,13 @@ def execution(data):
             "time": len(data["memory"])
         })
 
-    # =========================
-    # CLEANUP
-    # =========================
     cleanup_modules(data)
 
-    # =========================
-    # MEMORY
-    # =========================
-    data["memory"].append(data.get("decision"))
+    data["memory"].append(decision)
     data["memory"] = data["memory"][-100:]
 
-    # 🔥 ограничение логов
     data["log"] = data["log"][-200:]
 
-    # =========================
-    # LOG
-    # =========================
     data["log"].append(
         f"execution: {action} | module: {module_used} | success: {success} | delta: {delta} | score: {score}"
     )

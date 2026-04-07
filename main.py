@@ -24,11 +24,25 @@ def run_task(data):
     # 🧠 DECISION
     data = decision(data)
 
-    # 🛑 АНТИ-ЗАСТРЕВАНИЕ (штраф за повтор)
+    # 🛑 АНТИ-ЗАСТРЕВАНИЕ (умный штраф)
     if "last_decision" in data:
         if data["decision"] == data["last_decision"]:
-            data["penalty"] = data.get("penalty", 0) - 5
-            data["log"].append("⚠️ penalty: repeated decision")
+            data["repeat_count"] = data.get("repeat_count", 0) + 1
+
+            # увеличиваем штраф постепенно
+            penalty_value = -5 * data["repeat_count"]
+            data["penalty"] = penalty_value
+
+            data["log"].append(f"⚠️ penalty: repeated decision x{data['repeat_count']}")
+
+            # 🔥 ЖЕСТКИЙ СЛОМ ЗАЦИКЛИВАНИЯ
+            if data["repeat_count"] >= 3:
+                data["decision"] = "generate_idea"
+                data["log"].append("🧠 forced switch: generate_idea")
+        else:
+            # сброс если сменилось поведение
+            data["repeat_count"] = 0
+            data["penalty"] = 0
 
     data["last_decision"] = data["decision"]
 
@@ -40,9 +54,14 @@ def run_task(data):
         if "last_delta" in data:
             data["evaluation"]["delta"] = data["last_delta"]
 
-        # 🔥 ПРИМЕНЕНИЕ ШТРАФА
+        # 🔥 ПРИМЕНЕНИЕ ШТРАФА (но ограниченное)
         if "penalty" in data:
             data["evaluation"]["score"] += data["penalty"]
+
+            # ограничение, чтобы не убить систему
+            if data["evaluation"]["score"] < 0:
+                data["evaluation"]["score"] = 0
+
             data["log"].append(f"penalty applied: {data['penalty']}")
 
     # 📈 ОБНОВЛЕНИЕ ЦЕЛИ
@@ -85,8 +104,14 @@ if __name__ == "__main__":
         for i in range(7):
             print(f"\n🔁 Цикл {i+1}")
 
-            # 🔥 EXPLOIT / EXPLORE
-            if best_data and random.random() < 0.6:
+            # 🔥 ДИНАМИЧЕСКИЙ EXPLOIT / EXPLORE
+            exploit_chance = 0.6
+
+            # если застряли → уменьшаем exploit
+            if data.get("repeat_count", 0) >= 2:
+                exploit_chance = 0.2
+
+            if best_data and random.random() < exploit_chance:
                 print("♻️ Используем лучший найденный результат (exploit)")
                 data = copy.deepcopy(best_data)
 

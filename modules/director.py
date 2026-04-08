@@ -29,7 +29,7 @@ def run_task(data):
     data = self_improver(data)
 
     # =========================
-    # 🧠 META-STRATEGY (FIX)
+    # 🧠 META-STRATEGY
     # =========================
 
     score = data.get("evaluation", {}).get("score", 0)
@@ -52,10 +52,9 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🔥 ВАЖНО: НЕ ЛОМАЕМ decision
+    # 🔥 МЯГКАЯ КОРРЕКЦИЯ decision
     # =========================
 
-    # только мягкая корректировка
     if strategy == "explore":
         if data["decision"] == "run_module":
             data["decision"] = "create_module"
@@ -68,13 +67,13 @@ def run_task(data):
         if data["decision"] == "create_module":
             data["decision"] = "improve_module"
 
-    # ❗ ЖЁСТКИЙ АНТИ-БАГ
+    # ❗ защита от старого бага
     if data.get("decision") == "generate_idea":
         data["decision"] = "create_module"
         data["log"].append("🔥 override: idea → create_module")
 
     # =========================
-    # 🎭 MODE SYSTEM
+    # 🎭 MODE
     # =========================
 
     if strategy == "explore":
@@ -90,7 +89,7 @@ def run_task(data):
     data["log"].append(f"mode: {mode}")
 
     # =========================
-    # 🛑 ANTI-LOOP SYSTEM
+    # 🛑 ANTI-LOOP
     # =========================
 
     if "last_decision" in data:
@@ -116,7 +115,7 @@ def run_task(data):
     data["last_decision"] = data["decision"]
 
     # =========================
-    # ⚡ MODE → BOOST
+    # ⚡ BOOST
     # =========================
 
     if mode == "aggressive":
@@ -157,10 +156,7 @@ def run_task(data):
 
             data["log"].append(f"penalty applied: {data['penalty']}")
 
-    # =========================
     # 🎯 GOAL UPDATE
-    # =========================
-
     data["last_layer"] = "goal_update"
     data = update_goal(data)
 
@@ -206,7 +202,8 @@ def run(task):
             "experience": [],
             "repeat_count": 0,
             "force_explore": False,
-            "penalty": 0
+            "penalty": 0,
+            "fail_count": 0
         }
 
         for i in range(10):
@@ -214,42 +211,23 @@ def run(task):
 
             data = analyze_experience(data)
 
-            exploit_chance = 0.6
-
-            if data.get("force_explore"):
-                exploit_chance = 0.0
-                print("🧪 FORCED EXPLORE")
-
-            elif data.get("repeat_count", 0) >= 2:
-                exploit_chance = 0.2
-
-            elif best_score > 80:
-                exploit_chance = 0.75
-
-            if best_data and random.random() < exploit_chance:
-                print("♻️ SMART EXPLOIT")
-
-                best_copy = copy.deepcopy(best_data)
-
-                data["experience"] = best_copy.get("experience", [])
-                data["memory"] = best_copy.get("memory", [])
-                data["best_module"] = best_copy.get("best_module")
-
-                data["repeat_count"] = 0
-                data["penalty"] = 0
-                data["force_explore"] = False
-                data["last_decision"] = None
-
-            else:
-                print("🧪 EXPLORE")
+            print("🧪 EXPLORE")
 
             data = run_task(data)
 
             current_score = data.get("evaluation", {}).get("score", 0)
 
-            if best_data and current_score < best_score - 15:
-                print("🛑 ДЕГРАДАЦИЯ → ОТКАТ")
+            # 🔥 УМНЫЙ АНТИ-ДЕГРАД
+            if best_data and current_score < best_score - 25:
+                data["fail_count"] += 1
+                print(f"⚠️ ухудшение ({data['fail_count']})")
+            else:
+                data["fail_count"] = 0
+
+            if data["fail_count"] >= 3:
+                print("🛑 СЕРИЯ ПРОВАЛОВ → ОТКАТ")
                 data = copy.deepcopy(best_data)
+                data["fail_count"] = 0
                 continue
 
             if current_score > best_score:

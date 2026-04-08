@@ -160,7 +160,7 @@ def calculate_score(before, after, success=True):
 
 
 # =========================
-# 🔥 EXECUTION FIXED
+# 🔥 EXECUTION (FIXED ARCHITECTURE)
 # =========================
 def execution(data):
 
@@ -169,6 +169,7 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
 
+    decision = data.get("decision")  # 🔥 КЛЮЧЕВОЕ
     before = data["goal"]["progress"]
 
     module_used = None
@@ -177,37 +178,55 @@ def execution(data):
     best_module, best_score = get_best_module(data["experience"])
 
     # =========================
-    # 🔥 ГЛАВНАЯ ЛОГИКА (СТАБИЛЬНАЯ)
+    # 🎯 ЖЁСТКАЯ ЛОГИКА ПО DECISION
     # =========================
 
-    # 1. Нет модулей → создать
-    if not data["experience"]:
-        data["log"].append("🔥 create first module")
+    # 1. CREATE
+    if decision == "create_module":
+        data["log"].append("🔥 decision → create_module")
 
         module_used = create_new_module()
         path = os.path.join("modules", module_used + ".py")
         data, success = run_python_module(path, data)
 
-    # 2. Есть модуль → использовать
-    else:
-        if random.random() < 0.7:
-            data["log"].append("🚀 run best module")
+    # 2. RUN
+    elif decision == "run_module":
+        data["log"].append("🚀 decision → run_module")
 
+        if best_module:
+            module_used = best_module
+            path = os.path.join("modules", best_module + ".py")
+            data, success = run_python_module(path, data)
+        else:
+            data["log"].append("⚠️ no module → fallback create")
+            module_used = create_new_module()
+            path = os.path.join("modules", module_used + ".py")
+            data, success = run_python_module(path, data)
+
+    # 3. IMPROVE
+    elif decision == "improve_module":
+        data["log"].append("🛠 decision → improve_module")
+
+        if best_module and improve_existing_module(best_module):
+            module_used = best_module
+            success = True
+            data["goal"]["progress"] += 5
+        elif best_module:
             module_used = best_module
             path = os.path.join("modules", best_module + ".py")
             data, success = run_python_module(path, data)
 
-        else:
-            data["log"].append("🛠 improve module")
+    # 4. IDEA
+    elif decision == "generate_idea":
+        data["log"].append("💡 idea generated")
+        success = True
 
-            if improve_existing_module(best_module):
-                module_used = best_module
-                success = True
-                data["goal"]["progress"] += 5
-            else:
-                module_used = best_module
-                path = os.path.join("modules", best_module + ".py")
-                data, success = run_python_module(path, data)
+    # 5. FALLBACK
+    else:
+        data["log"].append("⚠️ unknown decision → fallback create")
+        module_used = create_new_module()
+        path = os.path.join("modules", module_used + ".py")
+        data, success = run_python_module(path, data)
 
     # =========================
     # 📊 RESULT
@@ -226,7 +245,7 @@ def execution(data):
             "time": len(data["memory"])
         })
 
-    data["memory"].append(module_used or "none")
+    data["memory"].append(decision)
 
     data["memory"] = data["memory"][-100:]
     data["log"] = data["log"][-200:]

@@ -44,20 +44,21 @@ def decision(data):
                 best_score = avg
                 best_module = m
 
-    has_strong_module = best_score >= 75
+    has_strong_module = best_score >= 70
     has_any_module = len(module_scores) > 0
 
     # =========================
-    # 🚨 КРИТИЧЕСКИЙ ФИКС
+    # 🚨 BOOTSTRAP (ФИКС)
     # =========================
     if not has_any_module:
-        action = "create_module"
+        # создаём, но не бесконечно
+        if memory.count("create_module") < 2:
+            action = "create_module"
+        else:
+            action = "run_module"
+
         data["decision"] = action
-
-        data["log"].append(
-            f"decision: {action} | FORCE BOOTSTRAP (no modules)"
-        )
-
+        data["log"].append(f"decision: {action} | BOOTSTRAP")
         return data
 
     # =========================
@@ -65,8 +66,7 @@ def decision(data):
     # =========================
     recent = memory[-5:]
 
-    too_many_ideas = recent.count("generate_idea") >= 3
-    too_many_creates = recent.count("create_module") >= 4
+    too_many_creates = recent.count("create_module") >= 3
     too_many_runs = recent.count("run_module") >= 3
     too_many_improves = recent.count("improve_module") >= 3
 
@@ -77,98 +77,70 @@ def decision(data):
     )
 
     # =========================
-    # 🔥 ЛОГИКА
+    # 🔥 ОСНОВНАЯ ЛОГИКА
     # =========================
 
     if analysis_type == "recovery":
-        if has_strong_module:
-            action = "run_module"
-        else:
-            action = "improve_module"
+        action = "run_module" if has_strong_module else "improve_module"
 
     elif analysis_type == "bootstrap":
         action = "create_module"
 
     elif analysis_type == "build":
-        if too_many_creates:
-            action = "run_module"
-        else:
-            action = "create_module"
+        action = "run_module" if too_many_creates else "create_module"
 
     elif analysis_type == "explore":
-
         if stagnation:
             action = "create_module"
-
-        elif too_many_ideas:
-            action = "create_module"
-
         elif has_strong_module:
             action = "run_module"
-
         else:
-            action = "create_module"  # ← ФИКС (было generate_idea)
+            action = "create_module"
 
     elif analysis_type == "exploit":
-
         if has_strong_module:
-
-            if too_many_runs or stagnation:
+            if stagnation or too_many_runs:
                 action = "improve_module"
             else:
                 action = "run_module"
-
         else:
             action = "create_module"
 
     elif analysis_type == "improve":
-
         if has_strong_module:
-            if too_many_improves:
-                action = "run_module"
-            else:
-                action = "improve_module"
+            action = "run_module" if too_many_improves else "improve_module"
         else:
             action = "create_module"
 
     elif analysis_type == "optimize":
-
-        if has_strong_module:
-            action = "run_module"
-        else:
-            action = "create_module"
+        action = "run_module" if has_strong_module else "create_module"
 
     else:
-        if score < 50:
-            action = "improve_module"
-        else:
-            action = "run_module"
+        action = "run_module" if score >= 50 else "improve_module"
 
     # =========================
-    # 🛡 ЗАЩИТА
+    # 🛡 ЖЁСТКИЙ ФИКС (ВАЖНО)
     # =========================
-    if action == "do_nothing":
-        action = "generate_idea"
 
-    if too_many_ideas and action == "generate_idea":
-        action = "create_module"
-
+    # нельзя застревать в create
     if too_many_creates and action == "create_module":
         action = "run_module"
 
+    # нельзя застревать в run
     if too_many_runs and action == "run_module":
         action = "improve_module"
+
+    # всегда должен быть прогресс
+    if action not in ["create_module", "run_module", "improve_module"]:
+        action = "run_module"
 
     # =========================
     # 💾 SAVE
     # =========================
     data["decision"] = action
 
-    # =========================
-    # 📘 LOG
-    # =========================
     data["log"].append(
-        f"decision: {action} | analysis: {analysis_type} | behavior: {behavior} | trend: {trend} | score: {score} | best: {best_module}({round(best_score,1)})"
+        f"decision: {action} | analysis: {analysis_type} | score: {score} | best: {best_module}({round(best_score,1)})"
     )
 
     return data

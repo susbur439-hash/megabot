@@ -13,16 +13,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Клонирование репозитория
+      - name: 📥 Клонирование репозитория
         uses: actions/checkout@v3
 
-      - name: Установка Python
+      - name: 🐍 Установка Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Установка зависимостей
+      - name: 📦 Установка зависимостей
         run: pip install -r requirements.txt || true
 
-      - name: Запуск Megabot
+      - name: 🤖 Запуск Megabot
         run: python main.py "${{ github.event.inputs.task }}"
+
+      # 🔥 ДОБАВЛЯЕМ SNAPSHOT
+      - name: 📸 Создание snapshot системы
+        run: python system_snapshot.py || echo "No snapshot script"
+
+      # 🔥 СОХРАНЕНИЕ ФАЙЛА
+      - name: 📤 Сохранение snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-snapshot
+          path: |
+            full_system_snapshot.txt
+            memory.json
+            modules/

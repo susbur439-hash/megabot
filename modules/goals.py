@@ -11,7 +11,6 @@ def set_goal(data):
     goal.setdefault("target", 100)
     goal.setdefault("history", [])
 
-    # 🔥 добавляем предыдущее значение
     data.setdefault("prev_progress", goal["progress"])
 
     return data
@@ -20,9 +19,6 @@ def set_goal(data):
 def update_goal(data):
 
     goal = data.get("goal", {})
-    evaluation = data.get("evaluation", {})
-    score = evaluation.get("score", 50)
-
     progress = goal.get("progress", 0)
     prev_progress = data.get("prev_progress", progress)
 
@@ -32,39 +28,29 @@ def update_goal(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🔥 РЕАЛЬНЫЙ DELTA (ФИКС)
+    # 🔥 ЧИСТЫЙ REAL DELTA
     # =========================
     real_delta = progress - prev_progress
-    data["last_delta"] = real_delta  # сохраняем
+    data["last_delta"] = real_delta
 
     # =========================
-    # 🔥 УМНАЯ КОРРЕКЦИЯ
+    # ❗ НЕ ТРОГАЕМ progress
     # =========================
-    if score >= 85:
-        delta = real_delta + 2
-    elif score >= 70:
-        delta = real_delta + 1
-    elif score >= 50:
-        delta = real_delta
-    elif score >= 30:
-        delta = real_delta - 1
-    else:
-        delta = real_delta - 3
-
-    progress += delta
+    # progress уже изменён execution
+    # тут только анализ
 
     # =========================
-    # 📊 ТРЕНД
+    # 📊 HISTORY + TREND
     # =========================
     history = goal.get("history", [])
-    history.append(score)
+    history.append(real_delta)
     history = history[-10:]
 
-    avg = sum(history) / len(history) if history else 50
+    avg = sum(history) / len(history) if history else 0
 
-    if avg > 75:
+    if avg > 5:
         trend = "up"
-    elif avg < 40:
+    elif avg < 0:
         trend = "down"
     else:
         trend = "stable"
@@ -73,28 +59,36 @@ def update_goal(data):
     data["trend"] = trend
 
     # =========================
-    # 🔥 LEVEL SYSTEM
+    # 🔥 LEVEL SYSTEM (ФИКС)
     # =========================
+    leveled_up = False
+
     if progress >= target:
         level += 1
-
         progress = progress - target
+        target = int(target * 1.2)
+
+        goal["target"] = target
+        data["difficulty"] = level
+        leveled_up = True
 
         data["log"].append(f"🚀 LEVEL UP → {level}")
 
-        target = int(target * 1.2)
-        goal["target"] = target
-        data["difficulty"] = level
-
     elif progress < 0:
         progress = 0
+
+    # =========================
+    # 🔥 КОРРЕКЦИЯ DELTA ПРИ LEVEL UP
+    # =========================
+    if leveled_up:
+        data["last_delta"] = max(real_delta, 1)
 
     # =========================
     # 🧠 STATE
     # =========================
     if trend == "down":
         state = "crisis"
-    elif trend == "up" and score > 80:
+    elif trend == "up":
         state = "growth"
     elif progress > target * 0.8:
         state = "finishing"
@@ -110,15 +104,13 @@ def update_goal(data):
     goal["level"] = level
 
     data["goal"] = goal
-
-    # 🔥 ОБНОВЛЯЕМ prev_progress
     data["prev_progress"] = goal["progress"]
 
     # =========================
     # 📘 LOG
     # =========================
     data["log"].append(
-        f"{goal['name']}: {goal['progress']}/{target} | level: {level} | trend: {trend} | state: {state} | delta: {delta} | real: {real_delta}"
+        f"{goal['name']}: {goal['progress']}/{target} | level: {level} | trend: {trend} | state: {state} | delta: {data['last_delta']}"
     )
 
     return data

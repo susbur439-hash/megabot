@@ -226,7 +226,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION
+# 🔥 EXECUTION (FINAL FIX)
 # =========================
 def execution(data):
 
@@ -234,6 +234,15 @@ def execution(data):
     data.setdefault("memory", [])
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
+
+    # 🔥 FIX 1: старое имя
+    if data.get("decision") == "add_module":
+        data["decision"] = "create_module"
+
+    # 🔥 FIX 2: если нет модулей — принудительно создаём
+    if not data.get("experience"):
+        data["decision"] = "create_module"
+        data["log"].append("🔥 FORCE CREATE MODULE (no modules)")
 
     decision = data.get("decision")
     before = data["goal"].get("progress", 0)
@@ -251,12 +260,8 @@ def execution(data):
     else:
         data["boost"] = max(1.0, data.get("boost", 1.0) * 0.95)
 
-    # =========================
     # 🔥 ЛОГИКА
-    # =========================
-
-    # 💡 IDEAS (только если нет модулей)
-    if decision == "generate_idea" and not data.get("experience"):
+    if decision == "generate_idea":
         boost, behavior = generate_idea_module()
 
         if behavior == "aggressive":
@@ -270,7 +275,6 @@ def execution(data):
         success = True
         data["result"] = "idea generated"
 
-    # 🧬 CREATE MODULE (🔥 ФИКС!)
     elif decision == "create_module":
         module_used = create_new_module(
             {"module": best_module, "score": best_score} if best_module else None
@@ -282,7 +286,6 @@ def execution(data):
         data["goal"]["progress"] += 5
         data["result"] = "module created"
 
-    # 🚀 RUN MODULE
     elif decision == "run_module":
         if best_module:
             module_used = best_module
@@ -298,7 +301,6 @@ def execution(data):
             success = False
             data["result"] = "no module"
 
-    # 🛠 IMPROVE
     elif decision == "improve_module":
         if best_module and improve_existing_module(best_module):
             module_used = best_module
@@ -313,21 +315,15 @@ def execution(data):
         success = False
         data["result"] = "no action"
 
-    # =========================
     # 📊 DELTA
-    # =========================
     after = data["goal"].get("progress", 0)
     delta = after - before
     data["last_delta"] = delta
 
-    # =========================
     # 📊 SCORE
-    # =========================
     score = calculate_score(before, after, success)
 
-    # =========================
     # 💾 EXPERIENCE
-    # =========================
     if module_used:
         data["experience"].append({
             "module": module_used,
@@ -336,9 +332,7 @@ def execution(data):
             "time": len(data["memory"])
         })
 
-    # =========================
     # 💾 MEMORY
-    # =========================
     if decision:
         data["memory"].append(decision)
 

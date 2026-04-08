@@ -17,6 +17,8 @@ from modules.self_improver import self_improver
 def run_task(data):
     data.setdefault("log", [])
 
+    prev_progress = data.get("goal", {}).get("progress", 0)
+
     # 🎯 GOAL
     data["last_layer"] = "goal"
     data = set_goal(data)
@@ -40,14 +42,10 @@ def run_task(data):
     repeat = data.get("repeat_count", 0)
     last_delta = data.get("last_delta", 0)
 
-    if last_delta <= 0:
-        strategy = "explore"
-    elif repeat >= 2:
+    if last_delta <= 0 or repeat >= 2 or score < 50:
         strategy = "explore"
     elif score > 85:
         strategy = "exploit"
-    elif score < 50:
-        strategy = "explore"
     else:
         strategy = "optimize"
 
@@ -62,7 +60,6 @@ def run_task(data):
 
     if strategy == "exploit" and best:
         data["decision"] = "run_module"
-        data["log"].append("🔥 exploit → best module")
 
     elif strategy == "optimize" and best:
         data["decision"] = "run_module" if random.random() < 0.8 else "improve_module"
@@ -77,12 +74,11 @@ def run_task(data):
     # 🎭 MODE
     # =========================
 
-    if strategy == "explore":
-        mode = "aggressive"
-    elif strategy == "exploit":
-        mode = "balanced"
-    else:
-        mode = "safe"
+    mode = {
+        "explore": "aggressive",
+        "exploit": "balanced",
+        "optimize": "safe"
+    }[strategy]
 
     data["mode"] = mode
     data["log"].append(f"mode: {mode}")
@@ -91,16 +87,15 @@ def run_task(data):
     # 🛑 ANTI-LOOP
     # =========================
 
-    if "last_decision" in data:
-        if data["decision"] == data["last_decision"]:
-            data["repeat_count"] = data.get("repeat_count", 0) + 1
-        else:
-            data["repeat_count"] = 0
-
-    if data.get("repeat_count", 0) >= 3:
-        data["decision"] = "improve_module"
-        data["log"].append("🧠 anti-loop → force improve")
+    if data.get("decision") == data.get("last_decision"):
+        data["repeat_count"] = data.get("repeat_count", 0) + 1
+    else:
         data["repeat_count"] = 0
+
+    if data["repeat_count"] >= 3:
+        data["decision"] = "improve_module"
+        data["repeat_count"] = 0
+        data["log"].append("🧠 anti-loop → force improve")
 
     data["last_decision"] = data["decision"]
 
@@ -134,6 +129,16 @@ def run_task(data):
     data["last_layer"] = "goal_update"
     data = update_goal(data)
 
+    # =========================
+    # 🚨 КЛЮЧЕВОЙ ФИКС
+    # =========================
+
+    new_progress = data.get("goal", {}).get("progress", 0)
+
+    if new_progress < prev_progress:
+        data["goal"]["progress"] = prev_progress
+        data["log"].append("🚫 rollback prevented")
+
     return data
 
 
@@ -150,9 +155,7 @@ def analyze_experience(data):
     best = max(exp, key=lambda x: x.get("score", 0))
     data["best_module"] = best
 
-    data["log"].append(
-        f"🏆 best module: {best['module']} ({best['score']})"
-    )
+    data["log"].append(f"🏆 best module: {best['module']} ({best['score']})")
 
     return data
 
@@ -170,7 +173,8 @@ def run(task):
         "log": [],
         "memory": [],
         "experience": [],
-        "repeat_count": 0
+        "repeat_count": 0,
+        "goal": {"progress": 0}
     }
 
     best_score = -1
@@ -179,39 +183,30 @@ def run(task):
     for i in range(10):
         print(f"\n🔁 Цикл {i+1}")
 
-        # 🔥 ВСЕГДА ОБНОВЛЯЕМ ЛУЧШИЙ МОДУЛЬ
         data = analyze_experience(data)
 
         # =========================
-        # 🔥 SMART EXPLOIT (ГЛАВНЫЙ ФИКС)
+        # 🔥 SMART EXPLOIT (НЕ ЛОМАЕТ СОСТОЯНИЕ)
         # =========================
-        if best_data and random.random() < 0.5:
+        if best_data and random.random() < 0.4:
             print("♻️ SMART EXPLOIT")
 
-            data["goal"] = copy.deepcopy(best_data.get("goal", {}))
             data["experience"] = copy.deepcopy(best_data.get("experience", []))
             data["memory"] = copy.deepcopy(best_data.get("memory", []))
+            data["best_module"] = best_data.get("best_module")
 
-            # 🔥 ВОССТАНАВЛИВАЕМ best_module
-            data = analyze_experience(data)
+            # ❗ НЕ ТРОГАЕМ goal.progress
 
         else:
             print("🧪 EXPLORE")
 
-        # =========================
-        # 🚀 RUN
-        # =========================
         data = run_task(data)
 
         score = data.get("evaluation", {}).get("score", 0)
 
-        # =========================
-        # 🏆 BEST SAVE
-        # =========================
         if score > best_score:
             best_score = score
             best_data = copy.deepcopy(data)
-
             print(f"🏆 Новый лучший результат: {best_score}")
 
         print("=== RESULT ===")

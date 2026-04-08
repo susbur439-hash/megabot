@@ -244,15 +244,19 @@ def execution(data):
 
     best_module, best_score = get_best_module(data["experience"])
 
-    # 🔥 АНТИ-СТАГНАЦИЯ
+    # ⚡ АНТИ-СТАГНАЦИЯ
     if data.get("last_delta", 1) <= 0:
         data["boost"] = data.get("boost", 1.0) * 1.3
         data["log"].append("⚡ anti-stagnation boost activated")
     else:
         data["boost"] = max(1.0, data.get("boost", 1.0) * 0.95)
 
+    # =========================
     # 🔥 ЛОГИКА
-    if decision == "generate_idea":
+    # =========================
+
+    # 💡 IDEAS (только если нет модулей)
+    if decision == "generate_idea" and not data.get("experience"):
         boost, behavior = generate_idea_module()
 
         if behavior == "aggressive":
@@ -266,7 +270,8 @@ def execution(data):
         success = True
         data["result"] = "idea generated"
 
-    elif decision == "add_module":
+    # 🧬 CREATE MODULE (🔥 ФИКС!)
+    elif decision == "create_module":
         module_used = create_new_module(
             {"module": best_module, "score": best_score} if best_module else None
         )
@@ -277,6 +282,7 @@ def execution(data):
         data["goal"]["progress"] += 5
         data["result"] = "module created"
 
+    # 🚀 RUN MODULE
     elif decision == "run_module":
         if best_module:
             module_used = best_module
@@ -292,6 +298,7 @@ def execution(data):
             success = False
             data["result"] = "no module"
 
+    # 🛠 IMPROVE
     elif decision == "improve_module":
         if best_module and improve_existing_module(best_module):
             module_used = best_module
@@ -306,15 +313,21 @@ def execution(data):
         success = False
         data["result"] = "no action"
 
+    # =========================
     # 📊 DELTA
+    # =========================
     after = data["goal"].get("progress", 0)
     delta = after - before
     data["last_delta"] = delta
 
+    # =========================
     # 📊 SCORE
+    # =========================
     score = calculate_score(before, after, success)
 
+    # =========================
     # 💾 EXPERIENCE
+    # =========================
     if module_used:
         data["experience"].append({
             "module": module_used,
@@ -323,7 +336,9 @@ def execution(data):
             "time": len(data["memory"])
         })
 
+    # =========================
     # 💾 MEMORY
+    # =========================
     if decision:
         data["memory"].append(decision)
 

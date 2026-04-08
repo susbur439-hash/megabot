@@ -10,59 +10,51 @@ from modules.system_guard import system_guard
 from modules.self_improver import self_improver
 
 
-# =========================
-# 🧠 CORE TASK PIPELINE
-# =========================
-
 def run_task(data):
     data.setdefault("log", [])
 
-    prev_progress = data.get("goal", {}).get("progress", 0)
-
-    # 🎯 GOAL
     data["last_layer"] = "goal"
     data = set_goal(data)
 
-    # 🧠 ANALYSIS
     data["last_layer"] = "analysis"
     data = analysis(data)
 
-    # 🧠 DECISION
     data["last_layer"] = "decision"
     data = decision(data)
 
-    # 🔥 SELF IMPROVER
     data = self_improver(data)
-
-    # =========================
-    # 🧠 META-STRATEGY
-    # =========================
 
     score = data.get("evaluation", {}).get("score", 0)
     repeat = data.get("repeat_count", 0)
     last_delta = data.get("last_delta", 0)
 
-    if last_delta <= 0 or repeat >= 2 or score < 50:
+    # =========================
+    # 🧠 STRATEGY
+    # =========================
+    if last_delta <= 0:
+        strategy = "explore"
+    elif repeat >= 2:
         strategy = "explore"
     elif score > 85:
         strategy = "exploit"
+    elif score < 50:
+        strategy = "explore"
     else:
         strategy = "optimize"
 
     data["strategy"] = strategy
     data["log"].append(f"strategy: {strategy}")
 
-    # =========================
-    # 🔥 CONTROL DECISION
-    # =========================
-
     best = data.get("best_module")
 
+    # =========================
+    # 🎯 DECISION CONTROL
+    # =========================
     if strategy == "exploit" and best:
         data["decision"] = "run_module"
 
     elif strategy == "optimize" and best:
-        data["decision"] = "run_module" if random.random() < 0.8 else "improve_module"
+        data["decision"] = "run_module" if random.random() < 0.7 else "improve_module"
 
     elif strategy == "explore":
         if not best:
@@ -73,7 +65,6 @@ def run_task(data):
     # =========================
     # 🎭 MODE
     # =========================
-
     mode = {
         "explore": "aggressive",
         "exploit": "balanced",
@@ -81,28 +72,26 @@ def run_task(data):
     }[strategy]
 
     data["mode"] = mode
-    data["log"].append(f"mode: {mode}")
 
     # =========================
     # 🛑 ANTI-LOOP
     # =========================
+    if "last_decision" in data:
+        if data["decision"] == data["last_decision"]:
+            data["repeat_count"] = data.get("repeat_count", 0) + 1
+        else:
+            data["repeat_count"] = 0
 
-    if data.get("decision") == data.get("last_decision"):
-        data["repeat_count"] = data.get("repeat_count", 0) + 1
-    else:
+    if data.get("repeat_count", 0) >= 3:
+        data["decision"] = "create_module"
+        data["log"].append("🧠 anti-loop → force create")
         data["repeat_count"] = 0
-
-    if data["repeat_count"] >= 3:
-        data["decision"] = "improve_module"
-        data["repeat_count"] = 0
-        data["log"].append("🧠 anti-loop → force improve")
 
     data["last_decision"] = data["decision"]
 
     # =========================
     # ⚡ BOOST
     # =========================
-
     data["boost"] = {
         "aggressive": 1.5,
         "balanced": 1.0,
@@ -110,41 +99,18 @@ def run_task(data):
     }[mode]
 
     # =========================
-    # 🛠 EXECUTION
+    # 🚀 EXECUTION
     # =========================
-
     data["last_layer"] = "execution"
     data = execution(data)
 
-    # =========================
-    # 🛡 SYSTEM GUARD
-    # =========================
-
     data = system_guard(data)
-
-    # =========================
-    # 🎯 GOAL UPDATE
-    # =========================
 
     data["last_layer"] = "goal_update"
     data = update_goal(data)
 
-    # =========================
-    # 🚨 КЛЮЧЕВОЙ ФИКС
-    # =========================
-
-    new_progress = data.get("goal", {}).get("progress", 0)
-
-    if new_progress < prev_progress:
-        data["goal"]["progress"] = prev_progress
-        data["log"].append("🚫 rollback prevented")
-
     return data
 
-
-# =========================
-# 🧠 EXPERIENCE
-# =========================
 
 def analyze_experience(data):
     exp = data.get("experience", [])
@@ -153,16 +119,13 @@ def analyze_experience(data):
         return data
 
     best = max(exp, key=lambda x: x.get("score", 0))
-    data["best_module"] = best
 
-    data["log"].append(f"🏆 best module: {best['module']} ({best['score']})")
+    # ❗ НЕ ДАЕМ СБРОСИТЬ
+    if not data.get("best_module") or best["score"] >= data["best_module"].get("score", 0):
+        data["best_module"] = best
 
     return data
 
-
-# =========================
-# 🎛 DIRECTOR FINAL
-# =========================
 
 def run(task):
     print("🚀 Запуск задачи:", task)
@@ -173,8 +136,7 @@ def run(task):
         "log": [],
         "memory": [],
         "experience": [],
-        "repeat_count": 0,
-        "goal": {"progress": 0}
+        "repeat_count": 0
     }
 
     best_score = -1
@@ -186,16 +148,16 @@ def run(task):
         data = analyze_experience(data)
 
         # =========================
-        # 🔥 SMART EXPLOIT (НЕ ЛОМАЕТ СОСТОЯНИЕ)
+        # 🔥 SMART EXPLOIT (ИСПРАВЛЕН)
         # =========================
         if best_data and random.random() < 0.4:
             print("♻️ SMART EXPLOIT")
 
-            data["experience"] = copy.deepcopy(best_data.get("experience", []))
+            data["goal"] = copy.deepcopy(best_data.get("goal", {}))
             data["memory"] = copy.deepcopy(best_data.get("memory", []))
-            data["best_module"] = best_data.get("best_module")
 
-            # ❗ НЕ ТРОГАЕМ goal.progress
+            # ❗ НЕ ТРОГАЕМ experience
+            data["best_module"] = best_data.get("best_module")
 
         else:
             print("🧪 EXPLORE")

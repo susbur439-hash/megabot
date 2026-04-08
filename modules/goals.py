@@ -11,7 +11,8 @@ def set_goal(data):
     goal.setdefault("target", 100)
     goal.setdefault("history", [])
 
-    data.setdefault("prev_progress", goal["progress"])
+    # 🔥 ВАЖНО: фиксируем состояние ДО execution
+    data["prev_progress"] = goal["progress"]
 
     return data
 
@@ -28,29 +29,30 @@ def update_goal(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🔥 ЧИСТЫЙ REAL DELTA
+    # 🔥 REAL DELTA (чистый)
     # =========================
     real_delta = progress - prev_progress
+
+    # защита от мусора
+    if abs(real_delta) > 1000:
+        real_delta = 0
+
     data["last_delta"] = real_delta
 
     # =========================
-    # ❗ НЕ ТРОГАЕМ progress
+    # 📊 HISTORY (по SCORE, а не delta)
     # =========================
-    # progress уже изменён execution
-    # тут только анализ
+    score = data.get("evaluation", {}).get("score", 50)
 
-    # =========================
-    # 📊 HISTORY + TREND
-    # =========================
     history = goal.get("history", [])
-    history.append(real_delta)
+    history.append(score)
     history = history[-10:]
 
-    avg = sum(history) / len(history) if history else 0
+    avg = sum(history) / len(history) if history else 50
 
-    if avg > 5:
+    if avg > 75:
         trend = "up"
-    elif avg < 0:
+    elif avg < 40:
         trend = "down"
     else:
         trend = "stable"
@@ -59,29 +61,33 @@ def update_goal(data):
     data["trend"] = trend
 
     # =========================
-    # 🔥 LEVEL SYSTEM (ФИКС)
+    # 🚀 LEVEL SYSTEM (СТАБИЛЬНЫЙ)
     # =========================
     leveled_up = False
 
     if progress >= target:
         level += 1
-        progress = progress - target
+
+        overflow = progress - target
+        progress = overflow
+
         target = int(target * 1.2)
 
         goal["target"] = target
         data["difficulty"] = level
-        leveled_up = True
 
+        leveled_up = True
         data["log"].append(f"🚀 LEVEL UP → {level}")
 
     elif progress < 0:
         progress = 0
 
     # =========================
-    # 🔥 КОРРЕКЦИЯ DELTA ПРИ LEVEL UP
+    # 🔥 DELTA FIX ПРИ LEVEL UP
     # =========================
     if leveled_up:
-        data["last_delta"] = max(real_delta, 1)
+        real_delta = max(real_delta, 1)
+        data["last_delta"] = real_delta
 
     # =========================
     # 🧠 STATE
@@ -98,13 +104,15 @@ def update_goal(data):
     goal["state"] = state
 
     # =========================
-    # 📦 SAVE
+    # 💾 SAVE
     # =========================
     goal["progress"] = min(progress, target)
     goal["level"] = level
 
     data["goal"] = goal
-    data["prev_progress"] = goal["progress"]
+
+    # ❗ ВАЖНО: НЕ ТРОГАЕМ prev_progress здесь
+    # он обновится в следующем set_goal()
 
     # =========================
     # 📘 LOG

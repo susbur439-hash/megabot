@@ -25,7 +25,7 @@ def run_task(data):
     data["last_layer"] = "analysis"
     data = analysis(data)
 
-    # 🧠 DECISION (ГЛАВНЫЙ)
+    # 🧠 DECISION
     data["last_layer"] = "decision"
     data = decision(data)
 
@@ -33,13 +33,14 @@ def run_task(data):
     data = self_improver(data)
 
     # =========================
-    # 🧠 META-STRATEGY (НЕ ЛОМАЕТ decision)
+    # 🧠 META-STRATEGY (ФИКС)
     # =========================
 
     score = data.get("evaluation", {}).get("score", 0)
     repeat = data.get("repeat_count", 0)
+    last_delta = data.get("last_delta", 0)
 
-    if data.get("last_delta", 0) <= 0:
+    if last_delta <= 0:
         strategy = "explore"
     elif repeat >= 2:
         strategy = "explore"
@@ -54,30 +55,26 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🔥 УМНЫЙ КОНТРОЛЬ decision
+    # 🔥 CONTROL DECISION (ФИКС)
     # =========================
 
     best = data.get("best_module")
 
     if strategy == "exploit" and best:
         data["decision"] = "run_module"
-        data["log"].append("🔥 override → run best module")
+        data["log"].append("🔥 exploit → best module")
 
     elif strategy == "optimize" and best:
-        if random.random() < 0.7:
-            data["decision"] = "run_module"
-        else:
-            data["decision"] = "improve_module"
+        data["decision"] = "run_module" if random.random() < 0.8 else "improve_module"
 
     elif strategy == "explore":
-        # ❗ НЕ generate_idea!
         if not best:
             data["decision"] = "create_module"
         else:
-            if random.random() < 0.5:
-                data["decision"] = "create_module"
-            else:
-                data["decision"] = "run_module"
+            data["decision"] = random.choice([
+                "create_module",
+                "run_module"
+            ])
 
     # =========================
     # 🎭 MODE
@@ -94,19 +91,19 @@ def run_task(data):
     data["log"].append(f"mode: {mode}")
 
     # =========================
-    # 🛑 ANTI-LOOP
+    # 🛑 ANTI-LOOP (УСИЛЕННЫЙ)
     # =========================
 
     if "last_decision" in data:
         if data["decision"] == data["last_decision"]:
             data["repeat_count"] = data.get("repeat_count", 0) + 1
-
-            if data["repeat_count"] >= 3:
-                data["decision"] = "improve_module"
-                data["log"].append("🧠 anti-loop → force improve")
-
         else:
             data["repeat_count"] = 0
+
+    if data.get("repeat_count", 0) >= 3:
+        data["decision"] = "improve_module"
+        data["log"].append("🧠 anti-loop → force improve")
+        data["repeat_count"] = 0
 
     data["last_decision"] = data["decision"]
 
@@ -114,12 +111,11 @@ def run_task(data):
     # ⚡ BOOST
     # =========================
 
-    if mode == "aggressive":
-        data["boost"] = 1.5
-    elif mode == "safe":
-        data["boost"] = 0.7
-    else:
-        data["boost"] = 1.0
+    data["boost"] = {
+        "aggressive": 1.5,
+        "balanced": 1.0,
+        "safe": 0.7
+    }[mode]
 
     # =========================
     # 🛠 EXECUTION
@@ -155,15 +151,17 @@ def analyze_experience(data):
         return data
 
     best = max(exp, key=lambda x: x.get("score", 0))
-
     data["best_module"] = best
-    data["log"].append(f"🏆 best module: {best['module']} ({best['score']})")
+
+    data["log"].append(
+        f"🏆 best module: {best['module']} ({best['score']})"
+    )
 
     return data
 
 
 # =========================
-# 🎛 DIRECTOR FINAL
+# 🎛 DIRECTOR FINAL (ГЛАВНЫЙ ФИКС)
 # =========================
 
 def run(task):
@@ -184,22 +182,38 @@ def run(task):
     for i in range(10):
         print(f"\n🔁 Цикл {i+1}")
 
+        # 🔥 НЕ ПЕРЕТИРАЕМ ДАННЫЕ
         data = analyze_experience(data)
 
-        # 🔥 УМНЫЙ EXPLOIT
-        if best_data and random.random() < 0.6:
+        # =========================
+        # 🔥 SMART EXPLOIT (ФИКС)
+        # =========================
+        if best_data and random.random() < 0.5:
             print("♻️ SMART EXPLOIT")
-            data = copy.deepcopy(best_data)
+
+            # ❗ КОПИРУЕМ ТОЛЬКО ПОЛЕЗНОЕ
+            data["goal"] = copy.deepcopy(best_data.get("goal", {}))
+            data["experience"] = copy.deepcopy(best_data.get("experience", []))
+            data["memory"] = copy.deepcopy(best_data.get("memory", []))
+            data["best_module"] = best_data.get("best_module")
+
         else:
             print("🧪 EXPLORE")
 
+        # =========================
+        # 🚀 RUN
+        # =========================
         data = run_task(data)
 
         score = data.get("evaluation", {}).get("score", 0)
 
+        # =========================
+        # 🏆 BEST SAVE (ФИКС)
+        # =========================
         if score > best_score:
             best_score = score
             best_data = copy.deepcopy(data)
+
             print(f"🏆 Новый лучший результат: {best_score}")
 
         print("=== RESULT ===")

@@ -13,15 +13,27 @@ from modules.self_improver import self_improver
 def run_task(data):
     data.setdefault("log", [])
 
+    # =========================
+    # GOAL
+    # =========================
     data["last_layer"] = "goal"
     data = set_goal(data)
 
+    # =========================
+    # ANALYSIS
+    # =========================
     data["last_layer"] = "analysis"
     data = analysis(data)
 
+    # =========================
+    # DECISION
+    # =========================
     data["last_layer"] = "decision"
     data = decision(data)
 
+    # =========================
+    # SELF IMPROVE
+    # =========================
     data = self_improver(data)
 
     score = data.get("evaluation", {}).get("score", 0)
@@ -29,18 +41,16 @@ def run_task(data):
     last_delta = data.get("last_delta", 0)
 
     # =========================
-    # 🧠 STRATEGY
+    # 🧠 STRATEGY (СТАБИЛЬНАЯ)
     # =========================
     if last_delta <= 0:
         strategy = "explore"
-    elif repeat >= 2:
-        strategy = "explore"
-    elif score > 85:
+    elif score >= 80:
         strategy = "exploit"
-    elif score < 50:
-        strategy = "explore"
-    else:
+    elif score >= 50:
         strategy = "optimize"
+    else:
+        strategy = "explore"
 
     data["strategy"] = strategy
     data["log"].append(f"strategy: {strategy}")
@@ -48,19 +58,16 @@ def run_task(data):
     best = data.get("best_module")
 
     # =========================
-    # 🎯 DECISION CONTROL
+    # 🎯 DECISION CONTROL (БЕЗ ХАОСА)
     # =========================
     if strategy == "exploit" and best:
         data["decision"] = "run_module"
 
     elif strategy == "optimize" and best:
-        data["decision"] = "run_module" if random.random() < 0.7 else "improve_module"
+        data["decision"] = "improve_module"
 
-    elif strategy == "explore":
-        if not best:
-            data["decision"] = "create_module"
-        else:
-            data["decision"] = random.choice(["create_module", "run_module"])
+    else:
+        data["decision"] = "create_module"
 
     # =========================
     # 🎭 MODE
@@ -106,6 +113,9 @@ def run_task(data):
 
     data = system_guard(data)
 
+    # =========================
+    # GOAL UPDATE
+    # =========================
     data["last_layer"] = "goal_update"
     data = update_goal(data)
 
@@ -120,8 +130,7 @@ def analyze_experience(data):
 
     best = max(exp, key=lambda x: x.get("score", 0))
 
-    # ❗ НЕ ДАЕМ СБРОСИТЬ
-    if not data.get("best_module") or best["score"] >= data["best_module"].get("score", 0):
+    if not data.get("best_module") or best["score"] > data["best_module"].get("score", 0):
         data["best_module"] = best
 
     return data
@@ -148,15 +157,12 @@ def run(task):
         data = analyze_experience(data)
 
         # =========================
-        # 🔥 SMART EXPLOIT (ИСПРАВЛЕН)
+        # 🔥 SMART EXPLOIT (ФИКС)
         # =========================
-        if best_data and random.random() < 0.4:
+        if best_data and random.random() < 0.3:
             print("♻️ SMART EXPLOIT")
 
-            data["goal"] = copy.deepcopy(best_data.get("goal", {}))
-            data["memory"] = copy.deepcopy(best_data.get("memory", []))
-
-            # ❗ НЕ ТРОГАЕМ experience
+            # ❗ ТОЛЬКО ЛУЧШИЙ МОДУЛЬ
             data["best_module"] = best_data.get("best_module")
 
         else:

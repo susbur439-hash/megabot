@@ -168,9 +168,6 @@ def improve_existing_module(module_name):
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
 
-        if "progress" not in code:
-            return False
-
         new_code = code.replace(
             "data[\"goal\"][\"progress\"] += boost",
             "data[\"goal\"][\"progress\"] += boost + 2"
@@ -226,7 +223,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION (FINAL FIX)
+# 🔥 EXECUTION FINAL FIX
 # =========================
 def execution(data):
 
@@ -235,45 +232,36 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
 
-    # 🔥 FIX 1: старое имя
-    if data.get("decision") == "add_module":
-        data["decision"] = "create_module"
-
-    # 🔥 FIX 2: если нет модулей — принудительно создаём
-    if not data.get("experience"):
-        data["decision"] = "create_module"
-        data["log"].append("🔥 FORCE CREATE MODULE (no modules)")
-
     decision = data.get("decision")
     before = data["goal"].get("progress", 0)
 
     module_used = None
     success = False
-    data["result"] = None
 
     best_module, best_score = get_best_module(data["experience"])
+
+    # 🔥 ЕСЛИ УЖЕ ЕСТЬ МОДУЛИ — ЗАПРЕЩАЕМ IDEAS
+    if data["experience"] and decision == "generate_idea":
+        decision = "run_module"
+        data["log"].append("🚫 block idea → switching to run_module")
 
     # ⚡ АНТИ-СТАГНАЦИЯ
     if data.get("last_delta", 1) <= 0:
         data["boost"] = data.get("boost", 1.0) * 1.3
-        data["log"].append("⚡ anti-stagnation boost activated")
+        data["log"].append("⚡ anti-stagnation boost")
     else:
         data["boost"] = max(1.0, data.get("boost", 1.0) * 0.95)
 
+    # =========================
     # 🔥 ЛОГИКА
+    # =========================
+
     if decision == "generate_idea":
-        boost, behavior = generate_idea_module()
-
-        if behavior == "aggressive":
-            boost = int(boost * 1.7)
-        elif behavior == "safe":
-            boost = int(boost * 0.7)
-
+        boost, _ = generate_idea_module()
         boost = int(boost * data.get("boost", 1.0))
 
         data["goal"]["progress"] += boost
         success = True
-        data["result"] = "idea generated"
 
     elif decision == "create_module":
         module_used = create_new_module(
@@ -284,7 +272,6 @@ def execution(data):
         data, success = run_python_module(path, data)
 
         data["goal"]["progress"] += 5
-        data["result"] = "module created"
 
     elif decision == "run_module":
         if best_module:
@@ -292,28 +279,18 @@ def execution(data):
             path = os.path.join("modules", best_module + ".py")
             data, success = run_python_module(path, data)
 
-            if data.get("last_delta", 0) < 3:
-                data["goal"]["progress"] += 3
-                data["log"].append("⚡ low result boost")
-
-            data["result"] = "module executed"
+            data["goal"]["progress"] += 2
         else:
-            success = False
-            data["result"] = "no module"
+            decision = "create_module"
 
     elif decision == "improve_module":
         if best_module and improve_existing_module(best_module):
             module_used = best_module
             data["goal"]["progress"] += 6
             success = True
-            data["result"] = "module improved"
-        else:
-            success = False
-            data["result"] = "improve failed"
 
     else:
         success = False
-        data["result"] = "no action"
 
     # 📊 DELTA
     after = data["goal"].get("progress", 0)

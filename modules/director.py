@@ -33,7 +33,7 @@ def run_task(data):
     data = self_improver(data)
 
     # =========================
-    # 🧠 META-STRATEGY (ФИКС)
+    # 🧠 META-STRATEGY
     # =========================
 
     score = data.get("evaluation", {}).get("score", 0)
@@ -55,7 +55,7 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🔥 CONTROL DECISION (ФИКС)
+    # 🔥 CONTROL DECISION
     # =========================
 
     best = data.get("best_module")
@@ -71,10 +71,7 @@ def run_task(data):
         if not best:
             data["decision"] = "create_module"
         else:
-            data["decision"] = random.choice([
-                "create_module",
-                "run_module"
-            ])
+            data["decision"] = random.choice(["create_module", "run_module"])
 
     # =========================
     # 🎭 MODE
@@ -91,7 +88,7 @@ def run_task(data):
     data["log"].append(f"mode: {mode}")
 
     # =========================
-    # 🛑 ANTI-LOOP (УСИЛЕННЫЙ)
+    # 🛑 ANTI-LOOP
     # =========================
 
     if "last_decision" in data:
@@ -161,7 +158,7 @@ def analyze_experience(data):
 
 
 # =========================
-# 🎛 DIRECTOR FINAL (ГЛАВНЫЙ ФИКС)
+# 🎛 DIRECTOR FINAL
 # =========================
 
 def run(task):
@@ -182,20 +179,21 @@ def run(task):
     for i in range(10):
         print(f"\n🔁 Цикл {i+1}")
 
-        # 🔥 НЕ ПЕРЕТИРАЕМ ДАННЫЕ
+        # 🔥 ВСЕГДА ОБНОВЛЯЕМ ЛУЧШИЙ МОДУЛЬ
         data = analyze_experience(data)
 
         # =========================
-        # 🔥 SMART EXPLOIT (ФИКС)
+        # 🔥 SMART EXPLOIT (ГЛАВНЫЙ ФИКС)
         # =========================
         if best_data and random.random() < 0.5:
             print("♻️ SMART EXPLOIT")
 
-            # ❗ КОПИРУЕМ ТОЛЬКО ПОЛЕЗНОЕ
             data["goal"] = copy.deepcopy(best_data.get("goal", {}))
             data["experience"] = copy.deepcopy(best_data.get("experience", []))
             data["memory"] = copy.deepcopy(best_data.get("memory", []))
-            data["best_module"] = best_data.get("best_module")
+
+            # 🔥 ВОССТАНАВЛИВАЕМ best_module
+            data = analyze_experience(data)
 
         else:
             print("🧪 EXPLORE")
@@ -208,7 +206,7 @@ def run(task):
         score = data.get("evaluation", {}).get("score", 0)
 
         # =========================
-        # 🏆 BEST SAVE (ФИКС)
+        # 🏆 BEST SAVE
         # =========================
         if score > best_score:
             best_score = score

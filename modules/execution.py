@@ -88,8 +88,7 @@ def get_best_module(experience):
 # =========================
 def generate_idea_module():
     boost = random.randint(4, 12)
-    behavior = random.choice(["aggressive", "balanced", "safe"])
-    return boost, behavior
+    return boost
 
 
 # =========================
@@ -118,25 +117,14 @@ def create_new_module(parent=None):
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    if parent:
-        base = parent.get("score", 50)
-        boost = max(3, int(base / 8 + random.randint(-2, 5)))
-    else:
-        boost, _ = generate_idea_module()
-
-    behavior = random.choice(["aggressive", "balanced", "safe"])
+    base = parent.get("score", 50) if parent else 50
+    boost = max(3, int(base / 8 + random.randint(-2, 5)))
 
     code = f"""def run(data):
     boost = {boost}
-    behavior = "{behavior}"
 
     if "goal" not in data:
         data["goal"] = {{"progress": 0}}
-
-    if behavior == "aggressive":
-        boost = int(boost * 1.6)
-    elif behavior == "safe":
-        boost = int(boost * 0.7)
 
     system_boost = data.get("boost", 1.0)
     boost = int(boost * system_boost)
@@ -144,7 +132,7 @@ def create_new_module(parent=None):
     data["goal"]["progress"] += boost
 
     data.setdefault("log", [])
-    data["log"].append(f"module {new_id} | behavior={{behavior}} | boost={{boost}}")
+    data["log"].append(f"module {new_id} | boost={{boost}}")
 
     return data
 """
@@ -167,6 +155,9 @@ def improve_existing_module(module_name):
     try:
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
+
+        if "+ 2" in code:
+            return False
 
         new_code = code.replace(
             "data[\"goal\"][\"progress\"] += boost",
@@ -192,38 +183,17 @@ def calculate_score(before, after, success=True):
     delta = after - before
 
     if delta <= 0:
-        return 30
+        return 20
     elif delta < 5:
-        return 60
-    elif delta < 10:
+        return 50
+    elif delta < 15:
         return 80
     else:
         return 100
 
 
 # =========================
-# 🧹 CLEANUP
-# =========================
-def cleanup_modules(data):
-    exp = [e for e in data.get("experience", []) if isinstance(e, dict)]
-
-    if len(exp) < 5:
-        return
-
-    good = [e for e in exp if e.get("score", 0) >= 50]
-    bad = [e for e in exp if e.get("score", 0) < 50]
-
-    for b in bad:
-        path = os.path.join("modules", b.get("module", "") + ".py")
-        if os.path.exists(path):
-            os.remove(path)
-            data["log"].append(f"🗑 removed {b.get('module')}")
-
-    data["experience"] = sorted(good, key=lambda x: x.get("score", 0), reverse=True)[:20]
-
-
-# =========================
-# 🔥 EXECUTION FINAL FIX
+# 🔥 IDEAL EXECUTION
 # =========================
 def execution(data):
 
@@ -240,15 +210,22 @@ def execution(data):
 
     best_module, best_score = get_best_module(data["experience"])
 
-    # 🔥 ЕСЛИ УЖЕ ЕСТЬ МОДУЛИ — ЗАПРЕЩАЕМ IDEAS
-    if data["experience"] and decision == "generate_idea":
-        decision = "run_module"
-        data["log"].append("🚫 block idea → switching to run_module")
+    # 🔥 ЖЁСТКАЯ СИНХРОНИЗАЦИЯ
+    if decision not in ["create_module", "run_module", "improve_module", "generate_idea"]:
+        data["log"].append(f"❌ invalid decision → fallback to create_module")
+        decision = "create_module"
+
+    data["log"].append(f"🎯 EXECUTE: {decision}")
+
+    # 🔥 ЕСЛИ НЕТ МОДУЛЕЙ — СОЗДАЁМ
+    if not data["experience"]:
+        decision = "create_module"
+        data["log"].append("🔥 FORCE CREATE (no modules)")
 
     # ⚡ АНТИ-СТАГНАЦИЯ
     if data.get("last_delta", 1) <= 0:
         data["boost"] = data.get("boost", 1.0) * 1.3
-        data["log"].append("⚡ anti-stagnation boost")
+        data["log"].append("⚡ anti-stagnation")
     else:
         data["boost"] = max(1.0, data.get("boost", 1.0) * 0.95)
 
@@ -257,9 +234,8 @@ def execution(data):
     # =========================
 
     if decision == "generate_idea":
-        boost, _ = generate_idea_module()
+        boost = generate_idea_module()
         boost = int(boost * data.get("boost", 1.0))
-
         data["goal"]["progress"] += boost
         success = True
 
@@ -278,29 +254,37 @@ def execution(data):
             module_used = best_module
             path = os.path.join("modules", best_module + ".py")
             data, success = run_python_module(path, data)
-
-            data["goal"]["progress"] += 2
         else:
+            data["log"].append("⚠️ no module → fallback create")
             decision = "create_module"
+            module_used = create_new_module()
+            path = os.path.join("modules", module_used + ".py")
+            data, success = run_python_module(path, data)
 
     elif decision == "improve_module":
         if best_module and improve_existing_module(best_module):
             module_used = best_module
             data["goal"]["progress"] += 6
             success = True
+        else:
+            data["log"].append("⚠️ improve failed → run module")
+            decision = "run_module"
 
-    else:
-        success = False
-
+    # =========================
     # 📊 DELTA
+    # =========================
     after = data["goal"].get("progress", 0)
     delta = after - before
     data["last_delta"] = delta
 
+    # =========================
     # 📊 SCORE
+    # =========================
     score = calculate_score(before, after, success)
 
+    # =========================
     # 💾 EXPERIENCE
+    # =========================
     if module_used:
         data["experience"].append({
             "module": module_used,
@@ -309,14 +293,15 @@ def execution(data):
             "time": len(data["memory"])
         })
 
+    # =========================
     # 💾 MEMORY
+    # =========================
     if decision:
         data["memory"].append(decision)
 
     data["memory"] = data["memory"][-100:]
     data["log"] = data["log"][-200:]
 
-    cleanup_modules(data)
     save_to_memory(data)
 
     return data

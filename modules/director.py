@@ -10,10 +10,6 @@ from modules.system_guard import system_guard
 from modules.self_improver import self_improver
 
 
-# =========================
-# 🧠 CORE TASK PIPELINE
-# =========================
-
 def run_task(data):
     data.setdefault("log", [])
 
@@ -39,22 +35,16 @@ def run_task(data):
     score = data.get("evaluation", {}).get("score", 0)
     repeat = data.get("repeat_count", 0)
 
-    # ❗ FIX: если нет прогресса → explore
     if data.get("last_delta", 0) <= 0:
         strategy = "explore"
-
     elif data.get("force_explore"):
         strategy = "explore"
-
     elif repeat >= 2:
         strategy = "explore"
-
     elif score > 85:
         strategy = "exploit"
-
     elif score < 50:
-        strategy = "explore"   # ❗ было build → ошибка
-
+        strategy = "explore"
     else:
         strategy = "optimize"
 
@@ -62,25 +52,26 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🎯 DECISION CONTROL (FIX)
+    # 🔥 ВАЖНО: НЕ ЛОМАЕМ decision
     # =========================
 
+    # только мягкая корректировка
     if strategy == "explore":
-        data["decision"] = "generate_idea"
+        if data["decision"] == "run_module":
+            data["decision"] = "create_module"
 
     elif strategy == "exploit":
-        if data.get("best_module"):
+        if data["decision"] == "create_module":
             data["decision"] = "run_module"
-        else:
-            data["decision"] = "generate_idea"
 
     elif strategy == "optimize":
-        # ❗ FIX: не залипать на generate_idea
-        if data.get("decision") == "generate_idea":
-            data["decision"] = "run_module"
-
-        elif data.get("decision") == "add_module":
+        if data["decision"] == "create_module":
             data["decision"] = "improve_module"
+
+    # ❗ ЖЁСТКИЙ АНТИ-БАГ
+    if data.get("decision") == "generate_idea":
+        data["decision"] = "create_module"
+        data["log"].append("🔥 override: idea → create_module")
 
     # =========================
     # 🎭 MODE SYSTEM
@@ -149,12 +140,10 @@ def run_task(data):
     data = system_guard(data)
 
     # =========================
-    # 🔥 SYNC (FIX)
+    # 🔥 SYNC
     # =========================
 
     if "evaluation" in data:
-
-        # ❗ FIX: delta считать автоматически
         before = data.get("goal", {}).get("history", [0])[-1] if data.get("goal", {}).get("history") else 0
         after = data.get("goal", {}).get("progress", 0)
 
@@ -178,10 +167,6 @@ def run_task(data):
     return data
 
 
-# =========================
-# 🧠 EXPERIENCE ANALYSIS
-# =========================
-
 def analyze_experience(data):
     exp = data.get("experience", [])
 
@@ -195,10 +180,6 @@ def analyze_experience(data):
 
     return data
 
-
-# =========================
-# 🎛 DIRECTOR v3 FINAL (FIXED)
-# =========================
 
 def run(task):
     print("🚀 Запуск задачи:", task)
@@ -266,7 +247,6 @@ def run(task):
 
             current_score = data.get("evaluation", {}).get("score", 0)
 
-            # 🛑 АНТИ-ДЕГРАДАЦИЯ (усилен)
             if best_data and current_score < best_score - 15:
                 print("🛑 ДЕГРАДАЦИЯ → ОТКАТ")
                 data = copy.deepcopy(best_data)

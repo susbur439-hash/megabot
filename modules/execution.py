@@ -195,11 +195,11 @@ def calculate_score(before, after, success=True):
     delta = after - before
 
     if delta <= 0:
-        return 20
+        return 30
     elif delta < 5:
-        return 50
+        return 60
     elif delta < 10:
-        return 75
+        return 80
     else:
         return 100
 
@@ -226,7 +226,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🔥 EXECUTION FIX FINAL
+# 🔥 EXECUTION
 # =========================
 def execution(data):
 
@@ -244,17 +244,21 @@ def execution(data):
 
     best_module, best_score = get_best_module(data["experience"])
 
-    # =========================
-    # 🔥 ЛОГИКА
-    # =========================
+    # 🔥 АНТИ-СТАГНАЦИЯ
+    if data.get("last_delta", 1) <= 0:
+        data["boost"] = data.get("boost", 1.0) * 1.3
+        data["log"].append("⚡ anti-stagnation boost activated")
+    else:
+        data["boost"] = max(1.0, data.get("boost", 1.0) * 0.95)
 
+    # 🔥 ЛОГИКА
     if decision == "generate_idea":
         boost, behavior = generate_idea_module()
 
         if behavior == "aggressive":
-            boost = int(boost * 1.5)
+            boost = int(boost * 1.7)
         elif behavior == "safe":
-            boost = int(boost * 0.8)
+            boost = int(boost * 0.7)
 
         boost = int(boost * data.get("boost", 1.0))
 
@@ -262,15 +266,15 @@ def execution(data):
         success = True
         data["result"] = "idea generated"
 
-        # ❗ НЕ считаем идею модулем
-        module_used = None
-
     elif decision == "add_module":
         module_used = create_new_module(
             {"module": best_module, "score": best_score} if best_module else None
         )
+
         path = os.path.join("modules", module_used + ".py")
         data, success = run_python_module(path, data)
+
+        data["goal"]["progress"] += 5
         data["result"] = "module created"
 
     elif decision == "run_module":
@@ -278,6 +282,11 @@ def execution(data):
             module_used = best_module
             path = os.path.join("modules", best_module + ".py")
             data, success = run_python_module(path, data)
+
+            if data.get("last_delta", 0) < 3:
+                data["goal"]["progress"] += 3
+                data["log"].append("⚡ low result boost")
+
             data["result"] = "module executed"
         else:
             success = False
@@ -286,7 +295,7 @@ def execution(data):
     elif decision == "improve_module":
         if best_module and improve_existing_module(best_module):
             module_used = best_module
-            data["goal"]["progress"] += 4
+            data["goal"]["progress"] += 6
             success = True
             data["result"] = "module improved"
         else:
@@ -297,28 +306,24 @@ def execution(data):
         success = False
         data["result"] = "no action"
 
-    # =========================
     # 📊 DELTA
-    # =========================
     after = data["goal"].get("progress", 0)
-    data["last_delta"] = after - before
+    delta = after - before
+    data["last_delta"] = delta
 
-    # =========================
     # 📊 SCORE
-    # =========================
     score = calculate_score(before, after, success)
 
-    # ❗ сохраняем ТОЛЬКО реальные модули
+    # 💾 EXPERIENCE
     if module_used:
         data["experience"].append({
             "module": module_used,
             "score": score,
+            "delta": delta,
             "time": len(data["memory"])
         })
 
-    # =========================
     # 💾 MEMORY
-    # =========================
     if decision:
         data["memory"].append(decision)
 

@@ -48,6 +48,19 @@ def decision(data):
     has_any_module = len(module_scores) > 0
 
     # =========================
+    # 🚨 КРИТИЧЕСКИЙ ФИКС
+    # =========================
+    if not has_any_module:
+        action = "create_module"
+        data["decision"] = action
+
+        data["log"].append(
+            f"decision: {action} | FORCE BOOTSTRAP (no modules)"
+        )
+
+        return data
+
+    # =========================
     # 🧠 АНТИ-ЗАЦИКЛИВАНИЕ
     # =========================
     recent = memory[-5:]
@@ -67,27 +80,21 @@ def decision(data):
     # 🔥 ЛОГИКА
     # =========================
 
-    # 🚨 RECOVERY
     if analysis_type == "recovery":
-        if not has_any_module:
-            action = "create_module"
-        elif has_strong_module:
+        if has_strong_module:
             action = "run_module"
         else:
             action = "improve_module"
 
-    # 🧱 BOOTSTRAP
     elif analysis_type == "bootstrap":
         action = "create_module"
 
-    # 🏗 BUILD
     elif analysis_type == "build":
         if too_many_creates:
             action = "run_module"
         else:
             action = "create_module"
 
-    # 🔍 EXPLORE
     elif analysis_type == "explore":
 
         if stagnation:
@@ -100,9 +107,8 @@ def decision(data):
             action = "run_module"
 
         else:
-            action = "generate_idea"
+            action = "create_module"  # ← ФИКС (было generate_idea)
 
-    # 🎯 EXPLOIT
     elif analysis_type == "exploit":
 
         if has_strong_module:
@@ -115,7 +121,6 @@ def decision(data):
         else:
             action = "create_module"
 
-    # 🛠 IMPROVE
     elif analysis_type == "improve":
 
         if has_strong_module:
@@ -126,7 +131,6 @@ def decision(data):
         else:
             action = "create_module"
 
-    # ⚡ OPTIMIZE
     elif analysis_type == "optimize":
 
         if has_strong_module:
@@ -134,11 +138,8 @@ def decision(data):
         else:
             action = "create_module"
 
-    # ❓ FALLBACK
     else:
-        if not has_any_module:
-            action = "create_module"
-        elif score < 50:
+        if score < 50:
             action = "improve_module"
         else:
             action = "run_module"

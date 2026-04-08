@@ -1,78 +1,130 @@
 import os
 import json
-import re
+import subprocess
+import time
 
-print("🔧 MEGABOT AUTO FIX START\n")
+LOG_FILE = "run_log.txt"
 
-# =========================
-# 1. MEMORY FIX
-# =========================
-if not os.path.exists("memory.json"):
-    with open("memory.json", "w", encoding="utf-8") as f:
-        json.dump({}, f, indent=4)
-    print("✅ memory.json создан")
-else:
-    print("✔️ memory.json уже существует")
 
 # =========================
-# 2. EXECUTION CHECK
+# 🚀 ЗАПУСК МЕГАБОТА
 # =========================
-print("\n🔍 Проверка execution()...")
+def run_bot():
+    try:
+        result = subprocess.run(
+            ["python", "main.py", "развивай себя"],
+            capture_output=True,
+            text=True
+        )
 
-execution_files = []
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.write(result.stdout)
 
-for root, dirs, files in os.walk("."):
-    for file in files:
-        if file.endswith(".py"):
-            path = os.path.join(root, file)
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    if "def execution" in content:
-                        execution_files.append(path)
-            except:
-                pass
+        return result.stdout
 
-print(f"⚠️ Найдено execution(): {len(execution_files)}")
+    except Exception as e:
+        print("Run error:", e)
+        return ""
 
-for f in execution_files:
-    print(" -", f)
-
-if len(execution_files) > 1:
-    print("\n⚠️ ВНИМАНИЕ: дубли execution()")
-    print("👉 Оставь только: modules/execution.py")
 
 # =========================
-# 3. MAIN FIX (умный запуск)
+# 🔍 АНАЛИЗ ЛОГА
 # =========================
-print("\n🧠 Проверка main.py...")
+def analyze_log(text):
+    issues = []
 
-main_path = "main.py"
+    if "generate_idea" in text and "create_module" not in text:
+        issues.append("NO_MODULE_CREATION")
 
-if os.path.exists(main_path):
-    with open(main_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    if "experience': []" in text:
+        issues.append("NO_EXPERIENCE")
 
-    if "Direct run" not in content:
-        inject_code = '''
+    if "module created" not in text and "create_module" in text:
+        issues.append("CREATE_NOT_EXECUTED")
 
-    # 🔥 DIRECT SCRIPT RUN
-    if task.endswith(".py") and os.path.exists(task):
-        print("🚀 Direct run:", task)
-        os.system(f"python {task}")
-        exit()
-'''
+    return issues
 
-        # вставка перед run(task)
-        content = re.sub(r'run\(task\)', inject_code + "\n    run(task)", content)
 
-        with open(main_path, "w", encoding="utf-8") as f:
-            f.write(content)
+# =========================
+# 🔧 ФИКС: execution.py
+# =========================
+def fix_execution():
+    if not os.path.exists("execution.py"):
+        return False
 
-        print("✅ main.py обновлён (direct run добавлен)")
-    else:
-        print("✔️ main.py уже настроен")
-else:
-    print("❌ main.py не найден")
+    with open("execution.py", "r", encoding="utf-8") as f:
+        code = f.read()
 
-print("\n🚀 AUTO FIX COMPLETE")
+    if "FORCE_CREATE_MODULE" in code:
+        return True  # уже фиксили
+
+    fix_code = """
+# 🔥 FORCE CREATE MODULE IF NONE EXISTS
+if not data.get("experience"):
+    data["decision"] = "create_module"
+"""
+
+    code = fix_code + "\n" + code
+
+    with open("execution.py", "w", encoding="utf-8") as f:
+        f.write(code)
+
+    print("FIXED: execution.py")
+    return True
+
+
+# =========================
+# 🔧 ФИКС: decision.py
+# =========================
+def fix_decision():
+    if not os.path.exists("decision.py"):
+        return False
+
+    with open("decision.py", "r", encoding="utf-8") as f:
+        code = f.read()
+
+    if "FORCE_BOOTSTRAP_FIX" in code:
+        return True
+
+    fix_code = """
+# 🔥 FORCE BOOTSTRAP FIX
+if data.get("analysis") == "bootstrap" and not data.get("experience"):
+    data["decision"] = "create_module"
+"""
+
+    code = code + "\n" + fix_code
+
+    with open("decision.py", "w", encoding="utf-8") as f:
+        f.write(code)
+
+    print("FIXED: decision.py")
+    return True
+
+
+# =========================
+# 🔄 ГЛАВНЫЙ ЦИКЛ
+# =========================
+def main():
+    for i in range(3):
+        print(f"\n=== RUN {i+1} ===")
+
+        output = run_bot()
+        issues = analyze_log(output)
+
+        print("Issues:", issues)
+
+        if not issues:
+            print("✅ SYSTEM OK")
+            break
+
+        if "NO_MODULE_CREATION" in issues:
+            fix_execution()
+
+        if "CREATE_NOT_EXECUTED" in issues:
+            fix_decision()
+
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()

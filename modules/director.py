@@ -15,8 +15,9 @@ def run_task(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🔥 DOCTOR (ДО СИСТЕМЫ)
+    # 🔥 DOCTOR (ПРАВИЛЬНЫЙ СТАРТ)
     # =========================
+    data["last_layer"] = "start"
     data = doctor(data)
 
     # =========================
@@ -144,9 +145,9 @@ def run_task(data):
     }[mode]
 
     # =========================
-    # 🔥 DOCTOR (ПОСЛЕ ЦИКЛА)
+    # 🔥 DOCTOR (ФИНАЛ)
     # =========================
-    data["last_layer"] = "loop"
+    data["last_layer"] = "loop_end"
     data = doctor(data)
 
     return data

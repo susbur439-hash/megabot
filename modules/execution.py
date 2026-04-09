@@ -17,6 +17,23 @@ def save_to_memory(data):
 
 
 # =========================
+# 🛡 SAFE ENV INIT
+# =========================
+def ensure_env(data):
+    env = data.setdefault("env", {})
+
+    env.setdefault("energy", 100)
+    env.setdefault("knowledge", 0)
+    env.setdefault("success", 0)
+    env.setdefault("fail", 0)
+    env.setdefault("entropy", 0)
+    env.setdefault("experience", 0)
+    env.setdefault("level", 1)
+
+    return env
+
+
+# =========================
 # 🎯 CHECK TASK COMPLETE
 # =========================
 def is_task_completed(data):
@@ -26,33 +43,6 @@ def is_task_completed(data):
         return os.path.exists("test.txt")
 
     return False
-
-
-# =========================
-# 🌍 ENV EFFECTS (НОВОЕ)
-# =========================
-def apply_env_effects(data, success=True):
-    env = data.setdefault("env", {
-        "energy": 100,
-        "knowledge": 0,
-        "success": 0,
-        "fail": 0,
-        "entropy": 0
-    })
-
-    env["energy"] -= 2
-
-    if success:
-        env["success"] += 1
-        env["knowledge"] += 1
-    else:
-        env["fail"] += 1
-        env["entropy"] += 2
-
-    if env["energy"] < 0:
-        env["energy"] = 0
-
-    return data
 
 
 # =========================
@@ -90,11 +80,13 @@ def execute_real_action(data):
 def run_python_module(module_path, data):
     try:
         if not os.path.exists(module_path):
+            data["log"].append("❌ module not found")
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
 
         if not spec or not spec.loader:
+            data["log"].append("❌ module load failed")
             return data, False
 
         module = importlib.util.module_from_spec(spec)
@@ -102,12 +94,15 @@ def run_python_module(module_path, data):
 
         if hasattr(module, "run"):
             result = module.run(data)
+
             if isinstance(result, dict):
                 return result, True
 
+        data["log"].append("⚠️ invalid module result")
         return data, False
 
-    except Exception:
+    except Exception as e:
+        data["log"].append(f"❌ module error: {e}")
         return data, False
 
 
@@ -116,6 +111,7 @@ def run_python_module(module_path, data):
 # =========================
 def get_best_module(experience):
     valid = [x for x in experience if x.get("module") not in (None, "real_action")]
+
     if not valid:
         return None, 0
 
@@ -157,8 +153,10 @@ def create_new_module():
     code = f"""def run(data):
     data.setdefault("goal", {{"progress": 0}})
     data.setdefault("log", [])
+
     data["goal"]["progress"] += {boost}
     data["log"].append("module {new_id} | +{boost}")
+
     return data
 """
 
@@ -169,40 +167,36 @@ def create_new_module():
 
 
 # =========================
-# 🔁 REPEAT PENALTY (НОВОЕ)
+# 🔁 REPEAT PENALTY
 # =========================
 def apply_repeat_penalty(data, module_used):
     if len(data["experience"]) < 1:
-        return data
+        return
 
     last = data["experience"][-1]["module"]
 
     if last == module_used:
-        data["env"]["entropy"] += 3
+        data["env"]["entropy"] += 2
         data["log"].append("♻️ repeat penalty")
 
-    return data
-
 
 # =========================
-# 📊 SCORE (ПЕРЕПИСАН)
+# 📊 SCORE
 # =========================
-def calculate_score(data, before, after, success=True):
+def calculate_score(data, before, after):
     env = data.get("env", {})
 
-    if env.get("energy", 0) <= 0:
-        return 0
+    delta = after - before
 
-    reward = 0
+    score = 0
+    score += delta * 5
+    score += env.get("knowledge", 0) * 2
+    score += env.get("success", 0) * 2
 
-    reward += (after - before)
-    reward += env.get("knowledge", 0) * 5
-    reward += env.get("success", 0) * 5
+    score -= env.get("fail", 0) * 5
+    score -= env.get("entropy", 0)
 
-    reward -= env.get("fail", 0) * 5
-    reward -= env.get("entropy", 0) * 3
-
-    return max(0, min(100, reward))
+    return max(0, min(100, score))
 
 
 # =========================
@@ -215,36 +209,42 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
 
+    ensure_env(data)
+
     before = data["goal"]["progress"]
 
     if is_task_completed(data):
+        data["log"].append("✅ задача уже выполнена")
         return data
 
     module_used = None
 
-    # === ACTION ===
+    # === ВЫБОР СТРАТЕГИИ ===
     best_module, _ = get_best_module(data["experience"])
 
-    if best_module and random.random() > 0.3:
+    if best_module and random.random() > 0.4:
+        data["log"].append(f"🚀 run best: {best_module}")
         path = os.path.join("modules", best_module + ".py")
         data, success = run_python_module(path, data)
         module_used = best_module
     else:
+        data["log"].append("🧪 explore: create module")
         module_name = create_new_module()
         path = os.path.join("modules", module_name + ".py")
         data, success = run_python_module(path, data)
         module_used = module_name
 
-    # fallback
+    # === FALLBACK ===
     after = data["goal"]["progress"]
+
     if after == before:
+        data["log"].append("🧠 fallback → real action")
         data, success = execute_real_action(data)
         module_used = "real_action"
-        after = data["goal"]["progress"]
 
     # === ENV ===
-    data = apply_env_effects(data, success)
-    data = apply_repeat_penalty(data, module_used)
+    ensure_env(data)
+    apply_repeat_penalty(data, module_used)
 
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
@@ -253,7 +253,7 @@ def execution(data):
 
     # === EXPERIENCE ===
     after = data["goal"]["progress"]
-    score = calculate_score(data, before, after, success)
+    score = calculate_score(data, before, after)
 
     data["experience"].append({
         "module": module_used,
@@ -263,6 +263,7 @@ def execution(data):
 
     data["memory"].append("execution")
 
+    # лимиты
     data["memory"] = data["memory"][-100:]
     data["log"] = data["log"][-200:]
 

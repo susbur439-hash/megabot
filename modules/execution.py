@@ -85,7 +85,7 @@ def create_new_module(parent=None):
     path = os.path.join("modules", name)
 
     base = parent.get("score", 50) if parent else 50
-    boost = max(5, int(base / 6 + random.randint(0, 5)))
+    boost = max(5, int(base / 6 + random.randint(3, 10)))
 
     code = f"""def run(data):
     boost = {boost}
@@ -123,12 +123,12 @@ def improve_existing_module(module_name):
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
 
-        if "+ 3" in code:
+        if "+ 5" in code:
             return False
 
         new_code = code.replace(
             "data[\"goal\"][\"progress\"] += boost",
-            "data[\"goal\"][\"progress\"] += boost + 3"
+            "data[\"goal\"][\"progress\"] += boost + 5"
         )
 
         with open(path, "w", encoding="utf-8") as f:
@@ -143,14 +143,12 @@ def improve_existing_module(module_name):
 # =========================
 # 📊 SCORE
 # =========================
-def calculate_score(before, after, success=True):
+def calculate_score(delta, success=True):
     if not success:
         return 10
 
-    delta = after - before
-
     if delta <= 0:
-        return 20
+        return 30
     elif delta < 5:
         return 60
     elif delta < 15:
@@ -160,7 +158,7 @@ def calculate_score(before, after, success=True):
 
 
 # =========================
-# 🔥 EXECUTION (FIXED ARCHITECTURE)
+# 🔥 EXECUTION (FIXED)
 # =========================
 def execution(data):
 
@@ -169,7 +167,7 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
 
-    decision = data.get("decision")  # 🔥 КЛЮЧЕВОЕ
+    decision = data.get("decision")
     before = data["goal"]["progress"]
 
     module_used = None
@@ -178,18 +176,15 @@ def execution(data):
     best_module, best_score = get_best_module(data["experience"])
 
     # =========================
-    # 🎯 ЖЁСТКАЯ ЛОГИКА ПО DECISION
+    # 🎯 DECISION
     # =========================
-
-    # 1. CREATE
     if decision == "create_module":
         data["log"].append("🔥 decision → create_module")
 
-        module_used = create_new_module()
+        module_used = create_new_module(data.get("best_module"))
         path = os.path.join("modules", module_used + ".py")
         data, success = run_python_module(path, data)
 
-    # 2. RUN
     elif decision == "run_module":
         data["log"].append("🚀 decision → run_module")
 
@@ -198,32 +193,21 @@ def execution(data):
             path = os.path.join("modules", best_module + ".py")
             data, success = run_python_module(path, data)
         else:
-            data["log"].append("⚠️ no module → fallback create")
+            data["log"].append("⚠️ fallback → create")
             module_used = create_new_module()
             path = os.path.join("modules", module_used + ".py")
             data, success = run_python_module(path, data)
 
-    # 3. IMPROVE
     elif decision == "improve_module":
         data["log"].append("🛠 decision → improve_module")
 
         if best_module and improve_existing_module(best_module):
             module_used = best_module
             success = True
-            data["goal"]["progress"] += 5
-        elif best_module:
-            module_used = best_module
-            path = os.path.join("modules", best_module + ".py")
-            data, success = run_python_module(path, data)
+            data["goal"]["progress"] += 8
 
-    # 4. IDEA
-    elif decision == "generate_idea":
-        data["log"].append("💡 idea generated")
-        success = True
-
-    # 5. FALLBACK
     else:
-        data["log"].append("⚠️ unknown decision → fallback create")
+        data["log"].append("⚠️ fallback → create")
         module_used = create_new_module()
         path = os.path.join("modules", module_used + ".py")
         data, success = run_python_module(path, data)
@@ -233,17 +217,31 @@ def execution(data):
     # =========================
     after = data["goal"]["progress"]
     delta = after - before
+
     data["last_delta"] = delta
 
-    score = calculate_score(before, after, success)
+    score = calculate_score(delta, success)
 
+    # 🔥 ВАЖНО: ОБНОВЛЯЕМ EVALUATION
+    data["evaluation"] = {
+        "score": score,
+        "delta": delta,
+        "result": "success" if delta > 0 else "neutral"
+    }
+
+    # опыт
     if module_used:
-        data["experience"].append({
+        exp = {
             "module": module_used,
             "score": score,
             "delta": delta,
             "time": len(data["memory"])
-        })
+        }
+        data["experience"].append(exp)
+
+        # 🔥 фикс лучшего модуля
+        if not data.get("best_module") or score >= data["best_module"].get("score", 0):
+            data["best_module"] = exp
 
     data["memory"].append(decision)
 

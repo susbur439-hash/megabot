@@ -8,10 +8,16 @@ from modules.execution import execution
 from modules.goals import set_goal, update_goal
 from modules.system_guard import system_guard
 from modules.self_improver import self_improver
+from modules.doctor import doctor  # 🔥 ДОБАВИЛИ
 
 
 def run_task(data):
     data.setdefault("log", [])
+
+    # =========================
+    # 🔥 DOCTOR (КЛЮЧЕВОЕ)
+    # =========================
+    data = doctor(data)
 
     # =========================
     # GOAL
@@ -20,7 +26,7 @@ def run_task(data):
     data = set_goal(data)
 
     # =========================
-    # ANALYSIS (ПРЕДВАРИТЕЛЬНЫЙ)
+    # ANALYSIS
     # =========================
     data["last_layer"] = "analysis"
     data = analysis(data)
@@ -39,7 +45,7 @@ def run_task(data):
     best = data.get("best_module")
 
     # =========================
-    # 🎯 БАЗОВОЕ РЕШЕНИЕ (до execution)
+    # 🎯 БАЗОВОЕ РЕШЕНИЕ
     # =========================
     if best:
         data["decision"] = "run_module"
@@ -49,7 +55,7 @@ def run_task(data):
     data["last_decision"] = data["decision"]
 
     # =========================
-    # ⚡ BOOST (по умолчанию)
+    # ⚡ BOOST (начальный)
     # =========================
     data["boost"] = 1.2
 
@@ -68,13 +74,13 @@ def run_task(data):
     data = update_goal(data)
 
     # =========================
-    # 🔥 POST-ANALYSIS (ГЛАВНЫЙ ФИКС)
+    # 🔥 POST-ANALYSIS
     # =========================
     data["last_layer"] = "post_analysis"
     data = analysis(data)
 
     # =========================
-    # 🧠 STRATEGY (ПОСЛЕ РЕЗУЛЬТАТА)
+    # 🧠 STRATEGY
     # =========================
     score = data.get("evaluation", {}).get("score", 0)
     last_delta = data.get("last_delta", 0)
@@ -92,7 +98,7 @@ def run_task(data):
     data["log"].append(f"strategy: {strategy}")
 
     # =========================
-    # 🎯 КОРРЕКЦИЯ РЕШЕНИЯ (УЖЕ УМНАЯ)
+    # 🎯 КОРРЕКЦИЯ РЕШЕНИЯ
     # =========================
     if strategy == "exploit" and best:
         data["decision"] = "run_module"

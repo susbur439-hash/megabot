@@ -16,6 +16,53 @@ def save_to_memory(data):
 
 
 # =========================
+# 📁 REAL ACTIONS
+# =========================
+def create_file(filename):
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("")
+        return True, f"📁 file {filename} created"
+    except Exception as e:
+        return False, str(e)
+
+
+def write_file(filename, content):
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(content)
+        return True, f"✍️ written to {filename}"
+    except Exception as e:
+        return False, str(e)
+
+
+def read_file(filename):
+    try:
+        if not os.path.exists(filename):
+            return False, "file not found"
+        with open(filename, "r", encoding="utf-8") as f:
+            return True, f.read()
+    except Exception as e:
+        return False, str(e)
+
+
+# =========================
+# 🧠 TASK PARSER
+# =========================
+def parse_task_to_action(task):
+    task = task.lower()
+
+    if "создай файл" in task:
+        return "create_file"
+    if "запиши" in task:
+        return "write_file"
+    if "прочитай" in task:
+        return "read_file"
+
+    return None
+
+
+# =========================
 # 🚀 RUN MODULE
 # =========================
 def run_python_module(module_path, data):
@@ -68,7 +115,7 @@ def get_all_modules():
 
 
 # =========================
-# 🧬 CREATE MODULE (УЛУЧШЕН)
+# 🧬 CREATE MODULE
 # =========================
 def create_new_module(parent_exp=None):
     os.makedirs("modules", exist_ok=True)
@@ -87,17 +134,12 @@ def create_new_module(parent_exp=None):
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    base_score = parent_exp.get("score", 50) if parent_exp else 50
-    boost = max(5, int(base_score / 5 + random.randint(1, 6)))
+    boost = random.randint(5, 15)
 
     code = f"""def run(data):
     boost = {boost}
-
     data.setdefault("goal", {{"progress": 0}})
     data.setdefault("log", [])
-
-    system_boost = data.get("boost", 1.0)
-    boost = int(boost * system_boost)
 
     data["goal"]["progress"] += boost
     data["log"].append("module {new_id} executed | +" + str(boost))
@@ -109,36 +151,6 @@ def create_new_module(parent_exp=None):
         f.write(code)
 
     return name.replace(".py", "")
-
-
-# =========================
-# 🛠 IMPROVE MODULE (СТАБИЛЬНЫЙ)
-# =========================
-def improve_existing_module(module_name):
-    path = os.path.join("modules", module_name + ".py")
-
-    if not os.path.exists(path):
-        return False
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            code = f.read()
-
-        if "boost +=" in code:
-            return False
-
-        new_code = code.replace(
-            "data[\"goal\"][\"progress\"] += boost",
-            "data[\"goal\"][\"progress\"] += boost + 3"
-        )
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(new_code)
-
-        return True
-
-    except:
-        return False
 
 
 # =========================
@@ -161,7 +173,7 @@ def calculate_score(before, after, success=True):
 
 
 # =========================
-# 🔥 EXECUTION (ФИНАЛ)
+# 🔥 EXECUTION (REAL)
 # =========================
 def execution(data):
 
@@ -170,60 +182,44 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
 
+    task = data.get("task", "")
     decision = data.get("decision")
+
     before = data["goal"]["progress"]
 
-    module_used = None
     success = False
-
-    best_module_name, best_score = get_best_module(data["experience"])
-    best_exp = next((e for e in data["experience"] if e["module"] == best_module_name), None)
+    module_used = None
 
     # =========================
-    # 🎯 DECISION SYSTEM
+    # 🧠 AUTO ACTION FROM TASK
     # =========================
+    action = parse_task_to_action(task)
 
-    if decision == "create_module":
-        data["log"].append("🔥 create_module")
+    if action == "create_file":
+        success, msg = create_file("test.txt")
+        data["log"].append(msg)
 
-        module_used = create_new_module(best_exp)
-        path = os.path.join("modules", module_used + ".py")
-        data, success = run_python_module(path, data)
+    elif action == "write_file":
+        content = str(data.get("analysis", "нет анализа"))
+        success, msg = write_file("test.txt", content)
+        data["log"].append(msg)
 
-    elif decision == "run_module":
-        data["log"].append("🚀 run_module")
+    elif action == "read_file":
+        success, content = read_file("test.txt")
+        data["log"].append(f"📖 read: {content}")
 
-        if best_module_name:
+    else:
+        # fallback на старую систему
+        best_module_name, _ = get_best_module(data["experience"])
+
+        if decision == "run_module" and best_module_name:
             module_used = best_module_name
             path = os.path.join("modules", module_used + ".py")
             data, success = run_python_module(path, data)
         else:
-            data["log"].append("⚠️ no module → create")
             module_used = create_new_module()
             path = os.path.join("modules", module_used + ".py")
             data, success = run_python_module(path, data)
-
-    elif decision == "improve_module":
-        data["log"].append("🛠 improve_module")
-
-        if best_module_name and improve_existing_module(best_module_name):
-            module_used = best_module_name
-            success = True
-            data["goal"]["progress"] += 5
-        elif best_module_name:
-            module_used = best_module_name
-            path = os.path.join("modules", module_used + ".py")
-            data, success = run_python_module(path, data)
-
-    elif decision == "generate_idea":
-        data["log"].append("💡 idea")
-        success = True
-
-    else:
-        data["log"].append("⚠️ fallback → create")
-        module_used = create_new_module()
-        path = os.path.join("modules", module_used + ".py")
-        data, success = run_python_module(path, data)
 
     # =========================
     # 📊 RESULT
@@ -243,9 +239,6 @@ def execution(data):
             "time": len(data["memory"])
         }
         data["experience"].append(exp)
-
-        if not data.get("best_module") or score >= data["best_module"].get("score", 0):
-            data["best_module"] = exp
 
     data["memory"].append(decision)
 

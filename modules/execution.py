@@ -169,53 +169,42 @@ def create_new_module():
 # =========================
 # 🧬 MUTATE MODULE (НОВОЕ)
 # =========================
-def mutate_module(best_module):
-    if not best_module:
-        return None
-
-    path = os.path.join("modules", best_module + ".py")
+def mutate_module(module_name):
+    path = os.path.join("modules", module_name + ".py")
 
     if not os.path.exists(path):
         return None
 
-    with open(path, "r", encoding="utf-8") as f:
-        code = f.read()
+    boost = random.randint(8, 20)
 
-    mutation_boost = random.randint(3, 10)
+    code = f"""def run(data):
+    data.setdefault("goal", {{"progress": 0}})
+    data.setdefault("log", [])
 
-    if "+=" in code:
-        code = code.replace("+=", f"+= {mutation_boost} +")
+    data["goal"]["progress"] += {boost}
+    data["log"].append("🧬 mutated {module_name} | +{boost}")
 
-    modules = get_all_modules()
-    new_id = len(modules) + 1
-    new_name = f"module_{new_id}.py"
-    new_path = os.path.join("modules", new_name)
+    return data
+"""
 
-    with open(new_path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(code)
 
-    return new_name.replace(".py", "")
+    return module_name
 
 
 # =========================
 # 🔁 REPEAT PENALTY
 # =========================
 def apply_repeat_penalty(data, module_used):
-    data.setdefault("repeat_count", 0)
-
     if len(data["experience"]) < 1:
-        return data
+        return
 
     last = data["experience"][-1]["module"]
 
     if last == module_used:
-        data["env"]["entropy"] += 2
-        data["repeat_count"] += 1
+        data["env"]["entropy"] += 3
         data["log"].append("♻️ repeat penalty")
-    else:
-        data["repeat_count"] = 0
-
-    return data
 
 
 # =========================
@@ -258,8 +247,20 @@ def execution(data):
 
     module_used = None
 
-    best_module, _ = get_best_module(data["experience"])
+    best_module, best_score = get_best_module(data["experience"])
 
+    # =========================
+    # 🧠 АНТИ-ЛУП
+    # =========================
+    if len(data["experience"]) >= 2:
+        if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
+            data["repeat_count"] += 1
+        else:
+            data["repeat_count"] = 0
+
+    # =========================
+    # 🎯 STRATEGY
+    # =========================
     force_explore = data["repeat_count"] >= 2 or data["env"]["entropy"] > 10
 
     if best_module and not force_explore and random.random() > 0.4:
@@ -267,23 +268,24 @@ def execution(data):
         path = os.path.join("modules", best_module + ".py")
         data, success = run_python_module(path, data)
         module_used = best_module
+
+    elif best_module and random.random() > 0.5:
+        data["log"].append(f"🧬 mutate: {best_module}")
+        mutate_module(best_module)
+        path = os.path.join("modules", best_module + ".py")
+        data, success = run_python_module(path, data)
+        module_used = best_module
+
     else:
-        # 🧬 мутация или создание
-        if best_module and random.random() > 0.5:
-            data["log"].append(f"🧬 mutate: {best_module}")
-            module_name = mutate_module(best_module)
-
-            if not module_name:
-                module_name = create_new_module()
-        else:
-            data["log"].append("🧪 explore: create module")
-            module_name = create_new_module()
-
+        data["log"].append("🧪 explore: create module")
+        module_name = create_new_module()
         path = os.path.join("modules", module_name + ".py")
         data, success = run_python_module(path, data)
         module_used = module_name
 
+    # =========================
     # fallback
+    # =========================
     after = data["goal"]["progress"]
 
     if after == before:
@@ -291,19 +293,23 @@ def execution(data):
         data, success = execute_real_action(data)
         module_used = "real_action"
 
+    # =========================
     # ENV
-    ensure_env(data)
-    data = apply_repeat_penalty(data, module_used)
+    # =========================
+    apply_repeat_penalty(data, module_used)
+
+    if data["env"]["entropy"] > 15:
+        data["env"]["entropy"] -= 5
+        data["log"].append("🧹 entropy cleanup")
 
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5
         data["log"].append(f"🌍 reward: {reward}")
 
-        if reward > 0:
-            data["env"]["entropy"] = max(0, data["env"]["entropy"] - 1)
-
+    # =========================
     # EXPERIENCE
+    # =========================
     after = data["goal"]["progress"]
     score = calculate_score(data, before, after)
 

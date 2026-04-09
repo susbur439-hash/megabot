@@ -16,6 +16,13 @@ jobs:
       - name: 📥 Клонирование репозитория
         uses: actions/checkout@v3
 
+      # 🔥 ВАЖНО: загрузка памяти
+      - name: 📥 Загрузка памяти
+        uses: actions/download-artifact@v4
+        with:
+          name: system-snapshot
+        continue-on-error: true
+
       - name: 🐍 Установка Python
         uses: actions/setup-python@v4
         with:
@@ -27,16 +34,16 @@ jobs:
       - name: 🤖 Запуск Megabot
         run: python main.py "${{ github.event.inputs.task }}"
 
-      # 🔥 ДОБАВЛЯЕМ SNAPSHOT
+      # 🔥 snapshot системы
       - name: 📸 Создание snapshot системы
         run: python system_snapshot.py || echo "No snapshot script"
 
-      # 🔥 СОХРАНЕНИЕ ФАЙЛА
+      # 🔥 сохранение памяти
       - name: 📤 Сохранение snapshot
         uses: actions/upload-artifact@v4
         with:
           name: system-snapshot
           path: |
-            full_system_snapshot.txt
             memory.json
+            full_system_snapshot.txt
             modules/

@@ -16,18 +16,26 @@ def save_to_memory(data):
 
 
 # =========================
+# 🎯 CHECK TASK COMPLETE
+# =========================
+def is_task_completed(data):
+    task = data.get("task", "").lower()
+
+    if "создай файл" in task:
+        return os.path.exists("test.txt")
+
+    return False
+
+
+# =========================
 # ⚙️ REAL ACTION EXECUTOR
 # =========================
 def execute_real_action(data):
     task = data.get("task", "").lower()
 
     try:
-        # 📁 СОЗДАНИЕ ФАЙЛА
         if "создай файл" in task:
             filename = "test.txt"
-
-            if "test.txt" in task:
-                filename = "test.txt"
 
             content = "Результат анализа:\n"
             content += data.get("analysis", "нет данных")
@@ -36,12 +44,12 @@ def execute_real_action(data):
                 f.write(content)
 
             data["log"].append(f"📁 файл {filename} создан и записан")
-            data["goal"]["progress"] += 25
+            data["goal"]["progress"] += 50
             return data, True
 
-        # 💡 ЕСЛИ НЕ ПОНЯЛ — МАЛЕНЬКИЙ ПРОГРЕСС
+        # fallback
         data["goal"]["progress"] += 5
-        data["log"].append("⚙️ базовое действие выполнено")
+        data["log"].append("⚙️ базовое действие")
         return data, True
 
     except Exception as e:
@@ -102,9 +110,9 @@ def get_all_modules():
 
 
 # =========================
-# 🧬 CREATE MODULE (УЛУЧШЕН)
+# 🧬 CREATE MODULE
 # =========================
-def create_new_module(parent_exp=None):
+def create_new_module():
     os.makedirs("modules", exist_ok=True)
 
     modules = get_all_modules()
@@ -121,7 +129,7 @@ def create_new_module(parent_exp=None):
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    boost = random.randint(5, 20)
+    boost = random.randint(5, 15)
 
     code = f"""def run(data):
     data.setdefault("goal", {{"progress": 0}})
@@ -159,7 +167,7 @@ def calculate_score(before, after, success=True):
 
 
 # =========================
-# 🔥 EXECUTION (НОВЫЙ)
+# 🔥 EXECUTION v2
 # =========================
 def execution(data):
 
@@ -168,68 +176,62 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
 
-    decision = data.get("decision")
     before = data["goal"]["progress"]
 
-    module_used = None
-    success = False
-
-    best_module_name, _ = get_best_module(data["experience"])
+    # =========================
+    # ✅ ЕСЛИ УЖЕ ВЫПОЛНЕНО
+    # =========================
+    if is_task_completed(data):
+        data["log"].append("✅ задача уже выполнена")
+        return data
 
     # =========================
-    # 🎯 DECISION
+    # 🎯 ПРИОРИТЕТ REAL ACTION
     # =========================
+    task = data.get("task", "").lower()
 
-    if decision == "create_module":
-        data["log"].append("🔥 create_module")
+    if "создай файл" in task:
+        data["log"].append("🎯 прямое выполнение задачи")
+        data, success = execute_real_action(data)
+    else:
+        # fallback логика
+        best_module, _ = get_best_module(data["experience"])
 
-        module_used = create_new_module()
-        path = os.path.join("modules", module_used + ".py")
-        data, success = run_python_module(path, data)
-
-    elif decision == "run_module":
-        data["log"].append("🚀 run_module")
-
-        if best_module_name:
-            module_used = best_module_name
-            path = os.path.join("modules", module_used + ".py")
+        if best_module:
+            path = os.path.join("modules", best_module + ".py")
+            data["log"].append("🚀 run best module")
+            data, success = run_python_module(path, data)
+        else:
+            data["log"].append("🔥 create module")
+            module_name = create_new_module()
+            path = os.path.join("modules", module_name + ".py")
             data, success = run_python_module(path, data)
 
-    elif decision == "real_action":
-        data["log"].append("⚙️ real_action")
-        data, success = execute_real_action(data)
-
-    else:
-        data["log"].append("⚠️ fallback → real_action")
-        data, success = execute_real_action(data)
-
     # =========================
-    # 🔥 АНТИ-ЗАСТРЕВАНИЕ
-    # =========================
-    if data["goal"]["progress"] == before:
-        data["log"].append("🧠 stagnation → force real action")
-        data, success = execute_real_action(data)
-
-    # =========================
-    # 📊 RESULT
+    # 🔁 АНТИ-ЗАСТРЕВАНИЕ
     # =========================
     after = data["goal"]["progress"]
+
+    if after == before:
+        data["log"].append("🧠 force real action")
+        data, success = execute_real_action(data)
+        after = data["goal"]["progress"]
+
+    # =========================
+    # 📊 EXPERIENCE
+    # =========================
     delta = after - before
-
-    data["last_delta"] = delta
-
     score = calculate_score(before, after, success)
 
-    if module_used:
-        exp = {
-            "module": module_used,
-            "score": score,
-            "delta": delta
-        }
-        data["experience"].append(exp)
+    data["experience"].append({
+        "module": "real_action",
+        "score": score,
+        "delta": delta
+    })
 
-    data["memory"].append(decision)
+    data["memory"].append("execution")
 
+    # лимиты
     data["memory"] = data["memory"][-100:]
     data["log"] = data["log"][-200:]
 

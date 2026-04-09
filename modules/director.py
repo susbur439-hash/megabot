@@ -20,7 +20,7 @@ def run_task(data):
     data = set_goal(data)
 
     # =========================
-    # ANALYSIS
+    # ANALYSIS (ПРЕДВАРИТЕЛЬНЫЙ)
     # =========================
     data["last_layer"] = "analysis"
     data = analysis(data)
@@ -36,13 +36,49 @@ def run_task(data):
     # =========================
     data = self_improver(data)
 
-    score = data.get("evaluation", {}).get("score", 0)
-    repeat = data.get("repeat_count", 0)
-    last_delta = data.get("last_delta", 0)
+    best = data.get("best_module")
 
     # =========================
-    # 🧠 STRATEGY (СТАБИЛЬНАЯ)
+    # 🎯 БАЗОВОЕ РЕШЕНИЕ (до execution)
     # =========================
+    if best:
+        data["decision"] = "run_module"
+    else:
+        data["decision"] = "create_module"
+
+    data["last_decision"] = data["decision"]
+
+    # =========================
+    # ⚡ BOOST (по умолчанию)
+    # =========================
+    data["boost"] = 1.2
+
+    # =========================
+    # 🚀 EXECUTION
+    # =========================
+    data["last_layer"] = "execution"
+    data = execution(data)
+
+    data = system_guard(data)
+
+    # =========================
+    # GOAL UPDATE
+    # =========================
+    data["last_layer"] = "goal_update"
+    data = update_goal(data)
+
+    # =========================
+    # 🔥 POST-ANALYSIS (ГЛАВНЫЙ ФИКС)
+    # =========================
+    data["last_layer"] = "post_analysis"
+    data = analysis(data)
+
+    # =========================
+    # 🧠 STRATEGY (ПОСЛЕ РЕЗУЛЬТАТА)
+    # =========================
+    score = data.get("evaluation", {}).get("score", 0)
+    last_delta = data.get("last_delta", 0)
+
     if last_delta <= 0:
         strategy = "explore"
     elif score >= 80:
@@ -55,10 +91,8 @@ def run_task(data):
     data["strategy"] = strategy
     data["log"].append(f"strategy: {strategy}")
 
-    best = data.get("best_module")
-
     # =========================
-    # 🎯 DECISION CONTROL (БЕЗ ХАОСА)
+    # 🎯 КОРРЕКЦИЯ РЕШЕНИЯ (УЖЕ УМНАЯ)
     # =========================
     if strategy == "exploit" and best:
         data["decision"] = "run_module"
@@ -83,8 +117,8 @@ def run_task(data):
     # =========================
     # 🛑 ANTI-LOOP
     # =========================
-    if "last_decision" in data:
-        if data["decision"] == data["last_decision"]:
+    if "prev_decision" in data:
+        if data["decision"] == data["prev_decision"]:
             data["repeat_count"] = data.get("repeat_count", 0) + 1
         else:
             data["repeat_count"] = 0
@@ -94,30 +128,16 @@ def run_task(data):
         data["log"].append("🧠 anti-loop → force create")
         data["repeat_count"] = 0
 
-    data["last_decision"] = data["decision"]
+    data["prev_decision"] = data["decision"]
 
     # =========================
-    # ⚡ BOOST
+    # ⚡ BOOST (финальный)
     # =========================
     data["boost"] = {
         "aggressive": 1.5,
         "balanced": 1.0,
         "safe": 0.7
     }[mode]
-
-    # =========================
-    # 🚀 EXECUTION
-    # =========================
-    data["last_layer"] = "execution"
-    data = execution(data)
-
-    data = system_guard(data)
-
-    # =========================
-    # GOAL UPDATE
-    # =========================
-    data["last_layer"] = "goal_update"
-    data = update_goal(data)
 
     return data
 
@@ -156,15 +176,9 @@ def run(task):
 
         data = analyze_experience(data)
 
-        # =========================
-        # 🔥 SMART EXPLOIT (ФИКС)
-        # =========================
         if best_data and random.random() < 0.3:
             print("♻️ SMART EXPLOIT")
-
-            # ❗ ТОЛЬКО ЛУЧШИЙ МОДУЛЬ
             data["best_module"] = best_data.get("best_module")
-
         else:
             print("🧪 EXPLORE")
 

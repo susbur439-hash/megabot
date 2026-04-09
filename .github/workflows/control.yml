@@ -16,12 +16,24 @@ jobs:
       - name: 📥 Клонирование репозитория
         uses: actions/checkout@v3
 
-      # 🔥 ВАЖНО: загрузка памяти
+      # 🔥 СКАЧИВАЕМ ПАМЯТЬ
       - name: 📥 Загрузка памяти
         uses: actions/download-artifact@v4
         with:
           name: system-snapshot
+          path: downloaded
         continue-on-error: true
+
+      # 🔥 ПЕРЕМЕЩАЕМ В КОРЕНЬ
+      - name: 🔧 Восстановление памяти
+        run: |
+          if [ -f downloaded/memory.json ]; then
+            mv downloaded/memory.json ./memory.json
+          fi
+
+          if [ -d downloaded/modules ]; then
+            cp -r downloaded/modules/* modules/ || true
+          fi
 
       - name: 🐍 Установка Python
         uses: actions/setup-python@v4
@@ -34,11 +46,11 @@ jobs:
       - name: 🤖 Запуск Megabot
         run: python main.py "${{ github.event.inputs.task }}"
 
-      # 🔥 snapshot системы
+      # 🔥 SNAPSHOT
       - name: 📸 Создание snapshot системы
         run: python system_snapshot.py || echo "No snapshot script"
 
-      # 🔥 сохранение памяти
+      # 🔥 СОХРАНЕНИЕ
       - name: 📤 Сохранение snapshot
         uses: actions/upload-artifact@v4
         with:

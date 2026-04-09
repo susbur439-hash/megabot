@@ -49,26 +49,10 @@ def is_task_completed(data):
 # ⚙️ REAL ACTION
 # =========================
 def execute_real_action(data):
-    task = data.get("task", "").lower()
-
     try:
-        if "создай файл" in task:
-            filename = "test.txt"
-
-            content = "Результат анализа:\n"
-            content += data.get("analysis", "нет данных")
-
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(content)
-
-            data["log"].append(f"📁 файл {filename} создан")
-            data["goal"]["progress"] += 50
-            return data, True
-
         data["goal"]["progress"] += 5
         data["log"].append("⚙️ базовое действие")
         return data, True
-
     except Exception as e:
         data["log"].append(f"❌ real action error: {e}")
         return data, False
@@ -80,13 +64,11 @@ def execute_real_action(data):
 def run_python_module(module_path, data):
     try:
         if not os.path.exists(module_path):
-            data["log"].append("❌ module not found")
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
 
         if not spec or not spec.loader:
-            data["log"].append("❌ module load failed")
             return data, False
 
         module = importlib.util.module_from_spec(spec)
@@ -98,7 +80,6 @@ def run_python_module(module_path, data):
             if isinstance(result, dict):
                 return result, True
 
-        data["log"].append("⚠️ invalid module result")
         return data, False
 
     except Exception as e:
@@ -129,7 +110,7 @@ def get_all_modules():
 
 
 # =========================
-# 🧬 CREATE MODULE
+# 🧬 CREATE MODULE (СТАБИЛЬНЫЙ)
 # =========================
 def create_new_module():
     os.makedirs("modules", exist_ok=True)
@@ -148,7 +129,8 @@ def create_new_module():
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    boost = random.randint(5, 15)
+    # 🔒 ограниченный буст
+    boost = random.randint(5, 10)
 
     code = f"""def run(data):
     data.setdefault("goal", {{"progress": 0}})
@@ -167,15 +149,15 @@ def create_new_module():
 
 
 # =========================
-# 🧬 MUTATE MODULE (НОВОЕ)
+# 🧬 MUTATION (БЕЗОПАСНАЯ)
 # =========================
 def mutate_module(module_name):
     path = os.path.join("modules", module_name + ".py")
 
     if not os.path.exists(path):
-        return None
+        return
 
-    boost = random.randint(8, 20)
+    boost = random.randint(3, 8)  # меньше риск
 
     code = f"""def run(data):
     data.setdefault("goal", {{"progress": 0}})
@@ -190,8 +172,6 @@ def mutate_module(module_name):
     with open(path, "w", encoding="utf-8") as f:
         f.write(code)
 
-    return module_name
-
 
 # =========================
 # 🔁 REPEAT PENALTY
@@ -203,24 +183,23 @@ def apply_repeat_penalty(data, module_used):
     last = data["experience"][-1]["module"]
 
     if last == module_used:
-        data["env"]["entropy"] += 3
+        data["env"]["entropy"] += 1  # уменьшили штраф
         data["log"].append("♻️ repeat penalty")
 
 
 # =========================
-# 📊 SCORE
+# 📊 SCORE (СТАБИЛЬНЫЙ)
 # =========================
 def calculate_score(data, before, after):
     env = data.get("env", {})
 
     delta = after - before
 
-    score = 0
-    score += delta * 5
+    score = delta * 5
     score += env.get("knowledge", 0) * 2
     score += env.get("success", 0) * 2
 
-    score -= env.get("fail", 0) * 5
+    score -= env.get("fail", 0) * 3
     score -= env.get("entropy", 0)
 
     return max(0, min(100, score))
@@ -235,81 +214,62 @@ def execution(data):
     data.setdefault("memory", [])
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
-    data.setdefault("repeat_count", 0)
 
     ensure_env(data)
 
     before = data["goal"]["progress"]
 
     if is_task_completed(data):
-        data["log"].append("✅ задача уже выполнена")
         return data
-
-    module_used = None
 
     best_module, best_score = get_best_module(data["experience"])
 
-    # =========================
-    # 🧠 АНТИ-ЛУП
-    # =========================
-    if len(data["experience"]) >= 2:
-        if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
-            data["repeat_count"] += 1
+    module_used = None
+
+    # === УМНАЯ СТРАТЕГИЯ ===
+    if best_module and best_score > 60:
+        if random.random() < 0.6:
+            data["log"].append(f"🚀 exploit: {best_module}")
+            path = os.path.join("modules", best_module + ".py")
+            data, success = run_python_module(path, data)
+            module_used = best_module
+
+            # шанс мутации
+            if random.random() < 0.3:
+                mutate_module(best_module)
+
         else:
-            data["repeat_count"] = 0
-
-    # =========================
-    # 🎯 STRATEGY
-    # =========================
-    force_explore = data["repeat_count"] >= 2 or data["env"]["entropy"] > 10
-
-    if best_module and not force_explore and random.random() > 0.4:
-        data["log"].append(f"🚀 run best: {best_module}")
-        path = os.path.join("modules", best_module + ".py")
-        data, success = run_python_module(path, data)
-        module_used = best_module
-
-    elif best_module and random.random() > 0.5:
-        data["log"].append(f"🧬 mutate: {best_module}")
-        mutate_module(best_module)
-        path = os.path.join("modules", best_module + ".py")
-        data, success = run_python_module(path, data)
-        module_used = best_module
+            data["log"].append("🧪 explore")
+            module_used = create_new_module()
+            path = os.path.join("modules", module_used + ".py")
+            data, success = run_python_module(path, data)
 
     else:
-        data["log"].append("🧪 explore: create module")
-        module_name = create_new_module()
-        path = os.path.join("modules", module_name + ".py")
+        data["log"].append("🧪 bootstrap explore")
+        module_used = create_new_module()
+        path = os.path.join("modules", module_used + ".py")
         data, success = run_python_module(path, data)
-        module_used = module_name
 
-    # =========================
-    # fallback
-    # =========================
+    # === FALLBACK ===
     after = data["goal"]["progress"]
 
     if after == before:
-        data["log"].append("🧠 fallback → real action")
         data, success = execute_real_action(data)
         module_used = "real_action"
 
-    # =========================
-    # ENV
-    # =========================
+    # === ENV ===
     apply_repeat_penalty(data, module_used)
-
-    if data["env"]["entropy"] > 15:
-        data["env"]["entropy"] -= 5
-        data["log"].append("🧹 entropy cleanup")
 
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
+
+        # 🔒 ограничение награды
+        reward = max(-10, min(20, reward))
+
         data["goal"]["progress"] += reward // 5
         data["log"].append(f"🌍 reward: {reward}")
 
-    # =========================
-    # EXPERIENCE
-    # =========================
+    # === EXPERIENCE ===
     after = data["goal"]["progress"]
     score = calculate_score(data, before, after)
 

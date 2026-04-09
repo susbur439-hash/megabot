@@ -1,0 +1,174 @@
+MEGABOT SYSTEM ARCHITECTURE 10/10
+
+CORE LOOP:
+task → interpret → state → analysis → planning → decision → action → execution → evaluation → learning → control → goal_update → loop
+
+---
+
+1. TASK INTERPRETER
+
+- принимает задачу
+- определяет тип
+- нормализует вход
+
+---
+
+2. DIRECTOR (ORCHESTRATOR)
+
+- управляет порядком слоёв
+- запускает цикл
+- контролирует выполнение
+
+---
+
+3. STATE MANAGER
+
+- хранит текущее состояние системы
+- параметры:
+  - mode (explore / exploit / optimize)
+  - stagnation (true/false)
+  - phase (build / grow / fix)
+  - health (good / bad)
+
+---
+
+4. ANALYSIS LAYER
+
+- анализирует:
+  - прогресс
+  - ошибки
+  - тренд
+  - эффективность
+
+---
+
+5. MEMORY SYSTEM
+
+- short-term (последние действия)
+- long-term (experience, best_module)
+
+---
+
+6. KNOWLEDGE BASE
+
+- хранит:
+  - правила
+  - паттерны
+  - лучшие решения
+
+---
+
+7. PLANNING LAYER
+
+- строит план на 2–3 шага вперёд
+- пример:
+  1. создать
+  2. протестировать
+  3. улучшить
+
+---
+
+8. DECISION LAYER
+
+- выбирает действие на основе:
+  - анализа
+  - состояния
+  - плана
+
+---
+
+9. ACTION LAYER
+
+- формирует действие:
+  {
+  type,
+  target,
+  params
+  }
+
+---
+
+10. EXECUTION LAYER
+
+- выполняет действия:
+  - запуск модулей
+  - создание
+  - изменение
+
+---
+
+11. EVALUATION LAYER
+
+- оценивает результат:
+  - delta (прирост)
+  - score
+  - эффективность
+
+---
+
+12. LEARNING LAYER
+
+- обновляет опыт
+- усиливает успешные решения
+- ослабляет плохие
+
+---
+
+13. SELF-CORRECTION
+
+- исправляет ошибки
+- корректирует поведение
+
+---
+
+14. CONTROL LAYER
+
+RULES:
+
+- не создавать модули без причины
+- не повторять действия без прогресса
+- использовать лучший модуль при хорошем результате
+
+GUARD:
+
+- блокирует плохие действия
+- предотвращает деградацию
+
+---
+
+15. PROGRESS CONTROL
+
+- отслеживает:
+  - цель
+  - прогресс
+  - уровни
+
+---
+
+16. MODE SYSTEM
+
+- управляет режимами:
+  - aggressive
+  - balanced
+  - safe
+
+---
+
+17. LOOP SYSTEM
+
+- обеспечивает непрерывную работу
+
+---
+
+18. MULTI-TASKING (расширение)
+
+- работа с несколькими задачами
+
+---
+
+19. CONTROL PANEL (будущее)
+
+- внешний контроль системы
+- управление поведением
+
+END OF ARCHITECTURE

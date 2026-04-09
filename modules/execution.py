@@ -2,6 +2,7 @@ import os
 import random
 import json
 import importlib.util
+from environment import run_environment   # ✅ ДОБАВЛЕНО
 
 
 # =========================
@@ -90,13 +91,19 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 🧠 BEST MODULE
+# 🧠 BEST MODULE (УЛУЧШЕН)
 # =========================
 def get_best_module(experience):
     if not experience:
         return None, 0
 
-    best = max(experience, key=lambda x: x.get("score", 0))
+    # ❗ фильтр мусора (важно)
+    valid = [x for x in experience if x.get("module") not in (None, "real_action")]
+
+    if not valid:
+        return None, 0
+
+    best = max(valid, key=lambda x: x.get("score", 0))
     return best.get("module"), best.get("score", 0)
 
 
@@ -167,7 +174,7 @@ def calculate_score(before, after, success=True):
 
 
 # =========================
-# 🔥 EXECUTION v2
+# 🔥 EXECUTION v3 (УЛУЧШЕН)
 # =========================
 def execution(data):
 
@@ -190,22 +197,26 @@ def execution(data):
     # =========================
     task = data.get("task", "").lower()
 
+    module_used = None
+
     if "создай файл" in task:
         data["log"].append("🎯 прямое выполнение задачи")
         data, success = execute_real_action(data)
+        module_used = "real_action"
     else:
-        # fallback логика
         best_module, _ = get_best_module(data["experience"])
 
         if best_module:
             path = os.path.join("modules", best_module + ".py")
-            data["log"].append("🚀 run best module")
+            data["log"].append(f"🚀 run best module: {best_module}")
             data, success = run_python_module(path, data)
+            module_used = best_module
         else:
             data["log"].append("🔥 create module")
             module_name = create_new_module()
             path = os.path.join("modules", module_name + ".py")
             data, success = run_python_module(path, data)
+            module_used = module_name
 
     # =========================
     # 🔁 АНТИ-ЗАСТРЕВАНИЕ
@@ -215,16 +226,25 @@ def execution(data):
     if after == before:
         data["log"].append("🧠 force real action")
         data, success = execute_real_action(data)
+        module_used = "real_action"
         after = data["goal"]["progress"]
 
     # =========================
-    # 📊 EXPERIENCE
+    # 🌍 ENVIRONMENT (ГЛАВНОЕ)
     # =========================
-    delta = after - before
-    score = calculate_score(before, after, success)
+    if data.get("log"):
+        data, reward = run_environment(data, data["log"][-1])
+        data["goal"]["progress"] += reward // 5
+        data["log"].append(f"🌍 reward: {reward}")
+
+    # =========================
+    # 📊 EXPERIENCE (ФИКС)
+    # =========================
+    delta = data["goal"]["progress"] - before
+    score = calculate_score(before, data["goal"]["progress"], success)
 
     data["experience"].append({
-        "module": "real_action",
+        "module": module_used,
         "score": score,
         "delta": delta
     })

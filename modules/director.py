@@ -8,14 +8,14 @@ from modules.execution import execution
 from modules.goals import set_goal, update_goal
 from modules.system_guard import system_guard
 from modules.self_improver import self_improver
-from modules.doctor import doctor  # 🔥 ДОБАВИЛИ
+from modules.doctor import doctor
 
 
 def run_task(data):
     data.setdefault("log", [])
 
     # =========================
-    # 🔥 DOCTOR (КЛЮЧЕВОЕ)
+    # 🔥 DOCTOR (ДО СИСТЕМЫ)
     # =========================
     data = doctor(data)
 
@@ -102,10 +102,8 @@ def run_task(data):
     # =========================
     if strategy == "exploit" and best:
         data["decision"] = "run_module"
-
     elif strategy == "optimize" and best:
         data["decision"] = "improve_module"
-
     else:
         data["decision"] = "create_module"
 
@@ -144,6 +142,12 @@ def run_task(data):
         "balanced": 1.0,
         "safe": 0.7
     }[mode]
+
+    # =========================
+    # 🔥 DOCTOR (ПОСЛЕ ЦИКЛА)
+    # =========================
+    data["last_layer"] = "loop"
+    data = doctor(data)
 
     return data
 

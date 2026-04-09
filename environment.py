@@ -2,7 +2,7 @@ import random
 
 
 # =========================
-# 🌍 INIT ENV (УЛУЧШЕН)
+# 🌍 INIT ENV (STABLE)
 # =========================
 def init_env(data):
     env = data.setdefault("env", {})
@@ -22,7 +22,7 @@ def init_env(data):
 
 
 # =========================
-# ⚡ APPLY ACTION (УЛУЧШЕН)
+# ⚡ APPLY ACTION (SMART)
 # =========================
 def apply_action(env, action_log):
     text = str(action_log).lower()
@@ -39,6 +39,16 @@ def apply_action(env, action_log):
         reward += 10
         env["experience"] += 3
 
+    # 🧬 создание нового (ВАЖНО)
+    if "create module" in text or "module_" in text:
+        reward += 8
+        env["knowledge"] += 2
+
+    # ♻️ повтор — плохо
+    if "repeat" in text or "♻️" in text:
+        reward -= 5
+        env["entropy"] += 2
+
     # ⚙️ базовое действие
     if "базовое" in text:
         reward += 3
@@ -52,32 +62,33 @@ def apply_action(env, action_log):
 
 
 # =========================
-# 🌪 DYNAMIC WORLD (СТАБИЛИЗИРОВАНО)
+# 🌪 DYNAMIC WORLD (BALANCED)
 # =========================
 def world_dynamics(env):
-    # хаос
+
+    # хаос (контролируемый)
     entropy_change = random.randint(-2, 4)
     env["entropy"] += entropy_change
 
-    # энергия
+    # энергия утекает
     env["energy"] -= random.randint(1, 3)
 
-    # защита от ухода в минус
-    if env["energy"] < 0:
-        env["energy"] = 0
+    # защита от минуса
+    env["energy"] = max(0, env["energy"])
 
     # если мало энергии → штраф
     if env["energy"] < 10:
         env["fail"] += 1
         env["entropy"] += 1
 
-    # восстановление энергии
+    # восстановление (ВАЖНО)
     if env["success"] > env["fail"]:
         env["energy"] += 2
+        env["entropy"] -= random.randint(1, 3)
 
-    # ограничение
-    if env["energy"] > 100:
-        env["energy"] = 100
+    # ограничения
+    env["energy"] = min(env["energy"], 100)
+    env["entropy"] = max(0, min(env["entropy"], 50))
 
 
 # =========================
@@ -93,11 +104,10 @@ def update_state(env):
 
 
 # =========================
-# 🧬 LEVEL SYSTEM (УЛУЧШЕН)
+# 🧬 LEVEL SYSTEM (SMART)
 # =========================
 def update_level(env):
     score = env["knowledge"] + env["experience"] + env["success"] * 2
-
     new_level = score // 50 + 1
 
     if new_level > env["level"]:
@@ -105,10 +115,11 @@ def update_level(env):
 
 
 # =========================
-# 🎯 REWARD SYSTEM (УЛУЧШЕН)
+# 🎯 REWARD SYSTEM (ADVANCED)
 # =========================
 def calculate_reward(env, base_reward):
-    reward = base_reward
+
+    reward = float(base_reward)
 
     # состояние
     if env["state"] == "growth":
@@ -122,9 +133,15 @@ def calculate_reward(env, base_reward):
     # хаос штрафует
     reward -= env["entropy"] * 0.2
 
-    # энергия влияет (НОВОЕ)
+    # энергия влияет
     if env["energy"] < 10:
         reward *= 0.5
+
+    # защита от мусора
+    if reward < -50:
+        reward = -50
+    if reward > 100:
+        reward = 100
 
     return int(reward)
 
@@ -151,10 +168,7 @@ def run_environment(data, action_log):
     # 5. reward
     reward = calculate_reward(env, base_reward)
 
-    # защита от мусора
-    if not isinstance(reward, int):
-        reward = 0
-
+    # финализация
     env["last_reward"] = reward
     env["history"].append(reward)
     env["history"] = env["history"][-50:]

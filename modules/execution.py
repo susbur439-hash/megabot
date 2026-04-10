@@ -6,6 +6,9 @@ from environment import run_environment
 from modules.control import control
 
 
+# =========================
+# 💾 MEMORY
+# =========================
 def save_to_memory(data):
     try:
         with open("memory.json", "w", encoding="utf-8") as f:
@@ -14,6 +17,9 @@ def save_to_memory(data):
         print("Save error:", e)
 
 
+# =========================
+# 🌍 ENV
+# =========================
 def ensure_env(data):
     env = data.setdefault("env", {})
 
@@ -29,6 +35,23 @@ def ensure_env(data):
 
 
 # =========================
+# 🔥 BREAK PATTERN (НОВОЕ)
+# =========================
+def break_pattern(data):
+    data["log"].append("💥 BREAK PATTERN ACTIVATED")
+
+    module_name = create_new_module(boost_range=(15, 30))
+    path = os.path.join("modules", module_name + ".py")
+
+    data, _ = run_python_module(path, data)
+
+    data["env"]["entropy"] = max(0, data["env"]["entropy"] - 3)
+    data["goal"]["progress"] += random.randint(10, 20)
+
+    return data, module_name
+
+
+# =========================
 # 🔥 REAL ACTIONS
 # =========================
 def execute_real_action(data):
@@ -38,51 +61,41 @@ def execute_real_action(data):
         os.makedirs("generated", exist_ok=True)
         os.makedirs("modules", exist_ok=True)
 
-        # 📁 файл
         if "файл" in task or data.get("strategy") == "force_file":
             filename = f"generated/file_{random.randint(1000,9999)}.txt"
 
-            content = "Megabot result:\n"
-            content += str(data.get("analysis", "no data"))
-
             with open(filename, "w", encoding="utf-8") as f:
-                f.write(content)
+                f.write(str(data.get("analysis", "no data")))
 
-            data["log"].append(f"📁 создан файл: {filename}")
+            data["log"].append(f"📁 файл: {filename}")
             data["goal"]["progress"] += 20
             return data, True
 
-        # 🧠 модуль
         if "модуль" in task or data.get("strategy") == "build_module":
-            module_name = f"auto_module_{random.randint(1000,9999)}.py"
+            module_name = f"auto_{random.randint(1000,9999)}.py"
             path = os.path.join("modules", module_name)
 
             boost = random.randint(10, 20)
 
             code = f"""def run(data):
-    data.setdefault("log", [])
     data.setdefault("goal", {{"progress": 0}})
-
     data["goal"]["progress"] += {boost}
-    data["log"].append("⚙️ auto module executed +{boost}")
-
+    data.setdefault("log", []).append("auto +{boost}")
     return data
 """
 
             with open(path, "w", encoding="utf-8") as f:
                 f.write(code)
 
-            data["log"].append(f"🧠 создан модуль: {module_name}")
+            data["log"].append(f"🧠 авто-модуль: {module_name}")
             data["goal"]["progress"] += 25
             return data, True
 
-        # ⚙️ базовое действие
-        data["log"].append("⚙️ базовое действие")
         data["goal"]["progress"] += 5
         return data, True
 
     except Exception as e:
-        data["log"].append(f"❌ real action error: {e}")
+        data["log"].append(f"❌ error: {e}")
         return data, False
 
 
@@ -92,25 +105,17 @@ def execute_real_action(data):
 def run_python_module(module_path, data):
     try:
         if not os.path.exists(module_path):
-            data["log"].append("❌ module not found")
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
-
-        if not spec or not spec.loader:
-            data["log"].append("❌ module load failed")
-            return data, False
-
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
         if hasattr(module, "run"):
             result = module.run(data)
-
             if isinstance(result, dict):
                 return result, True
 
-        data["log"].append("⚠️ invalid module result")
         return data, False
 
     except Exception as e:
@@ -119,42 +124,29 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 🧠 MODULE LOGIC
+# 🧠 MODULE SYSTEM
 # =========================
 def get_best_module(experience):
-    valid = [x for x in experience if x.get("module") not in (None, "real_action")]
-
+    valid = [x for x in experience if x["module"] not in ("real_action", None)]
     if not valid:
-        return None, 0
+        return None
 
-    best = max(valid, key=lambda x: x.get("score", 0))
-    return best.get("module"), best.get("score", 0)
-
-
-def get_all_modules():
-    if not os.path.exists("modules"):
-        return []
-    return [f for f in os.listdir("modules") if f.endswith(".py")]
+    return max(valid, key=lambda x: x["score"]).get("module")
 
 
-def create_new_module():
+def create_new_module(boost_range=(5, 15)):
     os.makedirs("modules", exist_ok=True)
 
-    modules = get_all_modules()
-    new_id = len(modules) + 1
-
-    name = f"module_{new_id}.py"
+    modules = os.listdir("modules")
+    name = f"module_{len(modules)+1}.py"
     path = os.path.join("modules", name)
 
-    boost = random.randint(5, 15)
+    boost = random.randint(*boost_range)
 
     code = f"""def run(data):
     data.setdefault("goal", {{"progress": 0}})
-    data.setdefault("log", [])
-
     data["goal"]["progress"] += {boost}
-    data["log"].append("module {new_id} | +{boost}")
-
+    data.setdefault("log", []).append("module +{boost}")
     return data
 """
 
@@ -165,101 +157,107 @@ def create_new_module():
 
 
 # =========================
-# ⚖️ SCORE
+# 📊 SCORE
 # =========================
-def calculate_score(data, before, after):
-    env = data.get("env", {})
+def calculate_score(before, after):
     delta = after - before
-
-    score = delta * 5
-    score += env.get("knowledge", 0) * 2
-    score += env.get("success", 0) * 2
-    score -= env.get("fail", 0) * 5
-    score -= env.get("entropy", 0)
-
-    return max(0, min(100, score))
+    return max(0, min(100, delta * 5))
 
 
 # =========================
-# 🚀 MAIN EXECUTION
+# 🧠 LEARNING (НОВОЕ)
+# =========================
+def update_knowledge(data, module, delta):
+    kb = data.setdefault("knowledge_base", [])
+
+    kb.append({
+        "module": module,
+        "delta": delta,
+        "good": delta > 10
+    })
+
+    data["knowledge_base"] = kb[-50:]
+
+
+# =========================
+# 🚀 EXECUTION
 # =========================
 def execution(data):
 
     data.setdefault("log", [])
-    data.setdefault("memory", [])
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
     data.setdefault("repeat_count", 0)
 
     ensure_env(data)
 
-    # 🧠 CONTROL LAYER
     data = control(data)
 
     before = data["goal"]["progress"]
 
-    strategy = data.get("strategy", "explore")
+    best_module = get_best_module(data["experience"])
     module_used = None
 
-    best_module, _ = get_best_module(data["experience"])
-
-    # 🔁 анти-зацикливание
+    # 🔁 anti-loop
     if len(data["experience"]) >= 2:
         if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
             data["repeat_count"] += 1
         else:
             data["repeat_count"] = 0
 
-    force_explore = data["repeat_count"] >= 2 or data["env"]["entropy"] > 10
+    stagnation = data["repeat_count"] >= 2
+    high_entropy = data["env"]["entropy"] > 10
 
     # =========================
-    # 🎯 STRATEGY SWITCH
+    # 🎯 SMART DECISION
     # =========================
 
-    if strategy in ["force_file", "build_module"]:
-        data["log"].append(f"🎯 forced action: {strategy}")
-        data, _ = execute_real_action(data)
-        module_used = "real_action"
+    if stagnation or high_entropy:
+        data, module_used = break_pattern(data)
 
-    elif strategy == "exploit" and best_module and not force_explore:
-        data["log"].append(f"🚀 exploit: {best_module}")
+    elif data.get("strategy") == "exploit" and best_module:
         path = os.path.join("modules", best_module + ".py")
         data, _ = run_python_module(path, data)
         module_used = best_module
+        data["log"].append(f"🚀 exploit: {best_module}")
+
+    elif data.get("strategy") in ["force_file", "build_module"]:
+        data, _ = execute_real_action(data)
+        module_used = "real_action"
 
     else:
-        data["log"].append("🧪 explore: create module")
         module_name = create_new_module()
         path = os.path.join("modules", module_name + ".py")
         data, _ = run_python_module(path, data)
         module_used = module_name
+        data["log"].append("🧪 explore")
 
     after = data["goal"]["progress"]
 
-    # 🧠 fallback если нет прогресса
+    # fallback
     if after == before:
-        data["log"].append("🧠 fallback → real action")
         data, _ = execute_real_action(data)
         module_used = "real_action"
 
-    # 🌍 среда
+    # 🌍 environment
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5
-        data["log"].append(f"🌍 reward: {reward}")
 
     after = data["goal"]["progress"]
-    score = calculate_score(data, before, after)
+
+    delta = after - before
+    score = calculate_score(before, after)
+
+    # 🧠 learning
+    update_knowledge(data, module_used, delta)
 
     data["experience"].append({
         "module": module_used,
         "score": score,
-        "delta": after - before
+        "delta": delta
     })
 
-    data["memory"].append("execution")
-
-    data["memory"] = data["memory"][-100:]
     data["log"] = data["log"][-200:]
 
     save_to_memory(data)

@@ -3,7 +3,7 @@ import random
 import json
 import importlib.util
 from environment import run_environment
-from modules.control import control  # ✅ FIX
+from modules.control import control
 
 
 def save_to_memory(data):
@@ -28,10 +28,9 @@ def ensure_env(data):
     return env
 
 
-def is_task_completed(data):
-    return False
-
-
+# =========================
+# 🔥 REAL ACTIONS
+# =========================
 def execute_real_action(data):
     task = data.get("task", "").lower()
 
@@ -39,7 +38,8 @@ def execute_real_action(data):
         os.makedirs("generated", exist_ok=True)
         os.makedirs("modules", exist_ok=True)
 
-        if "создай файл" in task or "create file" in task:
+        # 📁 файл
+        if "файл" in task or data.get("strategy") == "force_file":
             filename = f"generated/file_{random.randint(1000,9999)}.txt"
 
             content = "Megabot result:\n"
@@ -52,16 +52,19 @@ def execute_real_action(data):
             data["goal"]["progress"] += 20
             return data, True
 
-        if "создай модуль" in task or "create module" in task:
+        # 🧠 модуль
+        if "модуль" in task or data.get("strategy") == "build_module":
             module_name = f"auto_module_{random.randint(1000,9999)}.py"
             path = os.path.join("modules", module_name)
+
+            boost = random.randint(10, 20)
 
             code = f"""def run(data):
     data.setdefault("log", [])
     data.setdefault("goal", {{"progress": 0}})
 
-    data["goal"]["progress"] += {random.randint(5,15)}
-    data["log"].append("⚙️ auto module executed")
+    data["goal"]["progress"] += {boost}
+    data["log"].append("⚙️ auto module executed +{boost}")
 
     return data
 """
@@ -73,6 +76,7 @@ def execute_real_action(data):
             data["goal"]["progress"] += 25
             return data, True
 
+        # ⚙️ базовое действие
         data["log"].append("⚙️ базовое действие")
         data["goal"]["progress"] += 5
         return data, True
@@ -82,6 +86,9 @@ def execute_real_action(data):
         return data, False
 
 
+# =========================
+# 📦 MODULE EXECUTION
+# =========================
 def run_python_module(module_path, data):
     try:
         if not os.path.exists(module_path):
@@ -111,6 +118,9 @@ def run_python_module(module_path, data):
         return data, False
 
 
+# =========================
+# 🧠 MODULE LOGIC
+# =========================
 def get_best_module(experience):
     valid = [x for x in experience if x.get("module") not in (None, "real_action")]
 
@@ -131,20 +141,12 @@ def create_new_module():
     os.makedirs("modules", exist_ok=True)
 
     modules = get_all_modules()
-    ids = []
+    new_id = len(modules) + 1
 
-    for m in modules:
-        if m.startswith("module_"):
-            try:
-                ids.append(int(m.replace("module_", "").replace(".py", "")))
-            except:
-                pass
-
-    new_id = max(ids, default=0) + 1
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    boost = random.randint(5, 12)
+    boost = random.randint(5, 15)
 
     code = f"""def run(data):
     data.setdefault("goal", {{"progress": 0}})
@@ -162,33 +164,25 @@ def create_new_module():
     return name.replace(".py", "")
 
 
-def apply_repeat_penalty(data, module_used):
-    if len(data["experience"]) < 1:
-        return
-
-    last = data["experience"][-1]["module"]
-
-    if last == module_used:
-        data["env"]["entropy"] += 2
-        data["log"].append("♻️ repeat penalty")
-
-
+# =========================
+# ⚖️ SCORE
+# =========================
 def calculate_score(data, before, after):
     env = data.get("env", {})
-
     delta = after - before
 
-    score = 0
-    score += delta * 5
+    score = delta * 5
     score += env.get("knowledge", 0) * 2
     score += env.get("success", 0) * 2
-
     score -= env.get("fail", 0) * 5
     score -= env.get("entropy", 0)
 
     return max(0, min(100, score))
 
 
+# =========================
+# 🚀 MAIN EXECUTION
+# =========================
 def execution(data):
 
     data.setdefault("log", [])
@@ -199,14 +193,17 @@ def execution(data):
 
     ensure_env(data)
 
-    # 🧠 CONTROL
+    # 🧠 CONTROL LAYER
     data = control(data)
 
     before = data["goal"]["progress"]
 
+    strategy = data.get("strategy", "explore")
     module_used = None
+
     best_module, _ = get_best_module(data["experience"])
 
+    # 🔁 анти-зацикливание
     if len(data["experience"]) >= 2:
         if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
             data["repeat_count"] += 1
@@ -215,31 +212,37 @@ def execution(data):
 
     force_explore = data["repeat_count"] >= 2 or data["env"]["entropy"] > 10
 
-    if best_module and not force_explore:
-        data["log"].append(f"🚀 run best: {best_module}")
+    # =========================
+    # 🎯 STRATEGY SWITCH
+    # =========================
+
+    if strategy in ["force_file", "build_module"]:
+        data["log"].append(f"🎯 forced action: {strategy}")
+        data, _ = execute_real_action(data)
+        module_used = "real_action"
+
+    elif strategy == "exploit" and best_module and not force_explore:
+        data["log"].append(f"🚀 exploit: {best_module}")
         path = os.path.join("modules", best_module + ".py")
-        data, success = run_python_module(path, data)
+        data, _ = run_python_module(path, data)
         module_used = best_module
+
     else:
         data["log"].append("🧪 explore: create module")
         module_name = create_new_module()
         path = os.path.join("modules", module_name + ".py")
-        data, success = run_python_module(path, data)
+        data, _ = run_python_module(path, data)
         module_used = module_name
 
     after = data["goal"]["progress"]
 
+    # 🧠 fallback если нет прогресса
     if after == before:
         data["log"].append("🧠 fallback → real action")
         data, _ = execute_real_action(data)
         module_used = "real_action"
 
-    apply_repeat_penalty(data, module_used)
-
-    if data["env"]["entropy"] > 15:
-        data["env"]["entropy"] -= 5
-        data["log"].append("🧹 entropy cleanup")
-
+    # 🌍 среда
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5

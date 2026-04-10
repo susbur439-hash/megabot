@@ -3,7 +3,7 @@ import random
 import json
 import importlib.util
 from environment import run_environment
-from control import control  # 🧠 НОВОЕ
+from modules.control import control  # ✅ FIX
 
 
 def save_to_memory(data):
@@ -29,7 +29,7 @@ def ensure_env(data):
 
 
 def is_task_completed(data):
-    return False  # отключено для развития
+    return False
 
 
 def execute_real_action(data):
@@ -199,16 +199,14 @@ def execution(data):
 
     ensure_env(data)
 
-    # 🧠 CONTROL LAYER (ГЛАВНОЕ)
+    # 🧠 CONTROL
     data = control(data)
 
     before = data["goal"]["progress"]
-    task = data.get("task", "").lower()
 
     module_used = None
     best_module, _ = get_best_module(data["experience"])
 
-    # 🔁 АНТИ-ЛУП
     if len(data["experience"]) >= 2:
         if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
             data["repeat_count"] += 1
@@ -217,7 +215,6 @@ def execution(data):
 
     force_explore = data["repeat_count"] >= 2 or data["env"]["entropy"] > 10
 
-    # 🚀 ВЫБОР ДЕЙСТВИЯ
     if best_module and not force_explore:
         data["log"].append(f"🚀 run best: {best_module}")
         path = os.path.join("modules", best_module + ".py")
@@ -232,7 +229,6 @@ def execution(data):
 
     after = data["goal"]["progress"]
 
-    # 🧠 FALLBACK (ЕСЛИ НЕТ ПРОГРЕССА)
     if after == before:
         data["log"].append("🧠 fallback → real action")
         data, _ = execute_real_action(data)
@@ -240,12 +236,10 @@ def execution(data):
 
     apply_repeat_penalty(data, module_used)
 
-    # 🧹 ENTROPY CLEAN
     if data["env"]["entropy"] > 15:
         data["env"]["entropy"] -= 5
         data["log"].append("🧹 entropy cleanup")
 
-    # 🌍 ENV
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5

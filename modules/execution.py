@@ -3,6 +3,7 @@ import random
 import json
 import importlib.util
 from environment import run_environment
+from control import control  # 🧠 НОВОЕ
 
 
 def save_to_memory(data):
@@ -28,7 +29,7 @@ def ensure_env(data):
 
 
 def is_task_completed(data):
-    return False  # отключаем авто-стоп (важно для развития)
+    return False  # отключено для развития
 
 
 def execute_real_action(data):
@@ -70,16 +71,6 @@ def execute_real_action(data):
 
             data["log"].append(f"🧠 создан модуль: {module_name}")
             data["goal"]["progress"] += 25
-            return data, True
-
-        if "отчет" in task or "report" in task:
-            filename = f"generated/report_{random.randint(1000,9999)}.json"
-
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-            data["log"].append(f"📊 отчет сохранен: {filename}")
-            data["goal"]["progress"] += 15
             return data, True
 
         data["log"].append("⚙️ базовое действие")
@@ -140,8 +131,8 @@ def create_new_module():
     os.makedirs("modules", exist_ok=True)
 
     modules = get_all_modules()
-
     ids = []
+
     for m in modules:
         if m.startswith("module_"):
             try:
@@ -169,10 +160,6 @@ def create_new_module():
         f.write(code)
 
     return name.replace(".py", "")
-
-
-def mutate_module(module_name):
-    return create_new_module()
 
 
 def apply_repeat_penalty(data, module_used):
@@ -212,22 +199,16 @@ def execution(data):
 
     ensure_env(data)
 
-    before = data["goal"]["progress"]
+    # 🧠 CONTROL LAYER (ГЛАВНОЕ)
+    data = control(data)
 
+    before = data["goal"]["progress"]
     task = data.get("task", "").lower()
 
-    # 🔥 КЛЮЧЕВОЕ: ПРИНУДИТЕЛЬНОЕ ДЕЙСТВИЕ
-    if "создай файл" in task or "create file" in task:
-        data["log"].append("🎯 forced file creation")
-        data, _ = execute_real_action(data)
-
-    if "создай модуль" in task or "create module" in task:
-        data["log"].append("🎯 forced module creation")
-        data, _ = execute_real_action(data)
-
     module_used = None
-    best_module, best_score = get_best_module(data["experience"])
+    best_module, _ = get_best_module(data["experience"])
 
+    # 🔁 АНТИ-ЛУП
     if len(data["experience"]) >= 2:
         if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
             data["repeat_count"] += 1
@@ -236,12 +217,12 @@ def execution(data):
 
     force_explore = data["repeat_count"] >= 2 or data["env"]["entropy"] > 10
 
+    # 🚀 ВЫБОР ДЕЙСТВИЯ
     if best_module and not force_explore:
         data["log"].append(f"🚀 run best: {best_module}")
         path = os.path.join("modules", best_module + ".py")
         data, success = run_python_module(path, data)
         module_used = best_module
-
     else:
         data["log"].append("🧪 explore: create module")
         module_name = create_new_module()
@@ -251,12 +232,20 @@ def execution(data):
 
     after = data["goal"]["progress"]
 
+    # 🧠 FALLBACK (ЕСЛИ НЕТ ПРОГРЕССА)
+    if after == before:
+        data["log"].append("🧠 fallback → real action")
+        data, _ = execute_real_action(data)
+        module_used = "real_action"
+
     apply_repeat_penalty(data, module_used)
 
+    # 🧹 ENTROPY CLEAN
     if data["env"]["entropy"] > 15:
         data["env"]["entropy"] -= 5
         data["log"].append("🧹 entropy cleanup")
 
+    # 🌍 ENV
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5
@@ -279,4 +268,3 @@ def execution(data):
     save_to_memory(data)
 
     return data
-    

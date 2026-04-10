@@ -40,33 +40,71 @@ def is_task_completed(data):
     task = data.get("task", "").lower()
 
     if "создай файл" in task:
-        return os.path.exists("test.txt")
+        return os.path.exists("generated")
 
     return False
 
 
 # =========================
-# ⚙️ REAL ACTION
+# ⚙️ REAL ACTION (УЛУЧШЕННЫЙ)
 # =========================
 def execute_real_action(data):
     task = data.get("task", "").lower()
 
     try:
-        if "создай файл" in task:
-            filename = "test.txt"
+        os.makedirs("generated", exist_ok=True)
+        os.makedirs("modules", exist_ok=True)
 
-            content = "Результат анализа:\n"
-            content += data.get("analysis", "нет данных")
+        # 📁 СОЗДАНИЕ ФАЙЛА
+        if "создай файл" in task or "create file" in task:
+            filename = f"generated/file_{random.randint(1000,9999)}.txt"
+
+            content = "Megabot result:\n"
+            content += str(data.get("analysis", "no data"))
 
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(content)
 
-            data["log"].append(f"📁 файл {filename} создан")
-            data["goal"]["progress"] += 50
+            data["log"].append(f"📁 создан файл: {filename}")
+            data["goal"]["progress"] += 20
             return data, True
 
+        # 🧠 СОЗДАНИЕ PY МОДУЛЯ
+        if "создай модуль" in task or "create module" in task:
+            module_name = f"auto_module_{random.randint(1000,9999)}.py"
+            path = os.path.join("modules", module_name)
+
+            code = f"""def run(data):
+    data.setdefault("log", [])
+    data.setdefault("goal", {{"progress": 0}})
+
+    data["goal"]["progress"] += {random.randint(5,15)}
+    data["log"].append("⚙️ auto module executed")
+
+    return data
+"""
+
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(code)
+
+            data["log"].append(f"🧠 создан модуль: {module_name}")
+            data["goal"]["progress"] += 25
+            return data, True
+
+        # 📊 СОХРАНЕНИЕ ОТЧЕТА
+        if "отчет" in task or "report" in task:
+            filename = f"generated/report_{random.randint(1000,9999)}.json"
+
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            data["log"].append(f"📊 отчет сохранен: {filename}")
+            data["goal"]["progress"] += 15
+            return data, True
+
+        # ⚙️ БАЗОВОЕ ДЕЙСТВИЕ
+        data["log"].append("⚙️ базовое действие (no real match)")
         data["goal"]["progress"] += 5
-        data["log"].append("⚙️ базовое действие")
         return data, True
 
     except Exception as e:
@@ -148,7 +186,7 @@ def create_new_module():
     name = f"module_{new_id}.py"
     path = os.path.join("modules", name)
 
-    boost = random.randint(5, 12)  # меньше разброс
+    boost = random.randint(5, 12)
 
     code = f"""def run(data):
     data.setdefault("goal", {{"progress": 0}})
@@ -167,12 +205,10 @@ def create_new_module():
 
 
 # =========================
-# 🧬 SAFE MUTATION (НОВОЕ)
+# 🧬 SAFE MUTATION
 # =========================
 def mutate_module(module_name):
-    # создаём НОВЫЙ модуль вместо перезаписи
-    new_name = create_new_module()
-    return new_name
+    return create_new_module()
 
 
 # =========================
@@ -231,18 +267,13 @@ def execution(data):
 
     best_module, best_score = get_best_module(data["experience"])
 
-    # =========================
-    # 🧠 АНТИ-ЛУП
-    # =========================
+    # АНТИ-ЛУП
     if len(data["experience"]) >= 2:
         if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
             data["repeat_count"] += 1
         else:
             data["repeat_count"] = 0
 
-    # =========================
-    # 🎯 СТАБИЛЬНАЯ СТРАТЕГИЯ
-    # =========================
     force_explore = data["repeat_count"] >= 2 or data["env"]["entropy"] > 10
 
     if best_module and not force_explore:
@@ -267,18 +298,12 @@ def execution(data):
 
     after = data["goal"]["progress"]
 
-    # =========================
-    # 🛡 АНТИ-ДЕГРАДАЦИЯ
-    # =========================
     if best_module and (after - before) < 0:
         data["log"].append("⚠️ откат к лучшему модулю")
         path = os.path.join("modules", best_module + ".py")
         data, success = run_python_module(path, data)
         module_used = best_module
 
-    # =========================
-    # fallback
-    # =========================
     after = data["goal"]["progress"]
 
     if after == before:
@@ -286,9 +311,6 @@ def execution(data):
         data, success = execute_real_action(data)
         module_used = "real_action"
 
-    # =========================
-    # ENV
-    # =========================
     apply_repeat_penalty(data, module_used)
 
     if data["env"]["entropy"] > 15:
@@ -300,9 +322,6 @@ def execution(data):
         data["goal"]["progress"] += reward // 5
         data["log"].append(f"🌍 reward: {reward}")
 
-    # =========================
-    # EXPERIENCE
-    # =========================
     after = data["goal"]["progress"]
     score = calculate_score(data, before, after)
 

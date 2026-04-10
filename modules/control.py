@@ -1,4 +1,5 @@
-# control.py
+from modules.state_manager import run as state_manager
+
 
 def control(data):
     data.setdefault("log", [])
@@ -10,46 +11,50 @@ def control(data):
     env = data["env"]
     goal = data["goal"]
 
+    # =========================
+    # 🧠 STATE MANAGER (ГЛАВНОЕ)
+    # =========================
+    data = state_manager(data)
+    state = data.get("state", {})
+
+    mode = state.get("mode", "explore")
+    phase = state.get("phase", "normal")
+    trend = state.get("trend", "stable")
+
     progress = goal.get("progress", 0)
     target = goal.get("target", 100)
 
     # =========================
-    # 📊 АНАЛИЗ СОСТОЯНИЯ
+    # 🚨 АНТИ-ДЕГРАДАЦИЯ (через state)
     # =========================
-    stagnation = False
-    if len(data["experience"]) >= 3:
-        last_deltas = [x.get("delta", 0) for x in data["experience"][-3:]]
-        if sum(last_deltas) <= 5:
-            stagnation = True
+    if phase == "crisis":
+        data["log"].append("🚨 control: crisis detected")
+        data["mode"] = "explore"
+        data["force_explore"] = True
 
-    high_entropy = env.get("entropy", 0) > 12
-    low_energy = env.get("energy", 100) < 20
-
-    # =========================
-    # 🚨 АНТИ-ДЕГРАДАЦИЯ
-    # =========================
-    if stagnation:
+    elif phase == "stagnation":
         data["log"].append("🔁 control: stagnation detected")
-        data["mode"] = "explore"
+        data["mode"] = "improve"
         data["force_explore"] = True
 
-    if high_entropy:
-        data["log"].append("🧹 control: entropy high → cleanup")
-        env["entropy"] = max(0, env["entropy"] - 5)
-        data["mode"] = "explore"
-        data["force_explore"] = True
+    else:
+        data["mode"] = mode
+        data["force_explore"] = False
 
-    if low_energy:
+    # =========================
+    # 🔋 ЭНЕРГИЯ (приоритет)
+    # =========================
+    if env.get("energy", 100) < 20:
         data["log"].append("🔋 control: low energy → safe mode")
         data["mode"] = "safe"
         data["force_explore"] = False
 
     # =========================
-    # 🎯 УПРАВЛЕНИЕ СТРАТЕГИЕЙ
+    # 🧹 ENTROPY CONTROL
     # =========================
-    if not stagnation and not high_entropy:
-        data["mode"] = "exploit"
-        data["force_explore"] = False
+    if env.get("entropy", 0) > 15:
+        data["log"].append("🧹 control: entropy cleanup")
+        env["entropy"] = max(0, env["entropy"] - 5)
 
     # =========================
     # 🚀 LEVEL SYSTEM
@@ -61,48 +66,38 @@ def control(data):
 
         data["log"].append(f"🚀 CONTROL LEVEL UP → {goal['level']}")
 
-        # бонус
         env["energy"] = min(100, env.get("energy", 100) + 10)
         env["entropy"] = max(0, env.get("entropy", 0) - 3)
 
     # =========================
-    # 🧠 УМНОЕ ПЕРЕКЛЮЧЕНИЕ ЗАДАЧ
+    # 🧠 УМНОЕ ПОВЕДЕНИЕ (через state)
     # =========================
     task = data.get("task", "").lower()
 
-    if "создай файл" in task and progress > 60:
+    if "файл" in task and progress > 60:
         data["task"] = "создай модуль и улучши систему"
-        data["log"].append("🧠 control: смена задачи → модуль")
+        data["log"].append("🧠 control: shift → module")
 
-    if "модуль" in task and progress > 70:
+    elif "модуль" in task and progress > 70:
         data["task"] = "создай отчет и проанализируй себя"
-        data["log"].append("🧠 control: смена задачи → отчет")
+        data["log"].append("🧠 control: shift → report")
 
     # =========================
-    # 🛡 ЗАЩИТА ОТ СПАМА
+    # 🛡 АНТИ-СПАМ МОДУЛЕЙ
     # =========================
     if len(data["experience"]) >= 5:
-        last_modules = [x.get("module") for x in data["experience"][-5:]]
-        if len(set(last_modules)) == 1:
+        last = [x.get("module") for x in data["experience"][-5:]]
+        if len(set(last)) == 1:
             data["log"].append("🚫 control: module spam detected")
             data["force_explore"] = True
 
     # =========================
-    # 📈 СОСТОЯНИЕ СИСТЕМЫ
+    # 📊 СОСТОЯНИЕ
     # =========================
-    if stagnation:
-        state = "stagnation"
-    elif high_entropy:
-        state = "chaos"
-    elif progress > target * 0.7:
-        state = "growth"
-    else:
-        state = "normal"
-
-    data["control_state"] = state
+    data["control_state"] = phase
 
     data["log"].append(
-        f"🧠 control: mode={data.get('mode')} | state={state} | progress={progress}/{target}"
+        f"🧠 control: mode={data.get('mode')} | phase={phase} | trend={trend} | progress={progress}/{target}"
     )
 
     return data

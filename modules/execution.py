@@ -5,9 +5,6 @@ import importlib.util
 from environment import run_environment
 
 
-# =========================
-# 💾 SAVE
-# =========================
 def save_to_memory(data):
     try:
         with open("memory.json", "w", encoding="utf-8") as f:
@@ -16,9 +13,6 @@ def save_to_memory(data):
         print("Save error:", e)
 
 
-# =========================
-# 🛡 SAFE ENV INIT
-# =========================
 def ensure_env(data):
     env = data.setdefault("env", {})
 
@@ -33,21 +27,10 @@ def ensure_env(data):
     return env
 
 
-# =========================
-# 🎯 CHECK TASK COMPLETE
-# =========================
 def is_task_completed(data):
-    task = data.get("task", "").lower()
-
-    if "создай файл" in task:
-        return os.path.exists("generated")
-
-    return False
+    return False  # отключаем авто-стоп (важно для развития)
 
 
-# =========================
-# ⚙️ REAL ACTION (УЛУЧШЕННЫЙ)
-# =========================
 def execute_real_action(data):
     task = data.get("task", "").lower()
 
@@ -55,7 +38,6 @@ def execute_real_action(data):
         os.makedirs("generated", exist_ok=True)
         os.makedirs("modules", exist_ok=True)
 
-        # 📁 СОЗДАНИЕ ФАЙЛА
         if "создай файл" in task or "create file" in task:
             filename = f"generated/file_{random.randint(1000,9999)}.txt"
 
@@ -69,7 +51,6 @@ def execute_real_action(data):
             data["goal"]["progress"] += 20
             return data, True
 
-        # 🧠 СОЗДАНИЕ PY МОДУЛЯ
         if "создай модуль" in task or "create module" in task:
             module_name = f"auto_module_{random.randint(1000,9999)}.py"
             path = os.path.join("modules", module_name)
@@ -91,7 +72,6 @@ def execute_real_action(data):
             data["goal"]["progress"] += 25
             return data, True
 
-        # 📊 СОХРАНЕНИЕ ОТЧЕТА
         if "отчет" in task or "report" in task:
             filename = f"generated/report_{random.randint(1000,9999)}.json"
 
@@ -102,8 +82,7 @@ def execute_real_action(data):
             data["goal"]["progress"] += 15
             return data, True
 
-        # ⚙️ БАЗОВОЕ ДЕЙСТВИЕ
-        data["log"].append("⚙️ базовое действие (no real match)")
+        data["log"].append("⚙️ базовое действие")
         data["goal"]["progress"] += 5
         return data, True
 
@@ -112,9 +91,6 @@ def execute_real_action(data):
         return data, False
 
 
-# =========================
-# 🚀 RUN MODULE
-# =========================
 def run_python_module(module_path, data):
     try:
         if not os.path.exists(module_path):
@@ -144,9 +120,6 @@ def run_python_module(module_path, data):
         return data, False
 
 
-# =========================
-# 🧠 BEST MODULE
-# =========================
 def get_best_module(experience):
     valid = [x for x in experience if x.get("module") not in (None, "real_action")]
 
@@ -157,18 +130,12 @@ def get_best_module(experience):
     return best.get("module"), best.get("score", 0)
 
 
-# =========================
-# 📁 MODULES
-# =========================
 def get_all_modules():
     if not os.path.exists("modules"):
         return []
     return [f for f in os.listdir("modules") if f.endswith(".py")]
 
 
-# =========================
-# 🧬 CREATE MODULE
-# =========================
 def create_new_module():
     os.makedirs("modules", exist_ok=True)
 
@@ -204,16 +171,10 @@ def create_new_module():
     return name.replace(".py", "")
 
 
-# =========================
-# 🧬 SAFE MUTATION
-# =========================
 def mutate_module(module_name):
     return create_new_module()
 
 
-# =========================
-# 🔁 REPEAT PENALTY
-# =========================
 def apply_repeat_penalty(data, module_used):
     if len(data["experience"]) < 1:
         return
@@ -225,9 +186,6 @@ def apply_repeat_penalty(data, module_used):
         data["log"].append("♻️ repeat penalty")
 
 
-# =========================
-# 📊 SCORE
-# =========================
 def calculate_score(data, before, after):
     env = data.get("env", {})
 
@@ -244,9 +202,6 @@ def calculate_score(data, before, after):
     return max(0, min(100, score))
 
 
-# =========================
-# 🔥 EXECUTION FINAL
-# =========================
 def execution(data):
 
     data.setdefault("log", [])
@@ -259,15 +214,20 @@ def execution(data):
 
     before = data["goal"]["progress"]
 
-    if is_task_completed(data):
-        data["log"].append("✅ задача уже выполнена")
-        return data
+    task = data.get("task", "").lower()
+
+    # 🔥 КЛЮЧЕВОЕ: ПРИНУДИТЕЛЬНОЕ ДЕЙСТВИЕ
+    if "создай файл" in task or "create file" in task:
+        data["log"].append("🎯 forced file creation")
+        data, _ = execute_real_action(data)
+
+    if "создай модуль" in task or "create module" in task:
+        data["log"].append("🎯 forced module creation")
+        data, _ = execute_real_action(data)
 
     module_used = None
-
     best_module, best_score = get_best_module(data["experience"])
 
-    # АНТИ-ЛУП
     if len(data["experience"]) >= 2:
         if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
             data["repeat_count"] += 1
@@ -282,13 +242,6 @@ def execution(data):
         data, success = run_python_module(path, data)
         module_used = best_module
 
-    elif best_module and random.random() > 0.6:
-        data["log"].append(f"🧬 safe mutate: {best_module}")
-        new_module = mutate_module(best_module)
-        path = os.path.join("modules", new_module + ".py")
-        data, success = run_python_module(path, data)
-        module_used = new_module
-
     else:
         data["log"].append("🧪 explore: create module")
         module_name = create_new_module()
@@ -297,19 +250,6 @@ def execution(data):
         module_used = module_name
 
     after = data["goal"]["progress"]
-
-    if best_module and (after - before) < 0:
-        data["log"].append("⚠️ откат к лучшему модулю")
-        path = os.path.join("modules", best_module + ".py")
-        data, success = run_python_module(path, data)
-        module_used = best_module
-
-    after = data["goal"]["progress"]
-
-    if after == before:
-        data["log"].append("🧠 fallback → real action")
-        data, success = execute_real_action(data)
-        module_used = "real_action"
 
     apply_repeat_penalty(data, module_used)
 

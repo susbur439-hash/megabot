@@ -159,11 +159,11 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
     data.setdefault("repeat_count", 0)
-    data.setdefault("cycle", 0)
+
+    # 🔥 ВАЖНО: cycle НЕ накапливаем между запусками
+    data["cycle"] = data.get("cycle", 0) + 1
 
     ensure_env(data)
-
-    data["cycle"] += 1
 
     # стратегия
     task_text = data.get("task", "").lower()
@@ -189,7 +189,6 @@ def execution(data):
     # =========================
     # 🎯 DECISION
     # =========================
-
     if stagnation:
         data["log"].append("💥 stagnation → real action")
         data["strategy"] = "force_file"
@@ -211,7 +210,7 @@ def execution(data):
 
     after = data["goal"]["progress"]
 
-    # 🔥 fallback
+    # fallback
     if after <= before:
         data["env"]["entropy"] += 1
         data["log"].append("🧠 fallback → forcing action")
@@ -219,12 +218,12 @@ def execution(data):
         data, _ = execute_real_action(data)
         module_used = "real_action"
 
-    # 🌍 environment
+    # environment
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5
 
-    # 🧠 опыт
+    # опыт
     delta = data["goal"]["progress"] - before
     score = max(0, min(100, delta * 5))
 
@@ -238,21 +237,14 @@ def execution(data):
     data["log"] = data["log"][-200:]
 
     # =========================
-    # 👁 FINAL OBSERVER (ТОЛЬКО В КОНЦЕ)
+    # 👁 FINAL OBSERVER (ОДИН РАЗ)
     # =========================
-    max_cycles = data.get("max_cycles", 10)
-    goal_progress = data.get("goal", {}).get("progress", 0)
-
-    is_last_cycle = (
-        data["cycle"] >= max_cycles
-        or goal_progress >= 100
-    )
-
-    if observer_run and is_last_cycle:
+    if observer_run and not data.get("observer_done", False):
         try:
             data["log"].append("👁 FINAL OBSERVER START")
             data = observer_run(data)
             data["log"].append("👁 FINAL OBSERVER DONE")
+            data["observer_done"] = True  # ← КЛЮЧЕВОЕ
         except Exception as e:
             data["log"].append(f"❌ observer error: {e}")
 

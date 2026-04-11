@@ -1,5 +1,5 @@
 {
-  "version": "10.1",
+  "version": "10.0_full",
 
   "core_loop": [
     "task",
@@ -12,7 +12,7 @@
     "execution",
     "evaluation",
     "learning",
-    "control_layer",
+    "control",
     "goal_update",
     "loop"
   ],
@@ -20,19 +20,11 @@
   "layers": {
     "input": ["task_interpreter"],
     "state": ["state_manager"],
-
-    "analysis": ["analysis"],
-    "planning": ["planning"],
-    "decision": ["decision"],
-    "action": ["action"],
-
+    "core": ["analysis", "planning", "decision", "action"],
     "execution": ["execution"],
     "evaluation": ["evaluation"],
-
     "learning": ["learning", "self_improver"],
-
     "control": ["system_guard", "control_layer"],
-
     "goal": ["goals"],
     "loop": ["director"]
   },
@@ -40,31 +32,73 @@
   "required_modules": [
     "task_interpreter",
     "state_manager",
-
     "analysis",
     "planning",
     "decision",
     "action",
-
     "execution",
     "evaluation",
-
     "learning",
     "self_improver",
-
     "system_guard",
     "control_layer",
-
     "goals",
     "director"
   ],
 
-  "rules": {
-    "must_follow_loop": true,
-    "must_learn": true,
-    "must_use_experience": true,
-    "must_update_goal": true,
-    "no_random_behavior": true
+  "module_roles": {
+    "task_interpreter": "принимает и нормализует задачу",
+    "state_manager": "хранит состояние системы",
+    "analysis": "анализирует прогресс, ошибки и тренды",
+    "planning": "строит план действий",
+    "decision": "выбирает действие",
+    "action": "формирует действие",
+    "execution": "выполняет действие",
+    "evaluation": "оценивает результат",
+    "learning": "обновляет опыт",
+    "self_improver": "улучшает систему",
+    "system_guard": "защищает от деградации",
+    "control_layer": "контролирует поведение",
+    "goals": "управляет целями",
+    "director": "управляет циклом"
+  },
+
+  "connections": [
+    {"from": "task_interpreter", "to": "state_manager"},
+    {"from": "state_manager", "to": "analysis"},
+    {"from": "analysis", "to": "planning"},
+    {"from": "planning", "to": "decision"},
+    {"from": "decision", "to": "action"},
+    {"from": "action", "to": "execution"},
+    {"from": "execution", "to": "evaluation"},
+    {"from": "evaluation", "to": "learning"},
+    {"from": "learning", "to": "decision"},
+    {"from": "control_layer", "to": "decision"},
+    {"from": "system_guard", "to": "execution"}
+  ],
+
+  "system_rules": [
+    "не создавать модули без причины",
+    "не повторять действия без прогресса",
+    "использовать лучший модуль при хорошем результате",
+    "если есть ошибка → сначала исправить",
+    "если нет прогресса → сменить стратегию",
+    "если модуль не используется → пометить",
+    "если модуль ломает систему → отключить",
+    "сначала анализ → потом действие",
+    "запрещено случайное поведение без причины"
+  ],
+
+  "behavior": {
+    "explore": "пробовать новые действия",
+    "exploit": "использовать лучшие найденные решения",
+    "optimize": "улучшать существующие модули",
+    "fix": "исправлять ошибки"
+  },
+
+  "memory": {
+    "short_term": "последние действия и результаты",
+    "long_term": "опыт, лучшие решения, статистика"
   },
 
   "goals": {
@@ -76,6 +110,14 @@
   "control": {
     "allow_autofix": true,
     "allow_module_creation": true,
-    "allow_module_improvement": true
+    "allow_module_improvement": true,
+    "strict_mode": false
+  },
+
+  "evolution": {
+    "enabled": true,
+    "allow_structure_changes": true,
+    "allow_new_modules": true,
+    "allow_refactoring": true
   }
 }

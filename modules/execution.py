@@ -234,15 +234,25 @@ def execution(data):
         "delta": delta
     })
 
-    # ✂️ обрезаем лог ДО observer
+    # ✂️ обрезаем лог
     data["log"] = data["log"][-200:]
 
     # =========================
-    # 👁 OBSERVER В КОНЦЕ (раз в 5 циклов)
+    # 👁 FINAL OBSERVER (ТОЛЬКО В КОНЦЕ)
     # =========================
-    if observer_run and data["cycle"] % 5 == 0:
+    max_cycles = data.get("max_cycles", 10)
+    goal_progress = data.get("goal", {}).get("progress", 0)
+
+    is_last_cycle = (
+        data["cycle"] >= max_cycles
+        or goal_progress >= 100
+    )
+
+    if observer_run and is_last_cycle:
         try:
+            data["log"].append("👁 FINAL OBSERVER START")
             data = observer_run(data)
+            data["log"].append("👁 FINAL OBSERVER DONE")
         except Exception as e:
             data["log"].append(f"❌ observer error: {e}")
 

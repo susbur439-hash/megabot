@@ -51,8 +51,9 @@ def run(data):
 
                 imports = []
 
-                matches = re.findall(r"import\s+([\w\.]+)", content)
-                matches += re.findall(r"from\s+([\w\.]+)\s+import", content)
+                # 🔥 точные regex
+                matches = re.findall(r"^\s*import\s+([\w\.]+)", content, re.MULTILINE)
+                matches += re.findall(r"^\s*from\s+([\w\.]+)\s+import", content, re.MULTILINE)
 
                 for m in matches:
                     module_name = m.split(".")[0]
@@ -72,14 +73,14 @@ def run(data):
                     "imports": imports
                 })
 
-                # ⚠️ wildcard → WARNING
-                if "import *" in content:
+                # ⚠️ wildcard import (нормально ловим)
+                if re.search(r"from\s+[\w\.]+\s+import\s+\*", content):
                     report["warning"].append({
                         "type": "wildcard_import",
                         "file": rel_path
                     })
 
-                # ℹ️ нет run → INFO
+                # ℹ️ нет run
                 if not has_run:
                     report["info"].append({
                         "type": "no_run_function",
@@ -109,11 +110,17 @@ def run(data):
             )
 
             if not found:
-                report["warning"].append({
+                issue = {
                     "type": "missing_import",
                     "module": module,
                     "missing": imp
-                })
+                }
+
+                # 🔥 CRITICAL если это modules.*
+                if "modules" in module:
+                    report["critical"].append(issue)
+                else:
+                    report["warning"].append(issue)
 
     # =========================
     # 🧠 АРХИТЕКТУРА
@@ -124,16 +131,14 @@ def run(data):
         with open("megabot_architecture.json", "r", encoding="utf-8") as f:
             blueprint = json.load(f)
     except Exception:
-        report["info"].append({
-            "type": "no_blueprint"
-        })
+        report["info"].append({"type": "no_blueprint"})
 
     required = blueprint.get("required_modules", [])
     pipeline = blueprint.get("pipeline", [])
 
     existing_names = set(os.path.basename(f) for f in existing_files)
 
-    # отсутствующие модули → WARNING
+    # отсутствующие модули
     for req in required:
         req_file = req if req.endswith(".py") else req + ".py"
 
@@ -143,7 +148,7 @@ def run(data):
                 "module": req
             })
 
-    # неиспользуемые → INFO
+    # неиспользуемые
     for mod in existing_names:
         if mod not in usage_map and mod not in {"main.py", "__init__.py"}:
             report["info"].append({
@@ -151,7 +156,7 @@ def run(data):
                 "module": mod
             })
 
-    # pipeline → WARNING
+    # pipeline
     for step in pipeline:
         if not any(step in f for f in existing_files):
             report["warning"].append({
@@ -175,21 +180,42 @@ def run(data):
         "report": report
     }
 
+    # =========================
+    # 🖥️ ПОНЯТНЫЙ ВЫВОД (ключевое)
+    # =========================
     print(f"📊 files={stats['files']} modules={stats['modules']}")
     print(f"🚨 critical={stats['critical']} ⚠️ warning={stats['warning']} ℹ️ info={stats['info']}")
 
+    print("\n=== OBSERVER REPORT ===")
+
+    if report["critical"]:
+        print(f"\n🚨 CRITICAL ({len(report['critical'])})")
+        for item in report["critical"][:5]:
+            print("❌", item)
+
+    if report["warning"]:
+        print(f"\n⚠️ WARNING ({len(report['warning'])})")
+        for item in report["warning"][:5]:
+            print("⚠️", item)
+
+    if report["info"]:
+        print(f"\nℹ️ INFO ({len(report['info'])})")
+        for item in report["info"][:5]:
+            print("ℹ️", item)
+
+    print("\n=== END ===")
+
     # =========================
-    # 📋 УМНЫЙ ЛОГ (НЕ ЗАСОРЯЕТ)
+    # 📋 ЛОГ (КОРОТКИЙ)
     # =========================
     data.setdefault("log", []).append(
-        f"👁 observer: crit={stats['critical']} warn={stats['warning']} info={stats['info']}"
+        f"👁 obs: C={stats['critical']} W={stats['warning']} I={stats['info']}"
     )
 
-    # 🔥 ТОП-5 ПРОБЛЕМ В ЛОГ (чтобы ты видел сразу)
-    for item in report["critical"][:3]:
+    for item in report["critical"][:2]:
         data["log"].append(f"❌ {item}")
 
-    for item in report["warning"][:3]:
+    for item in report["warning"][:2]:
         data["log"].append(f"⚠️ {item}")
 
     print("✅ OBSERVER DONE")

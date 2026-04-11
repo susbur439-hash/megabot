@@ -94,10 +94,12 @@ def execute_real_action(data):
 def run_python_module(module_path, data):
     try:
         if not os.path.exists(module_path):
+            data["log"].append(f"❌ module not found: {module_path}")
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
         if not spec or not spec.loader:
+            data["log"].append("❌ module load failed")
             return data, False
 
         module = importlib.util.module_from_spec(spec)
@@ -108,9 +110,11 @@ def run_python_module(module_path, data):
             if isinstance(result, dict):
                 return result, True
 
+        data["log"].append("⚠️ invalid module result")
         return data, False
 
-    except Exception:
+    except Exception as e:
+        data["log"].append(f"❌ module error: {e}")
         return data, False
 
 
@@ -160,14 +164,6 @@ def execution(data):
     ensure_env(data)
 
     data["cycle"] += 1
-
-    # 👁 OBSERVER (раз в 5 циклов)
-    if observer_run and data["cycle"] % 5 == 0:
-        try:
-            data = observer_run(data)
-            data["log"].append("👁 observer executed")
-        except Exception:
-            pass
 
     # стратегия
     task_text = data.get("task", "").lower()
@@ -238,7 +234,17 @@ def execution(data):
         "delta": delta
     })
 
+    # ✂️ обрезаем лог ДО observer
     data["log"] = data["log"][-200:]
+
+    # =========================
+    # 👁 OBSERVER В КОНЦЕ (раз в 5 циклов)
+    # =========================
+    if observer_run and data["cycle"] % 5 == 0:
+        try:
+            data = observer_run(data)
+        except Exception as e:
+            data["log"].append(f"❌ observer error: {e}")
 
     save_to_memory(data)
 

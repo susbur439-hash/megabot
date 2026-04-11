@@ -24,7 +24,7 @@ jobs:
           path: downloaded
         continue-on-error: true
 
-      # 🔥 ПЕРЕМЕЩАЕМ В КОРЕНЬ
+      # 🔥 ВОССТАНОВЛЕНИЕ
       - name: 🔧 Восстановление памяти
         run: |
           if [ -f downloaded/memory.json ]; then
@@ -32,6 +32,7 @@ jobs:
           fi
 
           if [ -d downloaded/modules ]; then
+            mkdir -p modules
             cp -r downloaded/modules/* modules/ || true
           fi
 
@@ -43,14 +44,52 @@ jobs:
       - name: 📦 Установка зависимостей
         run: pip install -r requirements.txt || true
 
+      # =========================
+      # 🤖 ЗАПУСК МЕГАБОТА
+      # =========================
       - name: 🤖 Запуск Megabot
         run: python main.py "${{ github.event.inputs.task }}"
 
-      # 🔥 SNAPSHOT
+      # =========================
+      # 👁 OBLIVION (ОТДЕЛЬНО!)
+      # =========================
+      - name: 👁 Oblivion Check
+        run: |
+          python - <<EOF
+          from modules.system_observer import run
+          import json
+
+          try:
+              with open("memory.json", "r", encoding="utf-8") as f:
+                  data = json.load(f)
+          except:
+              data = {}
+
+          result = run(data)
+
+          issues = result.get("system_map", {}).get("architecture_issues", [])
+          broken = result.get("system_map", {}).get("broken_links", [])
+          errors = result.get("system_map", {}).get("errors", [])
+
+          if issues or broken or errors:
+              print("🚨 OBLIVION FOUND PROBLEMS")
+              print("Architecture:", len(issues))
+              print("Broken links:", len(broken))
+              print("Errors:", len(errors))
+              exit(1)
+          else:
+              print("✅ OBLIVION OK")
+          EOF
+
+      # =========================
+      # 📸 SNAPSHOT
+      # =========================
       - name: 📸 Создание snapshot системы
         run: python system_snapshot.py || echo "No snapshot script"
 
-      # 🔥 СОХРАНЕНИЕ
+      # =========================
+      # 📤 СОХРАНЕНИЕ
+      # =========================
       - name: 📤 Сохранение snapshot
         uses: actions/upload-artifact@v4
         with:

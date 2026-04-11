@@ -1,5 +1,6 @@
 import os
 import re
+import json
 
 
 def run(data):
@@ -10,12 +11,12 @@ def run(data):
         "modules": [],
         "errors": [],
         "connections": [],
-        "broken_links": []
+        "broken_links": [],
+        "architecture_issues": []
     }
 
     skip_dirs = {"__pycache__", ".git", ".github", "venv", "env"}
 
-    # стандартные библиотеки (игнор)
     std_libs = {
         "os", "sys", "json", "re", "math", "random",
         "time", "datetime", "collections", "itertools",
@@ -47,20 +48,15 @@ def run(data):
 
                 system_map["modules"].append(rel_path)
 
-                # =========================
-                # 🔗 ПОИСК ИМПОРТОВ
-                # =========================
+                # 🔗 импорт
                 imports = []
-
                 matches = re.findall(r"import (\w+)", content)
                 matches += re.findall(r"from (\w+)", content)
 
                 imports.extend(matches)
                 imports_map[rel_path] = imports
 
-                # =========================
-                # 🔗 ПРОВЕРКА run()
-                # =========================
+                # 🔗 run()
                 has_run = "def run(" in content
 
                 system_map["connections"].append({
@@ -69,9 +65,7 @@ def run(data):
                     "imports": imports
                 })
 
-                # =========================
-                # ⚠️ ПРОСТЫЕ ОШИБКИ
-                # =========================
+                # ⚠️ ошибки
                 if "import *" in content:
                     system_map["errors"].append({
                         "file": rel_path,
@@ -92,15 +86,9 @@ def run(data):
     for module, imports in imports_map.items():
         for imp in imports:
 
-            # игнор стандартных библиотек
-            if imp in std_libs:
+            if imp in std_libs or len(imp) < 2:
                 continue
 
-            # игнор коротких/подозрительных
-            if len(imp) < 2:
-                continue
-
-            # пробуем найти файл
             possible_paths = [
                 f"{imp}.py",
                 f"modules/{imp}.py",
@@ -116,12 +104,60 @@ def run(data):
                 })
 
     # =========================
+    # 🧠 ПОДКЛЮЧЕНИЕ АРХИТЕКТУРЫ
+    # =========================
+    blueprint = {}
+
+    try:
+        with open("megabot_architecture.json", "r", encoding="utf-8") as f:
+            blueprint = json.load(f)
+    except Exception:
+        data.setdefault("log", []).append("⚠️ observer: blueprint не найден")
+
+    # =========================
+    # 🧠 ПРОВЕРКА АРХИТЕКТУРЫ
+    # =========================
+    required = blueprint.get("required_modules", [])
+    pipeline = blueprint.get("pipeline", [])
+
+    existing_files = set(system_map["modules"])
+
+    # ❌ отсутствующие обязательные модули
+    for req in required:
+        found = any(req in f for f in existing_files)
+        if not found:
+            system_map["architecture_issues"].append({
+                "type": "missing_module",
+                "module": req
+            })
+
+    # ⚠️ неиспользуемые модули
+    used_modules = set()
+
+    for conn in system_map["connections"]:
+        for imp in conn["imports"]:
+            used_modules.add(imp + ".py")
+
+    unused = []
+    for f in existing_files:
+        name = os.path.basename(f)
+        if name not in required and name not in used_modules:
+            unused.append(name)
+
+    for u in unused:
+        system_map["architecture_issues"].append({
+            "type": "unused_module",
+            "module": u
+        })
+
+    # =========================
     # 📊 СТАТИСТИКА
     # =========================
     total = len(system_map["files"])
     modules = len(system_map["modules"])
     errors = len(system_map["errors"])
     broken = len(system_map["broken_links"])
+    arch_issues = len(system_map["architecture_issues"])
 
     data["system_map"] = system_map
 
@@ -129,23 +165,26 @@ def run(data):
     # 📊 ЛОГ
     # =========================
     data.setdefault("log", []).append(
-        f"👁 observer: files={total} modules={modules} errors={errors} broken_links={broken}"
+        f"👁 observer: files={total} modules={modules} errors={errors} broken_links={broken} arch_issues={arch_issues}"
     )
 
     # =========================
     # 🧠 УМНЫЙ ВЫВОД
     # =========================
+    if arch_issues > 0:
+        data["log"].append(f"⚠️ архитектура: найдено проблем ({arch_issues})")
+
     if broken > 0:
         if broken > 20:
-            data["log"].append(f"⚠️ observer: много связей отсутствует ({broken})")
+            data["log"].append(f"⚠️ связи: много отсутствует ({broken})")
         else:
-            data["log"].append(f"⚠️ observer: найдено {broken} проблемных связей")
+            data["log"].append(f"⚠️ связи: проблемные ({broken})")
 
-    elif errors > 0:
-        data["log"].append(f"⚠️ observer: найдено {errors} ошибок")
+    if errors > 0:
+        data["log"].append(f"⚠️ ошибки: {errors}")
 
-    else:
-        data["log"].append("✅ observer: система связана и стабильна")
+    if arch_issues == 0 and broken == 0 and errors == 0:
+        data["log"].append("✅ система стабильна")
 
     data["log"].append("👁 observer executed")
 

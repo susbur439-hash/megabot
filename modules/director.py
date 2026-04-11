@@ -10,6 +10,12 @@ from modules.system_guard import system_guard
 from modules.self_improver import self_improver
 from modules.doctor import doctor
 
+# 👁 OBSERVER ПОДКЛЮЧЕНИЕ
+try:
+    from modules.system_observer import run as observer_run
+except:
+    observer_run = None
+
 
 def run_task(data):
     data.setdefault("log", [])
@@ -114,7 +120,7 @@ def run_task(data):
     data["last_layer"] = "loop_end"
     data = doctor(data)
 
-    # ✂️ ограничение лога (ВАЖНО)
+    # ✂️ ограничение лога
     data["log"] = data["log"][-200:]
 
     return data
@@ -165,6 +171,15 @@ def run(task):
 
         data = run_task(data)
 
+        # 👁 OBSERVER (ВОТ ОН ТЕПЕРЬ РАБОТАЕТ)
+        if observer_run:
+            try:
+                data["log"].append("👁 OBSERVER START")
+                data = observer_run(data)
+                data["log"].append("👁 OBSERVER DONE")
+            except Exception as e:
+                data["log"].append(f"❌ observer error: {e}")
+
         score = data.get("evaluation", {}).get("score", 0)
 
         if score > best_score:
@@ -175,7 +190,7 @@ def run(task):
         print("=== RESULT ===")
         print(data)
 
-        # 🔥 ОСТАНОВКА ЕСЛИ ЦЕЛЬ ДОСТИГНУТА
+        # 🔥 ОСТАНОВКА
         if data.get("goal", {}).get("progress", 0) >= 100:
             print("🎯 Цель достигнута — остановка")
             break

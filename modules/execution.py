@@ -105,6 +105,10 @@ def run_python_module(module_path, data):
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
+        if not spec or not spec.loader:
+            data["log"].append("❌ module load failed")
+            return data, False
+
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
@@ -158,18 +162,28 @@ def create_new_module():
 # =========================
 def execution(data):
 
+    # 🔥 LOAD MEMORY
     memory = load_memory()
 
-    # сохраняем только полезное
-    data["experience"] = memory.get("experience", [])
-    data["goal"] = memory.get("goal", {"progress": 0})
-    data["cycle"] = memory.get("cycle", 0) + 1
+    for k, v in memory.items():
+        if k not in data:
+            data[k] = v
 
     data.setdefault("log", [])
+    data.setdefault("experience", [])
+    data.setdefault("goal", {
+        "name": "adaptive_goal",
+        "progress": 0,
+        "level": 1,
+        "target": 100
+    })
     data.setdefault("repeat_count", 0)
+
+    data["cycle"] = data.get("cycle", 0) + 1
 
     ensure_env(data)
 
+    # стратегия
     task_text = data.get("task", "").lower()
     if "файл" in task_text:
         data["strategy"] = "force_file"
@@ -181,24 +195,44 @@ def execution(data):
     before = data["goal"]["progress"]
     best_module = get_best_module(data["experience"])
 
+    # анти-зацикливание
+    if len(data["experience"]) >= 2:
+        if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
+            data["repeat_count"] += 1
+        else:
+            data["repeat_count"] = 0
+
+    stagnation = data["repeat_count"] >= 2
+
     # =========================
-    # DECISION
+    # 🎯 DECISION
     # =========================
-    if best_module:
+    if stagnation:
+        data["log"].append("💥 stagnation → real action")
+        data["strategy"] = "force_file"
+        data, _ = execute_real_action(data)
+        module_used = "real_action"
+
+    elif best_module and data.get("strategy") == "exploit":
         path = os.path.join("modules", best_module + ".py")
         data, _ = run_python_module(path, data)
         module_used = best_module
+        data["log"].append(f"🚀 exploit: {best_module}")
+
     else:
         module_name = create_new_module()
         path = os.path.join("modules", module_name + ".py")
         data, _ = run_python_module(path, data)
         module_used = module_name
+        data["log"].append("🧪 explore")
 
     after = data["goal"]["progress"]
 
     # fallback
     if after <= before:
         data["env"]["entropy"] += 1
+        data["log"].append("🧠 fallback → forcing action")
+        data["strategy"] = "force_file"
         data, _ = execute_real_action(data)
         module_used = "real_action"
 
@@ -217,6 +251,7 @@ def execution(data):
         "delta": delta
     })
 
+    # ✂️ лог
     data["log"] = data["log"][-200:]
 
     save_to_memory(data)

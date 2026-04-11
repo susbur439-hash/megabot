@@ -10,7 +10,7 @@ from modules.system_guard import system_guard
 from modules.self_improver import self_improver
 from modules.doctor import doctor
 
-# 👁 OBSERVER ПОДКЛЮЧЕНИЕ
+# 👁 OBSERVER (отдельный модуль, НЕ авто)
 try:
     from modules.system_observer import run as observer_run
 except:
@@ -41,7 +41,7 @@ def run_task(data):
 
     best = data.get("best_module")
 
-    # 🎯 БАЗОВОЕ РЕШЕНИЕ
+    # 🎯 РЕШЕНИЕ
     data["decision"] = "run_module" if best else "create_module"
     data["last_decision"] = data["decision"]
 
@@ -76,7 +76,6 @@ def run_task(data):
         strategy = "explore"
 
     data["strategy"] = strategy
-    data["log"].append(f"strategy: {strategy}")
 
     # 🎯 КОРРЕКЦИЯ
     if strategy == "exploit" and best:
@@ -87,13 +86,11 @@ def run_task(data):
         data["decision"] = "create_module"
 
     # 🎭 MODE
-    mode = {
+    data["mode"] = {
         "explore": "aggressive",
         "exploit": "balanced",
         "optimize": "safe"
     }[strategy]
-
-    data["mode"] = mode
 
     # 🛑 ANTI-LOOP
     if "prev_decision" in data:
@@ -104,7 +101,6 @@ def run_task(data):
 
     if data.get("repeat_count", 0) >= 3:
         data["decision"] = "create_module"
-        data["log"].append("🧠 anti-loop → force create")
         data["repeat_count"] = 0
 
     data["prev_decision"] = data["decision"]
@@ -114,7 +110,7 @@ def run_task(data):
         "aggressive": 1.5,
         "balanced": 1.0,
         "safe": 0.7
-    }[mode]
+    }[data["mode"]]
 
     # 🔥 END
     data["last_layer"] = "loop_end"
@@ -149,7 +145,10 @@ def run(task):
         "log": [],
         "memory": [],
         "experience": [],
-        "repeat_count": 0
+        "repeat_count": 0,
+
+        # 👁 ФЛАГ OBSERVER (ВАЖНО)
+        "run_observer": False
     }
 
     best_score = -1
@@ -162,7 +161,6 @@ def run(task):
 
         data = analyze_experience(data)
 
-        # 🔥 УМНЫЙ EXPLOIT
         if best_data and random.random() < 0.3:
             print("♻️ SMART EXPLOIT")
             data["best_module"] = best_data.get("best_module")
@@ -171,14 +169,16 @@ def run(task):
 
         data = run_task(data)
 
-        # 👁 OBSERVER (ВОТ ОН ТЕПЕРЬ РАБОТАЕТ)
-        if observer_run:
+        # 👁 OBSERVER (ТОЛЬКО ЕСЛИ ВКЛЮЧЕН)
+        if data.get("run_observer") and observer_run:
+            print("👁 OBSERVER RUN")
             try:
-                data["log"].append("👁 OBSERVER START")
                 data = observer_run(data)
-                data["log"].append("👁 OBSERVER DONE")
             except Exception as e:
-                data["log"].append(f"❌ observer error: {e}")
+                print("❌ observer error:", e)
+
+            # 🔴 СРАЗУ ВЫКЛЮЧАЕМ (один раз)
+            data["run_observer"] = False
 
         score = data.get("evaluation", {}).get("score", 0)
 
@@ -190,7 +190,6 @@ def run(task):
         print("=== RESULT ===")
         print(data)
 
-        # 🔥 ОСТАНОВКА
         if data.get("goal", {}).get("progress", 0) >= 100:
             print("🎯 Цель достигнута — остановка")
             break

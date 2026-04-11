@@ -41,19 +41,27 @@ def run(data):
             rel_path = os.path.relpath(full_path, project_root)
 
             system_map["files"].append(rel_path)
+            system_map["modules"].append(rel_path)
 
             try:
                 with open(full_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
-                system_map["modules"].append(rel_path)
-
-                # 🔗 импорт
+                # =========================
+                # 🔗 УЛУЧШЕННЫЙ ПАРСИНГ ИМПОРТОВ
+                # =========================
                 imports = []
-                matches = re.findall(r"import (\w+)", content)
-                matches += re.findall(r"from (\w+)", content)
 
-                imports.extend(matches)
+                # import x / import x.y
+                matches = re.findall(r"import\s+([\w\.]+)", content)
+
+                # from x import
+                matches += re.findall(r"from\s+([\w\.]+)\s+import", content)
+
+                for m in matches:
+                    parts = m.split(".")
+                    imports.append(parts[-1])  # берем имя модуля
+
                 imports_map[rel_path] = imports
 
                 # 🔗 run()
@@ -81,7 +89,7 @@ def run(data):
     # =========================
     # 🧠 АНАЛИЗ СВЯЗЕЙ
     # =========================
-    all_modules = set(system_map["modules"])
+    all_module_names = set(os.path.basename(f) for f in system_map["modules"])
 
     for module, imports in imports_map.items():
         for imp in imports:
@@ -89,15 +97,9 @@ def run(data):
             if imp in std_libs or len(imp) < 2:
                 continue
 
-            possible_paths = [
-                f"{imp}.py",
-                f"modules/{imp}.py",
-                f"./{imp}.py"
-            ]
+            possible = imp + ".py"
 
-            found = any(p in all_modules for p in possible_paths)
-
-            if not found:
+            if possible not in all_module_names:
                 system_map["broken_links"].append({
                     "module": module,
                     "missing": imp
@@ -114,41 +116,37 @@ def run(data):
     except Exception:
         data.setdefault("log", []).append("⚠️ observer: blueprint не найден")
 
+    required = blueprint.get("required_modules", [])
+
     # =========================
     # 🧠 ПРОВЕРКА АРХИТЕКТУРЫ
     # =========================
-    required = blueprint.get("required_modules", [])
-    pipeline = blueprint.get("pipeline", [])
 
-    existing_files = set(system_map["modules"])
+    # нормализуем имена файлов
+    existing_names = set(os.path.basename(f) for f in system_map["modules"])
 
-    # ❌ отсутствующие обязательные модули
+    # ❌ отсутствующие
     for req in required:
-        found = any(req in f for f in existing_files)
-        if not found:
+        if req not in existing_names:
             system_map["architecture_issues"].append({
                 "type": "missing_module",
                 "module": req
             })
 
-    # ⚠️ неиспользуемые модули
+    # 🧠 определяем используемые модули
     used_modules = set()
 
-    for conn in system_map["connections"]:
-        for imp in conn["imports"]:
+    for imports in imports_map.values():
+        for imp in imports:
             used_modules.add(imp + ".py")
 
-    unused = []
-    for f in existing_files:
-        name = os.path.basename(f)
-        if name not in required and name not in used_modules:
-            unused.append(name)
-
-    for u in unused:
-        system_map["architecture_issues"].append({
-            "type": "unused_module",
-            "module": u
-        })
+    # ⚠️ неиспользуемые
+    for f in existing_names:
+        if f not in required and f not in used_modules:
+            system_map["architecture_issues"].append({
+                "type": "unused_module",
+                "module": f
+            })
 
     # =========================
     # 📊 СТАТИСТИКА
@@ -172,13 +170,13 @@ def run(data):
     # 🧠 УМНЫЙ ВЫВОД
     # =========================
     if arch_issues > 0:
-        data["log"].append(f"⚠️ архитектура: найдено проблем ({arch_issues})")
+        data["log"].append(f"⚠️ архитектура: проблем ({arch_issues})")
 
     if broken > 0:
         if broken > 20:
-            data["log"].append(f"⚠️ связи: много отсутствует ({broken})")
+            data["log"].append(f"⚠️ связи: много ({broken})")
         else:
-            data["log"].append(f"⚠️ связи: проблемные ({broken})")
+            data["log"].append(f"⚠️ связи: ({broken})")
 
     if errors > 0:
         data["log"].append(f"⚠️ ошибки: {errors}")

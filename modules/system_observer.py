@@ -9,14 +9,25 @@ def run(data):
         "files": [],
         "modules": [],
         "errors": [],
-        "connections": []
+        "connections": [],
+        "broken_links": []
     }
 
     skip_dirs = {"__pycache__", ".git", ".github", "venv", "env"}
 
+    # стандартные библиотеки (игнор)
+    std_libs = {
+        "os", "sys", "json", "re", "math", "random",
+        "time", "datetime", "collections", "itertools",
+        "subprocess", "threading", "asyncio", "logging",
+        "importlib"
+    }
+
     imports_map = {}
 
-    # 📁 обход файлов
+    # =========================
+    # 📁 СКАН ФАЙЛОВ
+    # =========================
     for root, dirs, files in os.walk(project_root):
 
         dirs[:] = [d for d in dirs if d not in skip_dirs]
@@ -26,84 +37,116 @@ def run(data):
                 continue
 
             full_path = os.path.join(root, file)
-            system_map["files"].append(full_path)
+            rel_path = os.path.relpath(full_path, project_root)
+
+            system_map["files"].append(rel_path)
 
             try:
                 with open(full_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
-                system_map["modules"].append(file)
+                system_map["modules"].append(rel_path)
 
-                # 🔗 поиск импортов
+                # =========================
+                # 🔗 ПОИСК ИМПОРТОВ
+                # =========================
                 imports = []
 
                 matches = re.findall(r"import (\w+)", content)
                 matches += re.findall(r"from (\w+)", content)
 
                 imports.extend(matches)
-                imports_map[file] = imports
+                imports_map[rel_path] = imports
 
-                # 🔗 проверка run
+                # =========================
+                # 🔗 ПРОВЕРКА run()
+                # =========================
                 has_run = "def run(" in content
 
                 system_map["connections"].append({
-                    "module": file,
+                    "module": rel_path,
                     "has_run": has_run,
                     "imports": imports
                 })
 
-                # ⚠️ простые ошибки
+                # =========================
+                # ⚠️ ПРОСТЫЕ ОШИБКИ
+                # =========================
                 if "import *" in content:
                     system_map["errors"].append({
-                        "file": full_path,
+                        "file": rel_path,
                         "error": "wildcard import detected"
                     })
 
             except Exception as e:
                 system_map["errors"].append({
-                    "file": full_path,
+                    "file": rel_path,
                     "error": str(e)
                 })
 
+    # =========================
     # 🧠 АНАЛИЗ СВЯЗЕЙ
-    broken_links = []
-
+    # =========================
     all_modules = set(system_map["modules"])
 
     for module, imports in imports_map.items():
         for imp in imports:
-            # если импорт похож на наш модуль, но его нет
-            if imp.endswith(".py"):
-                imp = imp.replace(".py", "")
 
-            possible = imp + ".py"
+            # игнор стандартных библиотек
+            if imp in std_libs:
+                continue
 
-            if possible not in all_modules:
-                broken_links.append({
+            # игнор коротких/подозрительных
+            if len(imp) < 2:
+                continue
+
+            # пробуем найти файл
+            possible_paths = [
+                f"{imp}.py",
+                f"modules/{imp}.py",
+                f"./{imp}.py"
+            ]
+
+            found = any(p in all_modules for p in possible_paths)
+
+            if not found:
+                system_map["broken_links"].append({
                     "module": module,
                     "missing": imp
                 })
 
-    # 📊 запись
-    data["system_map"] = system_map
-    data["system_map"]["broken_links"] = broken_links
-
+    # =========================
+    # 📊 СТАТИСТИКА
+    # =========================
     total = len(system_map["files"])
     modules = len(system_map["modules"])
     errors = len(system_map["errors"])
-    broken = len(broken_links)
+    broken = len(system_map["broken_links"])
 
-    # 📊 лог
+    data["system_map"] = system_map
+
+    # =========================
+    # 📊 ЛОГ
+    # =========================
     data.setdefault("log", []).append(
         f"👁 observer: files={total} modules={modules} errors={errors} broken_links={broken}"
     )
 
-    # 🧠 интеллект
+    # =========================
+    # 🧠 УМНЫЙ ВЫВОД
+    # =========================
     if broken > 0:
-        data["log"].append(f"⚠️ observer: найдено {broken} сломанных связей")
+        if broken > 20:
+            data["log"].append(f"⚠️ observer: много связей отсутствует ({broken})")
+        else:
+            data["log"].append(f"⚠️ observer: найдено {broken} проблемных связей")
+
     elif errors > 0:
         data["log"].append(f"⚠️ observer: найдено {errors} ошибок")
+
     else:
         data["log"].append("✅ observer: система связана и стабильна")
+
+    data["log"].append("👁 observer executed")
 
     return data

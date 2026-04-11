@@ -5,6 +5,12 @@ import importlib.util
 from environment import run_environment
 from modules.control import control
 
+# 👁 OBSERVER
+try:
+    from modules.system_observer import run as observer_run
+except:
+    observer_run = None
+
 
 # =========================
 # 💾 MEMORY
@@ -198,6 +204,13 @@ def execution(data):
     data.setdefault("repeat_count", 0)
 
     ensure_env(data)
+
+    # 👁 SYSTEM OBSERVER (ВСЕГДА)
+    if observer_run:
+        try:
+            data = observer_run(data)
+        except Exception as e:
+            data["log"].append(f"❌ observer error: {e}")
 
     # 🔥 авто-определение задачи
     task_text = data.get("task", "").lower()

@@ -205,12 +205,15 @@ def execution(data):
 
     ensure_env(data)
 
-    # 👁 SYSTEM OBSERVER (ВСЕГДА)
-    if observer_run:
-        try:
-            data = observer_run(data)
-        except Exception as e:
-            data["log"].append(f"❌ observer error: {e}")
+    # 🛑 ЗАЩИТА ОТ ЗАЦИКЛИВАНИЯ OBSERVER
+    if not data.get("observer_ran", False):
+        if observer_run:
+            try:
+                data = observer_run(data)
+                data["observer_ran"] = True
+                data["log"].append("👁 observer executed")
+            except Exception as e:
+                data["log"].append(f"❌ observer error: {e}")
 
     # 🔥 авто-определение задачи
     task_text = data.get("task", "").lower()
@@ -296,6 +299,9 @@ def execution(data):
     })
 
     data["log"] = data["log"][-200:]
+
+    # 🔄 СБРОС ФЛАГА (следующий цикл)
+    data["observer_ran"] = False
 
     save_to_memory(data)
 

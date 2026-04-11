@@ -104,7 +104,7 @@ def run(data):
                 continue
 
             found = any(
-                imp + ".py" in f or f.endswith(f"/{imp}.py")
+                f.endswith(f"/{imp}.py") or f == f"{imp}.py"
                 for f in existing_files
             )
 
@@ -179,11 +179,18 @@ def run(data):
     print(f"🚨 critical={stats['critical']} ⚠️ warning={stats['warning']} ℹ️ info={stats['info']}")
 
     # =========================
-    # 📋 ЛОГ (МИНИМУМ)
+    # 📋 УМНЫЙ ЛОГ (НЕ ЗАСОРЯЕТ)
     # =========================
     data.setdefault("log", []).append(
-        f"👁 observer: crit={stats['critical']} warn={stats['warning']}"
+        f"👁 observer: crit={stats['critical']} warn={stats['warning']} info={stats['info']}"
     )
+
+    # 🔥 ТОП-5 ПРОБЛЕМ В ЛОГ (чтобы ты видел сразу)
+    for item in report["critical"][:3]:
+        data["log"].append(f"❌ {item}")
+
+    for item in report["warning"][:3]:
+        data["log"].append(f"⚠️ {item}")
 
     print("✅ OBSERVER DONE")
     return data

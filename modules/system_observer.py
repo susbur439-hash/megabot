@@ -18,11 +18,12 @@ def run(data):
 
     skip_dirs = {"__pycache__", ".git", ".github", "venv", "env"}
 
+    # стандарт + популярные библиотеки
     std_libs = {
         "os", "sys", "json", "re", "math", "random",
         "time", "datetime", "collections", "itertools",
         "subprocess", "threading", "asyncio", "logging",
-        "importlib"
+        "importlib", "traceback", "flask"
     }
 
     imports_map = {}
@@ -59,12 +60,11 @@ def run(data):
 
                 for m in matches:
                     parts = m.split(".")
-                    module_name = parts[-1]
+                    module_name = parts[0]  # ВАЖНО: берем корень
 
                     if module_name not in imports:
                         imports.append(module_name)
 
-                    # фиксируем использование
                     usage_map.setdefault(module_name + ".py", []).append(rel_path)
 
                 imports_map[rel_path] = imports
@@ -82,6 +82,9 @@ def run(data):
                         "file": rel_path,
                         "error": "wildcard import detected"
                     })
+                    system_map["recommendations"].append(
+                        f"{rel_path}: убрать import *"
+                    )
 
             except Exception as e:
                 system_map["errors"].append({
@@ -97,12 +100,19 @@ def run(data):
     for module, imports in imports_map.items():
         for imp in imports:
 
+            # игнор библиотек
             if imp in std_libs or len(imp) < 2:
                 continue
 
-            possible = imp + ".py"
+            # ищем и в корне, и в modules/
+            possible_files = {
+                imp + ".py",
+                f"modules/{imp}.py"
+            }
 
-            if possible not in all_module_names:
+            found = any(os.path.basename(p) in all_module_names for p in possible_files)
+
+            if not found:
                 system_map["broken_links"].append({
                     "module": module,
                     "missing": imp
@@ -132,7 +142,14 @@ def run(data):
     # ❌ ОТСУТСТВУЮЩИЕ МОДУЛИ
     # =========================
     for req in required:
-        if req not in existing_names:
+        req_file = req if req.endswith(".py") else req + ".py"
+
+        found = (
+            req_file in existing_names or
+            f"modules/{req_file}" in system_map["modules"]
+        )
+
+        if not found:
             system_map["architecture_issues"].append({
                 "type": "missing_module",
                 "module": req
@@ -145,7 +162,11 @@ def run(data):
     # ⚠️ НЕИСПОЛЬЗУЕМЫЕ МОДУЛИ
     # =========================
     for mod in existing_names:
-        if mod not in usage_map and mod not in required:
+        if mod not in usage_map and mod.replace(".py", "") not in required:
+            # игнор служебных
+            if mod in {"main.py", "__init__.py"}:
+                continue
+
             system_map["architecture_issues"].append({
                 "type": "unused_module",
                 "module": mod
@@ -158,7 +179,10 @@ def run(data):
     # 🔄 ПРОВЕРКА PIPELINE
     # =========================
     for step in pipeline:
-        found = any(step in m for m in existing_names)
+        step_file = step if step.endswith(".py") else step + ".py"
+
+        found = any(step in f for f in system_map["modules"])
+
         if not found:
             system_map["architecture_issues"].append({
                 "type": "pipeline_missing",
@@ -188,7 +212,7 @@ def run(data):
     )
 
     # =========================
-    # 🧠 УМНЫЙ ВЫВОД
+    # 🧠 ВЫВОД
     # =========================
     if arch_issues > 0:
         data["log"].append(f"⚠️ архитектура: {arch_issues} проблем")

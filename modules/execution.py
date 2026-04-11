@@ -13,7 +13,20 @@ except:
 
 
 # =========================
-# 💾 MEMORY
+# 💾 MEMORY LOAD
+# =========================
+def load_memory():
+    try:
+        if os.path.exists("memory.json"):
+            with open("memory.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+    except:
+        pass
+    return {}
+
+
+# =========================
+# 💾 MEMORY SAVE
 # =========================
 def save_to_memory(data):
     try:
@@ -155,12 +168,21 @@ def create_new_module():
 # =========================
 def execution(data):
 
+    # =========================
+    # 🔥 LOAD MEMORY (КЛЮЧЕВОЕ)
+    # =========================
+    memory = load_memory()
+
+    # аккуратно объединяем
+    for k, v in memory.items():
+        if k not in data:
+            data[k] = v
+
     data.setdefault("log", [])
     data.setdefault("experience", [])
     data.setdefault("goal", {"progress": 0})
     data.setdefault("repeat_count", 0)
 
-    # 🔥 ВАЖНО: cycle НЕ накапливаем между запусками
     data["cycle"] = data.get("cycle", 0) + 1
 
     ensure_env(data)
@@ -233,18 +255,18 @@ def execution(data):
         "delta": delta
     })
 
-    # ✂️ обрезаем лог
+    # ✂️ лог
     data["log"] = data["log"][-200:]
 
     # =========================
-    # 👁 FINAL OBSERVER (ОДИН РАЗ)
+    # 👁 FINAL OBSERVER (ОДИН РАЗ ЗА ВСЁ ВРЕМЯ)
     # =========================
     if observer_run and not data.get("observer_done", False):
         try:
             data["log"].append("👁 FINAL OBSERVER START")
             data = observer_run(data)
             data["log"].append("👁 FINAL OBSERVER DONE")
-            data["observer_done"] = True  # ← КЛЮЧЕВОЕ
+            data["observer_done"] = True
         except Exception as e:
             data["log"].append(f"❌ observer error: {e}")
 

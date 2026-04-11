@@ -1,9 +1,10 @@
 import os
-import importlib.util
+import re
 
 
 def run(data):
     project_root = "."
+
     system_map = {
         "files": [],
         "modules": [],
@@ -11,48 +12,98 @@ def run(data):
         "connections": []
     }
 
+    skip_dirs = {"__pycache__", ".git", ".github", "venv", "env"}
+
+    imports_map = {}
+
     # 📁 обход файлов
     for root, dirs, files in os.walk(project_root):
+
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+
         for file in files:
-            if file.endswith(".py"):
-                full_path = os.path.join(root, file)
+            if not file.endswith(".py"):
+                continue
 
-                system_map["files"].append(full_path)
+            full_path = os.path.join(root, file)
+            system_map["files"].append(full_path)
 
-                # 🧠 проверка импорта
-                try:
-                    spec = importlib.util.spec_from_file_location("mod", full_path)
-                    if spec and spec.loader:
-                        module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(module)
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    content = f.read()
 
-                        system_map["modules"].append(file)
+                system_map["modules"].append(file)
 
-                        # 🔗 проверка функции run
-                        if hasattr(module, "run"):
-                            system_map["connections"].append({
-                                "module": file,
-                                "has_run": True
-                            })
-                        else:
-                            system_map["connections"].append({
-                                "module": file,
-                                "has_run": False
-                            })
+                # 🔗 поиск импортов
+                imports = []
 
-                except Exception as e:
+                matches = re.findall(r"import (\w+)", content)
+                matches += re.findall(r"from (\w+)", content)
+
+                imports.extend(matches)
+                imports_map[file] = imports
+
+                # 🔗 проверка run
+                has_run = "def run(" in content
+
+                system_map["connections"].append({
+                    "module": file,
+                    "has_run": has_run,
+                    "imports": imports
+                })
+
+                # ⚠️ простые ошибки
+                if "import *" in content:
                     system_map["errors"].append({
                         "file": full_path,
-                        "error": str(e)
+                        "error": "wildcard import detected"
                     })
 
-    # 📊 статистика
-    data["system_map"] = system_map
+            except Exception as e:
+                system_map["errors"].append({
+                    "file": full_path,
+                    "error": str(e)
+                })
 
+    # 🧠 АНАЛИЗ СВЯЗЕЙ
+    broken_links = []
+
+    all_modules = set(system_map["modules"])
+
+    for module, imports in imports_map.items():
+        for imp in imports:
+            # если импорт похож на наш модуль, но его нет
+            if imp.endswith(".py"):
+                imp = imp.replace(".py", "")
+
+            possible = imp + ".py"
+
+            if possible not in all_modules:
+                broken_links.append({
+                    "module": module,
+                    "missing": imp
+                })
+
+    # 📊 запись
+    data["system_map"] = system_map
+    data["system_map"]["broken_links"] = broken_links
+
+    total = len(system_map["files"])
+    modules = len(system_map["modules"])
+    errors = len(system_map["errors"])
+    broken = len(broken_links)
+
+    # 📊 лог
     data.setdefault("log", []).append(
-        f"👁 observer: files={len(system_map['files'])} "
-        f"modules={len(system_map['modules'])} "
-        f"errors={len(system_map['errors'])}"
+        f"👁 observer: files={total} modules={modules} errors={errors} broken_links={broken}"
     )
+
+    # 🧠 интеллект
+    if broken > 0:
+        data["log"].append(f"⚠️ observer: найдено {broken} сломанных связей")
+    elif errors > 0:
+        data["log"].append(f"⚠️ observer: найдено {errors} ошибок")
+    else:
+        data["log"].append("✅ observer: система связана и стабильна")
 
     return data

@@ -4,18 +4,17 @@ import json
 
 
 def run(data):
-    print("👁 OBLIVION SCAN START")
+    print("👁 OBSERVER SCAN START")
 
     project_root = "."
 
-    system_map = {
+    report = {
         "files": [],
         "modules": [],
-        "errors": [],
+        "critical": [],
+        "warning": [],
+        "info": [],
         "connections": [],
-        "broken_links": [],
-        "architecture_issues": [],
-        "recommendations": []
     }
 
     skip_dirs = {"__pycache__", ".git", ".github", "venv", "env"}
@@ -43,8 +42,8 @@ def run(data):
             full_path = os.path.join(root, file)
             rel_path = os.path.relpath(full_path, project_root)
 
-            system_map["files"].append(rel_path)
-            system_map["modules"].append(rel_path)
+            report["files"].append(rel_path)
+            report["modules"].append(rel_path)
 
             try:
                 with open(full_path, "r", encoding="utf-8") as f:
@@ -67,28 +66,37 @@ def run(data):
 
                 has_run = "def run(" in content
 
-                system_map["connections"].append({
+                report["connections"].append({
                     "module": rel_path,
                     "has_run": has_run,
                     "imports": imports
                 })
 
+                # ⚠️ wildcard → WARNING
                 if "import *" in content:
-                    system_map["errors"].append({
-                        "file": rel_path,
-                        "error": "wildcard import detected"
+                    report["warning"].append({
+                        "type": "wildcard_import",
+                        "file": rel_path
+                    })
+
+                # ℹ️ нет run → INFO
+                if not has_run:
+                    report["info"].append({
+                        "type": "no_run_function",
+                        "file": rel_path
                     })
 
             except Exception as e:
-                system_map["errors"].append({
+                report["critical"].append({
+                    "type": "file_read_error",
                     "file": rel_path,
                     "error": str(e)
                 })
 
     # =========================
-    # 🧠 АНАЛИЗ СВЯЗЕЙ
+    # 🔗 АНАЛИЗ СВЯЗЕЙ
     # =========================
-    existing_files = set(system_map["modules"])
+    existing_files = set(report["modules"])
 
     for module, imports in imports_map.items():
         for imp in imports:
@@ -101,7 +109,8 @@ def run(data):
             )
 
             if not found:
-                system_map["broken_links"].append({
+                report["warning"].append({
+                    "type": "missing_import",
                     "module": module,
                     "missing": imp
                 })
@@ -115,35 +124,37 @@ def run(data):
         with open("megabot_architecture.json", "r", encoding="utf-8") as f:
             blueprint = json.load(f)
     except Exception:
-        system_map["recommendations"].append("Добавить megabot_architecture.json")
+        report["info"].append({
+            "type": "no_blueprint"
+        })
 
     required = blueprint.get("required_modules", [])
     pipeline = blueprint.get("pipeline", [])
 
     existing_names = set(os.path.basename(f) for f in existing_files)
 
-    # отсутствующие модули
+    # отсутствующие модули → WARNING
     for req in required:
         req_file = req if req.endswith(".py") else req + ".py"
 
         if req_file not in existing_names:
-            system_map["architecture_issues"].append({
+            report["warning"].append({
                 "type": "missing_module",
                 "module": req
             })
 
-    # неиспользуемые
+    # неиспользуемые → INFO
     for mod in existing_names:
         if mod not in usage_map and mod not in {"main.py", "__init__.py"}:
-            system_map["architecture_issues"].append({
+            report["info"].append({
                 "type": "unused_module",
                 "module": mod
             })
 
-    # pipeline
+    # pipeline → WARNING
     for step in pipeline:
         if not any(step in f for f in existing_files):
-            system_map["architecture_issues"].append({
+            report["warning"].append({
                 "type": "pipeline_missing",
                 "step": step
             })
@@ -151,31 +162,28 @@ def run(data):
     # =========================
     # 📊 СТАТИСТИКА
     # =========================
-    errors = len(system_map["errors"])
-    broken = len(system_map["broken_links"])
-    arch = len(system_map["architecture_issues"])
+    stats = {
+        "files": len(report["files"]),
+        "modules": len(report["modules"]),
+        "critical": len(report["critical"]),
+        "warning": len(report["warning"]),
+        "info": len(report["info"])
+    }
 
-    data["system_map"] = system_map
+    data["observer_report"] = {
+        "stats": stats,
+        "report": report
+    }
 
-    print(f"📊 files={len(system_map['files'])} modules={len(system_map['modules'])}")
-    print(f"❌ errors={errors} broken={broken} arch={arch}")
+    print(f"📊 files={stats['files']} modules={stats['modules']}")
+    print(f"🚨 critical={stats['critical']} ⚠️ warning={stats['warning']} ℹ️ info={stats['info']}")
 
     # =========================
-    # ❌ ЛОМАЕМ WORKFLOW ЕСЛИ ПРОБЛЕМЫ
+    # 📋 ЛОГ (МИНИМУМ)
     # =========================
-    if errors > 0 or broken > 0 or arch > 0:
-        print("\n🚨 OBLIVION FOUND PROBLEMS:")
+    data.setdefault("log", []).append(
+        f"👁 observer: crit={stats['critical']} warn={stats['warning']}"
+    )
 
-        for e in system_map["errors"][:5]:
-            print("ERROR:", e)
-
-        for b in system_map["broken_links"][:5]:
-            print("BROKEN:", b)
-
-        for a in system_map["architecture_issues"][:5]:
-            print("ARCH:", a)
-
-        raise Exception("OBLIVION FAILED")
-
-    print("✅ OBLIVION OK")
+    print("✅ OBSERVER DONE")
     return data

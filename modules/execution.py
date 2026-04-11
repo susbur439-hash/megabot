@@ -19,7 +19,13 @@ def load_memory():
     try:
         if os.path.exists("memory.json"):
             with open("memory.json", "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+
+                # 🔥 УДАЛЯЕМ СТАРЫЙ OBSERVER ИЗ ЛОГА
+                if "log" in data:
+                    data["log"] = [x for x in data["log"] if "OBSERVER" not in x]
+
+                return data
     except:
         pass
     return {}
@@ -168,12 +174,9 @@ def create_new_module():
 # =========================
 def execution(data):
 
-    # =========================
-    # 🔥 LOAD MEMORY (КЛЮЧЕВОЕ)
-    # =========================
+    # 🔥 LOAD MEMORY
     memory = load_memory()
 
-    # аккуратно объединяем
     for k, v in memory.items():
         if k not in data:
             data[k] = v
@@ -258,9 +261,7 @@ def execution(data):
     # ✂️ лог
     data["log"] = data["log"][-200:]
 
-    # =========================
-    # 👁 FINAL OBSERVER (ОДИН РАЗ ЗА ВСЁ ВРЕМЯ)
-    # =========================
+    # 👁 OBSERVER (ОДИН РАЗ)
     if observer_run and not data.get("observer_done", False):
         try:
             data["log"].append("👁 FINAL OBSERVER START")

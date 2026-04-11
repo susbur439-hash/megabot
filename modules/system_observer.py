@@ -12,7 +12,8 @@ def run(data):
         "errors": [],
         "connections": [],
         "broken_links": [],
-        "architecture_issues": []
+        "architecture_issues": [],
+        "recommendations": []
     }
 
     skip_dirs = {"__pycache__", ".git", ".github", "venv", "env"}
@@ -25,6 +26,7 @@ def run(data):
     }
 
     imports_map = {}
+    usage_map = {}
 
     # =========================
     # 📁 СКАН ФАЙЛОВ
@@ -47,24 +49,26 @@ def run(data):
                 with open(full_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
-                # =========================
-                # 🔗 УЛУЧШЕННЫЙ ПАРСИНГ ИМПОРТОВ
-                # =========================
                 imports = []
 
                 # import x / import x.y
                 matches = re.findall(r"import\s+([\w\.]+)", content)
 
-                # from x import
+                # from x import y
                 matches += re.findall(r"from\s+([\w\.]+)\s+import", content)
 
                 for m in matches:
                     parts = m.split(".")
-                    imports.append(parts[-1])  # берем имя модуля
+                    module_name = parts[-1]
+
+                    if module_name not in imports:
+                        imports.append(module_name)
+
+                    # фиксируем использование
+                    usage_map.setdefault(module_name + ".py", []).append(rel_path)
 
                 imports_map[rel_path] = imports
 
-                # 🔗 run()
                 has_run = "def run(" in content
 
                 system_map["connections"].append({
@@ -73,7 +77,6 @@ def run(data):
                     "imports": imports
                 })
 
-                # ⚠️ ошибки
                 if "import *" in content:
                     system_map["errors"].append({
                         "file": rel_path,
@@ -104,6 +107,9 @@ def run(data):
                     "module": module,
                     "missing": imp
                 })
+                system_map["recommendations"].append(
+                    f"{module}: импорт '{imp}' не найден"
+                )
 
     # =========================
     # 🧠 ПОДКЛЮЧЕНИЕ АРХИТЕКТУРЫ
@@ -115,38 +121,52 @@ def run(data):
             blueprint = json.load(f)
     except Exception:
         data.setdefault("log", []).append("⚠️ observer: blueprint не найден")
+        system_map["recommendations"].append("Добавить megabot_architecture.json")
 
     required = blueprint.get("required_modules", [])
+    pipeline = blueprint.get("pipeline", [])
 
-    # =========================
-    # 🧠 ПРОВЕРКА АРХИТЕКТУРЫ
-    # =========================
-
-    # нормализуем имена файлов
     existing_names = set(os.path.basename(f) for f in system_map["modules"])
 
-    # ❌ отсутствующие
+    # =========================
+    # ❌ ОТСУТСТВУЮЩИЕ МОДУЛИ
+    # =========================
     for req in required:
         if req not in existing_names:
             system_map["architecture_issues"].append({
                 "type": "missing_module",
                 "module": req
             })
+            system_map["recommendations"].append(
+                f"Отсутствует обязательный модуль: {req}"
+            )
 
-    # 🧠 определяем используемые модули
-    used_modules = set()
-
-    for imports in imports_map.values():
-        for imp in imports:
-            used_modules.add(imp + ".py")
-
-    # ⚠️ неиспользуемые
-    for f in existing_names:
-        if f not in required and f not in used_modules:
+    # =========================
+    # ⚠️ НЕИСПОЛЬЗУЕМЫЕ МОДУЛИ
+    # =========================
+    for mod in existing_names:
+        if mod not in usage_map and mod not in required:
             system_map["architecture_issues"].append({
                 "type": "unused_module",
-                "module": f
+                "module": mod
             })
+            system_map["recommendations"].append(
+                f"Модуль не используется: {mod}"
+            )
+
+    # =========================
+    # 🔄 ПРОВЕРКА PIPELINE
+    # =========================
+    for step in pipeline:
+        found = any(step in m for m in existing_names)
+        if not found:
+            system_map["architecture_issues"].append({
+                "type": "pipeline_missing",
+                "step": step
+            })
+            system_map["recommendations"].append(
+                f"Отсутствует этап pipeline: {step}"
+            )
 
     # =========================
     # 📊 СТАТИСТИКА
@@ -156,6 +176,7 @@ def run(data):
     errors = len(system_map["errors"])
     broken = len(system_map["broken_links"])
     arch_issues = len(system_map["architecture_issues"])
+    recs = len(system_map["recommendations"])
 
     data["system_map"] = system_map
 
@@ -163,23 +184,23 @@ def run(data):
     # 📊 ЛОГ
     # =========================
     data.setdefault("log", []).append(
-        f"👁 observer: files={total} modules={modules} errors={errors} broken_links={broken} arch_issues={arch_issues}"
+        f"👁 observer: files={total} modules={modules} errors={errors} broken={broken} arch={arch_issues}"
     )
 
     # =========================
     # 🧠 УМНЫЙ ВЫВОД
     # =========================
     if arch_issues > 0:
-        data["log"].append(f"⚠️ архитектура: проблем ({arch_issues})")
+        data["log"].append(f"⚠️ архитектура: {arch_issues} проблем")
 
     if broken > 0:
-        if broken > 20:
-            data["log"].append(f"⚠️ связи: много ({broken})")
-        else:
-            data["log"].append(f"⚠️ связи: ({broken})")
+        data["log"].append(f"⚠️ связи: {broken}")
 
     if errors > 0:
         data["log"].append(f"⚠️ ошибки: {errors}")
+
+    if recs > 0:
+        data["log"].append(f"💡 рекомендаций: {recs}")
 
     if arch_issues == 0 and broken == 0 and errors == 0:
         data["log"].append("✅ система стабильна")

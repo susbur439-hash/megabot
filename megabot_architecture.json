@@ -1,5 +1,5 @@
 {
-  "version": "10.0",
+  "version": "10.1",
 
   "core_loop": [
     "task",
@@ -12,7 +12,7 @@
     "execution",
     "evaluation",
     "learning",
-    "control",
+    "control_layer",
     "goal_update",
     "loop"
   ],
@@ -20,22 +20,42 @@
   "layers": {
     "input": ["task_interpreter"],
     "state": ["state_manager"],
-    "core": ["analysis", "planning", "decision", "action"],
+
+    "analysis": ["analysis"],
+    "planning": ["planning"],
+    "decision": ["decision"],
+    "action": ["action"],
+
     "execution": ["execution"],
     "evaluation": ["evaluation"],
+
     "learning": ["learning", "self_improver"],
+
     "control": ["system_guard", "control_layer"],
+
     "goal": ["goals"],
     "loop": ["director"]
   },
 
   "required_modules": [
+    "task_interpreter",
+    "state_manager",
+
     "analysis",
+    "planning",
     "decision",
+    "action",
+
     "execution",
-    "goals",
-    "system_guard",
+    "evaluation",
+
+    "learning",
     "self_improver",
+
+    "system_guard",
+    "control_layer",
+
+    "goals",
     "director"
   ],
 

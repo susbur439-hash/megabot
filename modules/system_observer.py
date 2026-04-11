@@ -23,7 +23,7 @@ def run(data):
         "os", "sys", "json", "re", "math", "random",
         "time", "datetime", "collections", "itertools",
         "subprocess", "threading", "asyncio", "logging",
-        "importlib", "traceback", "flask"
+        "importlib", "traceback", "flask", "copy"
     }
 
     imports_map = {}
@@ -51,17 +51,16 @@ def run(data):
 
                 imports = []
 
-                # 🔥 точные regex
                 matches = re.findall(r"^\s*import\s+([\w\.]+)", content, re.MULTILINE)
                 matches += re.findall(r"^\s*from\s+([\w\.]+)\s+import", content, re.MULTILINE)
 
                 for m in matches:
-                    module_name = m.split(".")[0]
+                    base_module = m.split(".")[0]
 
-                    if module_name not in imports:
-                        imports.append(module_name)
+                    if base_module not in imports:
+                        imports.append(base_module)
 
-                    usage_map.setdefault(module_name + ".py", []).append(rel_path)
+                    usage_map.setdefault(base_module + ".py", []).append(rel_path)
 
                 imports_map[rel_path] = imports
 
@@ -73,14 +72,13 @@ def run(data):
                     "imports": imports
                 })
 
-                # ⚠️ wildcard import (нормально ловим)
+                # wildcard import
                 if re.search(r"from\s+[\w\.]+\s+import\s+\*", content):
                     report["warning"].append({
                         "type": "wildcard_import",
                         "file": rel_path
                     })
 
-                # ℹ️ нет run
                 if not has_run:
                     report["info"].append({
                         "type": "no_run_function",
@@ -95,18 +93,29 @@ def run(data):
                 })
 
     # =========================
-    # 🔗 АНАЛИЗ СВЯЗЕЙ
+    # 🔗 АНАЛИЗ СВЯЗЕЙ (FIXED)
     # =========================
     existing_files = set(report["modules"])
 
+    # собираем имена файлов и папок
+    file_names = {os.path.basename(f) for f in existing_files}
+    dir_names = set(next(os.walk(project_root))[1])
+
     for module, imports in imports_map.items():
         for imp in imports:
+
+            # пропускаем стандартные
             if imp in std_libs or len(imp) < 2:
                 continue
 
-            found = any(
-                f.endswith(f"/{imp}.py") or f == f"{imp}.py"
-                for f in existing_files
+            # если это папка (например modules) — это ОК
+            if imp in dir_names:
+                continue
+
+            # проверка файла
+            found = (
+                f"{imp}.py" in file_names or
+                any(f.endswith(f"/{imp}.py") for f in existing_files)
             )
 
             if not found:
@@ -116,8 +125,8 @@ def run(data):
                     "missing": imp
                 }
 
-                # 🔥 CRITICAL если это modules.*
-                if "modules" in module:
+                # CRITICAL только если реально внутренняя ошибка
+                if module.startswith("modules/"):
                     report["critical"].append(issue)
                 else:
                     report["warning"].append(issue)
@@ -134,11 +143,10 @@ def run(data):
         report["info"].append({"type": "no_blueprint"})
 
     required = blueprint.get("required_modules", [])
-    pipeline = blueprint.get("pipeline", [])
+    pipeline = blueprint.get("core_loop", [])
 
     existing_names = set(os.path.basename(f) for f in existing_files)
 
-    # отсутствующие модули
     for req in required:
         req_file = req if req.endswith(".py") else req + ".py"
 
@@ -148,7 +156,6 @@ def run(data):
                 "module": req
             })
 
-    # неиспользуемые
     for mod in existing_names:
         if mod not in usage_map and mod not in {"main.py", "__init__.py"}:
             report["info"].append({
@@ -156,7 +163,6 @@ def run(data):
                 "module": mod
             })
 
-    # pipeline
     for step in pipeline:
         if not any(step in f for f in existing_files):
             report["warning"].append({
@@ -180,9 +186,6 @@ def run(data):
         "report": report
     }
 
-    # =========================
-    # 🖥️ ПОНЯТНЫЙ ВЫВОД (ключевое)
-    # =========================
     print(f"📊 files={stats['files']} modules={stats['modules']}")
     print(f"🚨 critical={stats['critical']} ⚠️ warning={stats['warning']} ℹ️ info={stats['info']}")
 
@@ -205,9 +208,6 @@ def run(data):
 
     print("\n=== END ===")
 
-    # =========================
-    # 📋 ЛОГ (КОРОТКИЙ)
-    # =========================
     data.setdefault("log", []).append(
         f"👁 obs: C={stats['critical']} W={stats['warning']} I={stats['info']}"
     )

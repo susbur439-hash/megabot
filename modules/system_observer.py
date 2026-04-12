@@ -9,10 +9,10 @@ def run(data):
     project_root = "."
 
     report = {
-        "files": [],              # python
-        "all_files": [],          # 🔥 ВСЕ файлы
-        "non_python_files": [],   # 🔥 не python
-        "directories": [],        # 🔥 папки
+        "files": [],
+        "all_files": [],
+        "non_python_files": [],
+        "directories": [],
         "modules": [],
         "critical": [],
         "warning": [],
@@ -31,6 +31,7 @@ def run(data):
 
     imports_map = {}
     usage_map = {}
+    all_dirs = set()
 
     # =========================
     # 📁 СКАН ВСЕГО РЕПО
@@ -39,7 +40,10 @@ def run(data):
         dirs[:] = [d for d in dirs if d not in skip_dirs]
 
         for d in dirs:
-            report["directories"].append(os.path.join(root, d))
+            full_dir = os.path.join(root, d)
+            rel_dir = os.path.relpath(full_dir, project_root)
+            report["directories"].append(rel_dir)
+            all_dirs.add(d)
 
         for file in files:
             full_path = os.path.join(root, file)
@@ -47,20 +51,23 @@ def run(data):
 
             report["all_files"].append(rel_path)
 
-            # отдельно не python
             if not file.endswith(".py"):
                 report["non_python_files"].append(rel_path)
                 continue
 
-            # =========================
-            # PYTHON ЛОГИКА (твоя)
-            # =========================
             report["files"].append(rel_path)
             report["modules"].append(rel_path)
 
             try:
                 with open(full_path, "r", encoding="utf-8") as f:
                     content = f.read()
+
+                # 🔥 пустой файл
+                if not content.strip():
+                    report["warning"].append({
+                        "type": "empty_file",
+                        "file": rel_path
+                    })
 
                 imports = []
 
@@ -108,9 +115,7 @@ def run(data):
     # 🔗 АНАЛИЗ ИМПОРТОВ
     # =========================
     existing_files = set(report["modules"])
-
     file_names = {os.path.basename(f) for f in existing_files}
-    dir_names = set(next(os.walk(project_root))[1])
 
     for module, imports in imports_map.items():
         for imp in imports:
@@ -118,7 +123,8 @@ def run(data):
             if imp in std_libs or len(imp) < 2:
                 continue
 
-            if imp in dir_names:
+            # если это папка (например modules)
+            if imp in all_dirs:
                 continue
 
             found = (
@@ -137,6 +143,18 @@ def run(data):
                     report["critical"].append(issue)
                 else:
                     report["warning"].append(issue)
+
+    # =========================
+    # 🧠 ПОИСК "СИРОТ" (ВАЖНО)
+    # =========================
+    for module in report["modules"]:
+        name = os.path.basename(module)
+
+        if name not in usage_map and module != "main.py":
+            report["warning"].append({
+                "type": "orphan_module",
+                "module": module
+            })
 
     # =========================
     # 🧠 АРХИТЕКТУРА
@@ -163,13 +181,6 @@ def run(data):
                 "module": req
             })
 
-    for mod in existing_names:
-        if mod not in usage_map and mod not in {"main.py", "__init__.py"}:
-            report["info"].append({
-                "type": "unused_module",
-                "module": mod
-            })
-
     for step in pipeline:
         if not any(step in f for f in existing_files):
             report["warning"].append({
@@ -181,7 +192,7 @@ def run(data):
     # 📊 СТАТИСТИКА
     # =========================
     stats = {
-        "files": len(report["files"]),
+        "python_files": len(report["files"]),
         "all_files": len(report["all_files"]),
         "non_python": len(report["non_python_files"]),
         "dirs": len(report["directories"]),
@@ -198,7 +209,7 @@ def run(data):
     # =========================
     # 🖥️ ВЫВОД
     # =========================
-    print(f"📊 python={stats['files']} all={stats['all_files']} dirs={stats['dirs']}")
+    print(f"📊 python={stats['python_files']} all={stats['all_files']} dirs={stats['dirs']}")
     print(f"🚨 critical={stats['critical']} ⚠️ warning={stats['warning']} ℹ️ info={stats['info']}")
 
     print("\n=== OBSERVER REPORT ===")
@@ -220,9 +231,18 @@ def run(data):
 
     print("\n=== END ===")
 
+    # =========================
+    # 📋 ЛОГ
+    # =========================
     data.setdefault("log", []).append(
         f"👁 obs: C={stats['critical']} W={stats['warning']} ALL={stats['all_files']}"
     )
+
+    for item in report["critical"][:2]:
+        data["log"].append(f"❌ {item}")
+
+    for item in report["warning"][:2]:
+        data["log"].append(f"⚠️ {item}")
 
     print("✅ OBSERVER DONE")
     return data

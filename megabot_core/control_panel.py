@@ -1,33 +1,15 @@
 import json
 from observer import scan_project
 from analyzer import analyze
-from execution import execute
 
 def run():
-    print("=== MEGABOT CORE ===")
+    print("=== MEGABOT CORE (SCAN MODE) ===")
 
-    while True:
-        cmd = input("\nscan / fix / exit:\n")
+    report = scan_project(".")
+    analysis = analyze(report)
 
-        if cmd == "exit":
-            break
+    print("\n=== FULL ANALYSIS ===")
+    print(json.dumps(analysis, indent=2, ensure_ascii=False))
 
-        elif cmd == "scan":
-            report = scan_project(".")
-            analysis = analyze(report)
-
-            print("\n=== ANALYSIS ===")
-            print(json.dumps(analysis, indent=2, ensure_ascii=False))
-
-        elif cmd == "fix":
-            report = scan_project(".")
-            analysis = analyze(report)
-
-            actions = analysis.get("actions", [])
-            result = execute(actions)
-
-            print("\n=== FIX RESULT ===")
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-
-        else:
-            print("unknown command")
+    print("\n⚠️ Никакие изменения НЕ выполнены")
+    print("👉 Скинь этот отчёт в ChatGPT")

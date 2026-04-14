@@ -162,7 +162,6 @@ def create_new_module():
 # =========================
 def execution(data):
 
-    # 🔥 LOAD MEMORY
     memory = load_memory()
 
     for k, v in memory.items():
@@ -183,11 +182,40 @@ def execution(data):
 
     ensure_env(data)
 
-    # стратегия
     task_text = data.get("task", "").lower()
-    if "файл" in task_text:
+
+    # =========================
+    # 🎮 CONTROL COMMANDS
+    # =========================
+    if task_text.startswith("create_module"):
+        parts = task_text.split()
+
+        if len(parts) >= 2:
+            module_name = parts[1]
+            os.makedirs("modules", exist_ok=True)
+            path = os.path.join("modules", module_name + ".py")
+
+            if not os.path.exists(path):
+                code = f"""def run(data):
+    data.setdefault("goal", {{"progress": 0}})
+    data["goal"]["progress"] += 15
+    data.setdefault("log", []).append("{module_name} +15")
+    return data
+"""
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(code)
+
+                data["log"].append(f"✅ создан модуль: {module_name}")
+            else:
+                data["log"].append(f"⚠️ модуль уже существует: {module_name}")
+
+        save_to_memory(data)
+        return data
+
+    # стратегия (теперь понимает и EN)
+    if "file" in task_text or "файл" in task_text:
         data["strategy"] = "force_file"
-    elif "модуль" in task_text:
+    elif "module" in task_text or "модуль" in task_text:
         data["strategy"] = "build_module"
 
     data = control(data)
@@ -251,7 +279,6 @@ def execution(data):
         "delta": delta
     })
 
-    # ✂️ лог
     data["log"] = data["log"][-200:]
 
     save_to_memory(data)

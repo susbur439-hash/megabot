@@ -7,6 +7,20 @@ from modules.control import control
 
 
 # =========================
+# 💾 GIT SAVE
+# =========================
+def save_to_git():
+    try:
+        os.system('git config --global user.name "megabot"')
+        os.system('git config --global user.email "bot@megabot.ai"')
+        os.system('git add .')
+        os.system('git commit -m "Megabot auto update" || echo "No changes"')
+        os.system('git push')
+    except Exception as e:
+        print("Git error:", e)
+
+
+# =========================
 # 💾 MEMORY LOAD
 # =========================
 def load_memory():
@@ -63,6 +77,8 @@ def execute_real_action(data):
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(str(data.get("analysis", "no data")))
 
+            save_to_git()
+
             data["log"].append(f"📁 файл создан: {filename}")
             data["goal"]["progress"] += 20
             return data, True
@@ -82,6 +98,8 @@ def execute_real_action(data):
 
             with open(path, "w", encoding="utf-8") as f:
                 f.write(code)
+
+            save_to_git()
 
             data["log"].append(f"🧠 авто-модуль создан: {module_name}")
             data["goal"]["progress"] += 25
@@ -154,6 +172,8 @@ def create_new_module():
     with open(path, "w", encoding="utf-8") as f:
         f.write(code)
 
+    save_to_git()
+
     return name[:-3]
 
 
@@ -205,6 +225,8 @@ def execution(data):
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(code)
 
+                save_to_git()
+
                 data["log"].append(f"✅ создан модуль: {module_name}")
             else:
                 data["log"].append(f"⚠️ модуль уже существует: {module_name}")
@@ -212,7 +234,7 @@ def execution(data):
         save_to_memory(data)
         return data
 
-    # стратегия (теперь понимает и EN)
+    # стратегия
     if "file" in task_text or "файл" in task_text:
         data["strategy"] = "force_file"
     elif "module" in task_text or "модуль" in task_text:
@@ -223,7 +245,6 @@ def execution(data):
     before = data["goal"]["progress"]
     best_module = get_best_module(data["experience"])
 
-    # анти-зацикливание
     if len(data["experience"]) >= 2:
         if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
             data["repeat_count"] += 1
@@ -232,9 +253,6 @@ def execution(data):
 
     stagnation = data["repeat_count"] >= 2
 
-    # =========================
-    # 🎯 DECISION
-    # =========================
     if stagnation:
         data["log"].append("💥 stagnation → real action")
         data["strategy"] = "force_file"
@@ -256,7 +274,6 @@ def execution(data):
 
     after = data["goal"]["progress"]
 
-    # fallback
     if after <= before:
         data["env"]["entropy"] += 1
         data["log"].append("🧠 fallback → forcing action")
@@ -264,12 +281,10 @@ def execution(data):
         data, _ = execute_real_action(data)
         module_used = "real_action"
 
-    # environment
     if data.get("log"):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5
 
-    # опыт
     delta = data["goal"]["progress"] - before
     score = max(0, min(100, delta * 5))
 

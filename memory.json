@@ -1,0 +1,13 @@
+{
+  "task": "scan",
+  "evaluation": {
+    "score": 0,
+    "delta": 0
+  },
+  "log": [],
+  "memory": [],
+  "experience": [],
+  "repeat_count": 0,
+  "run_observer": false,
+  "last_layer": "start"
+}

@@ -9,12 +9,17 @@ from modules.goals import set_goal, update_goal
 from modules.system_guard import system_guard
 from modules.self_improver import self_improver
 from modules.doctor import doctor
+from modules.control_layer import ControlLayer  # 🔥 ДОБАВЛЕНО
 
 # 👁 OBSERVER (отдельный модуль, НЕ авто)
 try:
     from modules.system_observer import run as observer_run
 except:
     observer_run = None
+
+
+# 🧠 CONTROL LAYER INIT (ГЛОБАЛЬНЫЙ ПРЕДОХРАНИТЕЛЬ)
+control_layer = ControlLayer()
 
 
 def run_task(data):
@@ -41,12 +46,32 @@ def run_task(data):
 
     best = data.get("best_module")
 
-    # 🎯 РЕШЕНИЕ
+    # 🎯 БАЗОВОЕ РЕШЕНИЕ
     data["decision"] = "run_module" if best else "create_module"
     data["last_decision"] = data["decision"]
 
+    # 🛑 CONTROL LAYER FILTER (НОВЫЙ КРИТИЧЕСКИЙ СЛОЙ)
+    existing_modules = data.get("experience", [])
+    existing_modules = [m.get("module") for m in existing_modules if isinstance(m, dict)]
+
+    health = control_layer.check_system_health(existing_modules)
+
+    decision_result = control_layer.filter_decision(data["decision"])
+
+    if not decision_result["allowed"]:
+        data["decision"] = decision_result["forced_decision"]
+        data["log"].append("🛑 CONTROL OVERRIDE → " + data["decision"])
+
     # ⚡ BOOST
     data["boost"] = 1.2
+
+    # 🚨 HARD SAFETY STOP (ЗАЩИТА ОТ СПАМА МОДУЛЕЙ)
+    if data.get("decision") == "create_module":
+        missing = control_layer.missing_core
+
+        if len(missing) > 0:
+            data["decision"] = "repair_core"
+            data["log"].append("🚨 HARD BLOCK → repair_core: " + str(missing))
 
     # 🚀 EXECUTION
     data["last_layer"] = "execution"
@@ -146,8 +171,6 @@ def run(task):
         "memory": [],
         "experience": [],
         "repeat_count": 0,
-
-        # 👁 ФЛАГ OBSERVER (ВАЖНО)
         "run_observer": False
     }
 
@@ -169,7 +192,7 @@ def run(task):
 
         data = run_task(data)
 
-        # 👁 OBSERVER (ТОЛЬКО ЕСЛИ ВКЛЮЧЕН)
+        # 👁 OBSERVER
         if data.get("run_observer") and observer_run:
             print("👁 OBSERVER RUN")
             try:
@@ -177,7 +200,6 @@ def run(task):
             except Exception as e:
                 print("❌ observer error:", e)
 
-            # 🔴 СРАЗУ ВЫКЛЮЧАЕМ (один раз)
             data["run_observer"] = False
 
         score = data.get("evaluation", {}).get("score", 0)

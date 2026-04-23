@@ -4,68 +4,109 @@ import json
 ROOT = "."
 
 
+# =========================
+# 📦 SCAN SYSTEM
+# =========================
 def scan_files():
     structure = {}
+
     for root, dirs, files in os.walk(ROOT):
+        # игнорируем мусор
+        if ".git" in root:
+            continue
         structure[root] = files
+
     return structure
 
 
+# =========================
+# 🧠 STRUCTURE CHECK
+# =========================
 def check_structure(structure):
     issues = []
     warnings = []
     ok = []
 
-    # базовые ожидания
-    expected_dirs = ["modules", "meta"]
+    found_paths = set(structure.keys())
+    all_files = []
+    for files in structure.values():
+        all_files.extend(files)
+
+    # =========================
+    # 📁 CORE ARCHITECTURE (реальная)
+    # =========================
+    expected_dirs = [
+        "modules",
+        "meta",
+        "megabot_core"
+    ]
 
     for d in expected_dirs:
-        if not any(d in path for path in structure):
-            issues.append(f"❌ отсутствует папка: {d}")
+        if not any(d in path for path in found_paths):
+            warnings.append(f"⚠️ missing optional layer: {d}")
         else:
-            ok.append(f"✅ папка есть: {d}")
+            ok.append(f"✅ layer present: {d}")
 
-    # проверка ключевых файлов
+    # =========================
+    # ⚙️ CORE ENTRY POINT
+    # =========================
     expected_files = ["main.py"]
 
-    found_files = []
-    for files in structure.values():
-        found_files.extend(files)
-
     for f in expected_files:
-        if f not in found_files:
-            issues.append(f"❌ отсутствует файл: {f}")
+        if f not in all_files:
+            issues.append(f"❌ missing entry file: {f}")
         else:
-            ok.append(f"✅ файл есть: {f}")
+            ok.append(f"✅ entry file exists: {f}")
+
+    # =========================
+    # 🧩 MODULE SYSTEM CHECK
+    # =========================
+    module_count = len([f for f in all_files if f.startswith("module_")])
+
+    if module_count == 0:
+        warnings.append("⚠️ no generated modules found (module_###)")
+    else:
+        ok.append(f"✅ generated modules: {module_count}")
 
     return issues, warnings, ok
 
 
+# =========================
+# 🧪 LOGIC CHECK
+# =========================
 def check_logic():
     warnings = []
 
-    # проверка памяти
     if not os.path.exists("memory.json"):
-        warnings.append("⚠️ memory.json отсутствует")
+        warnings.append("⚠️ memory.json missing (state will be ephemeral)")
+    else:
+        ok_size = os.path.getsize("memory.json")
+        if ok_size == 0:
+            warnings.append("⚠️ memory.json is empty")
 
     return warnings
 
 
+# =========================
+# 📊 SYSTEM SCORE
+# =========================
 def system_score(issues, warnings):
-    score = 10
-    score -= len(issues) * 2
-    score -= len(warnings)
+    score = 100
 
-    if score < 0:
-        score = 0
+    score -= len(issues) * 25
+    score -= len(warnings) * 5
 
-    return score
+    return max(0, min(100, score))
 
 
+# =========================
+# 🧠 OBSERVER CORE
+# =========================
 def run_observer():
     print("\n🧠 OBSERVER START\n")
 
     structure = scan_files()
+
     issues, warnings, ok = check_structure(structure)
     logic_warnings = check_logic()
 
@@ -73,23 +114,51 @@ def run_observer():
 
     score = system_score(issues, warnings)
 
-    print("📊 STRUCTURE:")
+    # =========================
+    # 📊 STRUCTURE OUTPUT
+    # =========================
+    print("📦 STRUCTURE SUMMARY:\n")
     for path, files in structure.items():
-        print(f"{path}: {files}")
+        print(f"{path}: {len(files)} files")
 
-    print("\n❌ ПРОБЛЕМЫ:")
-    for i in issues:
-        print(i)
+    # =========================
+    # ❌ ISSUES
+    # =========================
+    print("\n❌ CRITICAL ISSUES:")
+    if not issues:
+        print("none")
+    else:
+        for i in issues:
+            print(i)
 
-    print("\n⚠️ ПРЕДУПРЕЖДЕНИЯ:")
-    for w in warnings:
-        print(w)
+    # =========================
+    # ⚠️ WARNINGS
+    # =========================
+    print("\n⚠️ WARNINGS:")
+    if not warnings:
+        print("none")
+    else:
+        for w in warnings:
+            print(w)
 
-    print("\n✅ ЧТО ХОРОШО:")
+    # =========================
+    # ✅ OK STATE
+    # =========================
+    print("\n✅ HEALTHY PARTS:")
     for o in ok:
         print(o)
 
-    print(f"\n🏁 SYSTEM SCORE: {score}/10")
+    # =========================
+    # 🏁 SCORE
+    # =========================
+    print(f"\n🏁 SYSTEM HEALTH: {score}/100")
+
+    if score > 80:
+        print("🟢 SYSTEM STABLE")
+    elif score > 50:
+        print("🟡 SYSTEM DEGRADED")
+    else:
+        print("🔴 SYSTEM CRITICAL")
 
     print("\n🧠 OBSERVER END\n")
 

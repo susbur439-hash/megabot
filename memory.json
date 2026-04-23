@@ -64,6 +64,17 @@
     "🔋 control: low energy → safe mode",
     "🧠 control: mode=safe | phase=normal | trend=up | progress=24/100",
     "module +5",
+    "🧪 explore",
+    "adaptive_goal: 28/100 | level: 1 | trend: stable | state: normal | delta: 4",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 4 | best: module_653(36.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 0 | best: module_653(36.0)",
+    "decision: create_module | mode: build | analysis: build | score: 60 | best: module_653(32.0)",
+    "🧠 state: mode=exploit | phase=normal | trend=up",
+    "🔋 control: low energy → safe mode",
+    "🧠 control: mode=safe | phase=normal | trend=up | progress=28/100",
+    "module +13",
     "🧪 explore"
   ],
   "memory": [],
@@ -92,6 +103,11 @@
       "module": "module_656",
       "score": 20,
       "delta": 4
+    },
+    {
+      "module": "module_657",
+      "score": 60,
+      "delta": 12
     }
   ],
   "repeat_count": 0,
@@ -100,10 +116,11 @@
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 28,
+    "progress": 40,
     "level": 1,
     "target": 100,
     "history": [
+      60,
       60,
       60,
       60,
@@ -111,7 +128,7 @@
     ],
     "state": "normal"
   },
-  "prev_progress": 24,
+  "prev_progress": 28,
   "task_type": "development",
   "local_trend": "stable",
   "last_delta": 0,
@@ -121,13 +138,13 @@
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 573,
+  "cycle": 574,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 527,
-    "entropy": 15,
+    "fail": 528,
+    "entropy": 16,
     "experience": 0,
     "level": 1,
     "last_reward": -1,
@@ -187,7 +204,7 @@
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 573,
+    "cycles": 574,
     "mode": "exploit",
     "phase": "normal",
     "focus": "recovery",
@@ -195,7 +212,6 @@
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      32,
       37,
       41,
       51,
@@ -204,7 +220,8 @@
       6,
       14,
       18,
-      24
+      24,
+      28
     ],
     "trend": "up",
     "stagnation": false

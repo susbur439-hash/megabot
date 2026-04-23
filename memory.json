@@ -54,6 +54,19 @@
     "🧹 control: entropy cleanup",
     "🧠 control: mode=safe | phase=crisis | trend=up | progress=29/100",
     "module +7",
+    "🧪 explore",
+    "adaptive_goal: 35/100 | level: 1 | trend: stable | state: normal | delta: 6",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 6 | best: module_533(63.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 0 | best: module_533(63.0)",
+    "decision: create_module | analysis: build | score: 60 | best: module_533(63.0)",
+    "🧠 state: mode=explore | phase=crisis | trend=up",
+    "🚨 control: crisis detected",
+    "🔋 control: low energy → safe mode",
+    "🧹 control: entropy cleanup",
+    "🧠 control: mode=safe | phase=crisis | trend=up | progress=35/100",
+    "module +10",
     "🧪 explore"
   ],
   "memory": [],
@@ -77,6 +90,11 @@
       "module": "module_534",
       "score": 30,
       "delta": 6
+    },
+    {
+      "module": "module_535",
+      "score": 45,
+      "delta": 9
     }
   ],
   "repeat_count": 0,
@@ -85,33 +103,34 @@
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 35,
+    "progress": 44,
     "level": 1,
     "target": 100,
     "history": [
+      60,
       60,
       60,
       60
     ],
     "state": "normal"
   },
-  "prev_progress": 29,
+  "prev_progress": 35,
   "task_type": "development",
-  "local_trend": "up",
+  "local_trend": "stable",
   "last_delta": 0,
-  "behavior": "exploit",
-  "analysis": "exploit",
+  "behavior": "balanced",
+  "analysis": "build",
   "decision": "run_module",
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 464,
+  "cycle": 465,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 418,
-    "entropy": 16,
+    "fail": 419,
+    "entropy": 10,
     "experience": 0,
     "level": 1,
     "last_reward": -1,
@@ -171,7 +190,7 @@
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 464,
+    "cycles": 465,
     "mode": "explore",
     "phase": "crisis",
     "focus": "recovery",
@@ -179,7 +198,6 @@
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      27,
       32,
       40,
       44,
@@ -188,7 +206,8 @@
       0,
       6,
       15,
-      29
+      29,
+      35
     ],
     "trend": "up",
     "stagnation": false

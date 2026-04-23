@@ -18,7 +18,7 @@ def run(data):
         "warning": [],
         "info": [],
         "connections": [],
-        "dead_modules": []  # 🔥 новые
+        "dead_modules": []
     }
 
     skip_dirs = {"__pycache__", ".git", "venv", "env"}
@@ -31,10 +31,9 @@ def run(data):
     }
 
     imports_map = {}
-    usage_map = {}
 
     # =========================
-    # 📁 СКАН ВСЕГО РЕПО
+    # 📁 SCAN PROJECT
     # =========================
     for root, dirs, files in os.walk(project_root):
         dirs[:] = [d for d in dirs if d not in skip_dirs]
@@ -59,45 +58,39 @@ def run(data):
                 with open(full_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
-                imports = []
+                imports = set()
 
                 matches = re.findall(r"^\s*import\s+([\w\.]+)", content, re.MULTILINE)
                 matches += re.findall(r"^\s*from\s+([\w\.]+)\s+import", content, re.MULTILINE)
 
                 for m in matches:
                     base = m.split(".")[0]
+                    if base:
+                        imports.add(base)
 
-                    if base not in imports:
-                        imports.append(base)
-
-                    usage_map.setdefault(base + ".py", []).append(rel_path)
-
-                imports_map[rel_path] = imports
+                imports_map[rel_path] = list(imports)
 
                 has_run = "def run(" in content
 
                 report["connections"].append({
                     "module": rel_path,
                     "has_run": has_run,
-                    "imports": imports,
-                    "used_by": []  # 🔥 добавим ниже
+                    "imports": list(imports),
+                    "used_by": []
                 })
 
-                # ⚠️ wildcard
                 if re.search(r"from\s+[\w\.]+\s+import\s+\*", content):
                     report["warning"].append({
                         "type": "wildcard_import",
                         "file": rel_path
                     })
 
-                # ℹ️ нет run (но не для служебных файлов)
-                if not has_run and not file.startswith("__"):
+                if not has_run and file != "__init__.py":
                     report["info"].append({
                         "type": "no_run_function",
                         "file": rel_path
                     })
 
-                # ⚠️ пустой файл (НО НЕ __init__)
                 if len(content.strip()) == 0 and file != "__init__.py":
                     report["warning"].append({
                         "type": "empty_file",
@@ -112,12 +105,11 @@ def run(data):
                 })
 
     # =========================
-    # 🔗 АНАЛИЗ ИМПОРТОВ (УЛУЧШЕН)
+    # 🔗 IMPORT ANALYSIS (FIXED)
     # =========================
     existing_files = set(report["modules"])
     file_names = {os.path.basename(f) for f in existing_files}
 
-    # собираем папки ВСЕ (а не только корень)
     dir_names = set()
     for root, dirs, _ in os.walk(project_root):
         for d in dirs:
@@ -126,10 +118,13 @@ def run(data):
     for module, imports in imports_map.items():
         for imp in imports:
 
-            if imp in std_libs or len(imp) < 2:
+            if imp in std_libs:
                 continue
 
             if imp in dir_names:
+                continue
+
+            if len(imp) < 2:
                 continue
 
             found = (
@@ -150,60 +145,32 @@ def run(data):
                     report["warning"].append(issue)
 
     # =========================
-    # 🔗 USED BY (КТО ИСПОЛЬЗУЕТ)
-    # =========================
-    for module, imports in imports_map.items():
-        for imp in imports:
-            target = imp + ".py"
-
-            for conn in report["connections"]:
-                if conn["module"].endswith(target):
-                    conn["used_by"].append(module)
-
-    # =========================
-    # 🧟 МЁРТВЫЕ МОДУЛИ
+    # 🔗 USED BY FIXED
     # =========================
     for conn in report["connections"]:
-        if (
-            not conn["used_by"]
-            and conn["module"] not in ["main.py"]
-        ):
-            report["dead_modules"].append(conn["module"])
+        module_name = os.path.basename(conn["module"])
+
+        for other, imports in imports_map.items():
+            if module_name.replace(".py", "") in imports:
+                conn["used_by"].append(other)
 
     # =========================
-    # 🧠 АРХИТЕКТУРА
+    # 🧟 DEAD MODULES (FIXED)
     # =========================
-    blueprint = {}
+    for conn in report["connections"]:
+        file = conn["module"]
 
-    try:
-        with open("megabot_architecture.json", "r", encoding="utf-8") as f:
-            blueprint = json.load(f)
-    except Exception:
-        report["critical"].append({"type": "no_architecture_file"})
+        if file in ["main.py"]:
+            continue
 
-    required = blueprint.get("required_modules", [])
-    pipeline = blueprint.get("core_loop", [])
+        if file.startswith("modules/__init__"):
+            continue
 
-    existing_names = set(os.path.basename(f) for f in existing_files)
-
-    for req in required:
-        req_file = req if req.endswith(".py") else req + ".py"
-
-        if req_file not in existing_names:
-            report["warning"].append({
-                "type": "missing_module",
-                "module": req
-            })
-
-    for step in pipeline:
-        if not any(step in f for f in existing_files):
-            report["warning"].append({
-                "type": "pipeline_missing",
-                "step": step
-            })
+        if not conn["used_by"] and not conn["has_run"]:
+            report["dead_modules"].append(file)
 
     # =========================
-    # 📊 СТАТИСТИКА
+    # 📊 STATS
     # =========================
     stats = {
         "python": len(report["files"]),
@@ -220,34 +187,28 @@ def run(data):
         "report": report
     }
 
-    # =========================
-    # 🖥️ ВЫВОД
-    # =========================
     print(f"📊 python={stats['python']} all={stats['all']} dirs={stats['dirs']}")
     print(f"🚨 critical={stats['critical']} ⚠️ warning={stats['warning']} ℹ️ info={stats['info']} 🧟 dead={stats['dead']}")
 
     print("\n=== OBSERVER REPORT ===")
 
     if report["critical"]:
-        print(f"\n🚨 CRITICAL")
+        print("\n🚨 CRITICAL")
         for item in report["critical"][:5]:
             print("❌", item)
 
     if report["warning"]:
-        print(f"\n⚠️ WARNING")
+        print("\n⚠️ WARNING")
         for item in report["warning"][:5]:
             print("⚠️", item)
 
     if report["dead_modules"]:
-        print(f"\n🧟 DEAD MODULES")
+        print("\n🧟 DEAD MODULES")
         for m in report["dead_modules"][:5]:
             print("💀", m)
 
     print("\n=== END ===")
 
-    # =========================
-    # 📋 ЛОГ
-    # =========================
     data.setdefault("log", []).append(
         f"👁 obs: C={stats['critical']} W={stats['warning']} D={stats['dead']}"
     )

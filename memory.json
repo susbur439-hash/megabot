@@ -92,6 +92,23 @@
     "🔋 control: low energy → safe mode",
     "🧠 control: mode=safe | phase=normal | trend=up | progress=38/100",
     "module +15",
+    "🧪 explore",
+    "adaptive_goal: 52/100 | level: 1 | trend: stable | state: normal | delta: 14",
+    "analysis: explore | behavior: exploit | trend: up | stagnation: False | score: 60 | delta: 14 | best: module_330(63.0)",
+    "❌ missing module: task_interpreter",
+    "❌ missing module: evaluation",
+    "❌ missing module: learning",
+    "⚠️ doctor issues: ['missing_task_interpreter', 'missing_evaluation', 'missing_learning']",
+    "❌ missing module: task_interpreter",
+    "❌ missing module: evaluation",
+    "❌ missing module: learning",
+    "⚠️ doctor issues: ['missing_task_interpreter', 'missing_evaluation', 'missing_learning']",
+    "analysis: explore | behavior: exploit | trend: up | stagnation: False | score: 60 | delta: 0 | best: module_330(63.0)",
+    "decision: create_module | analysis: explore | score: 60 | best: module_330(63.0)",
+    "🧠 state: mode=exploit | phase=normal | trend=up",
+    "🔋 control: low energy → safe mode",
+    "🧠 control: mode=safe | phase=normal | trend=up | progress=52/100",
+    "module +15",
     "🧪 explore"
   ],
   "memory": [],
@@ -120,6 +137,11 @@
       "module": "module_330",
       "score": 70,
       "delta": 14
+    },
+    {
+      "module": "module_331",
+      "score": 70,
+      "delta": 14
     }
   ],
   "repeat_count": 0,
@@ -132,10 +154,11 @@
   ],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 52,
+    "progress": 66,
     "level": 1,
     "target": 100,
     "history": [
+      60,
       60,
       60,
       60,
@@ -143,23 +166,23 @@
     ],
     "state": "normal"
   },
-  "prev_progress": 38,
+  "prev_progress": 52,
   "task_type": "unknown",
-  "local_trend": "stable",
+  "local_trend": "up",
   "last_delta": 0,
-  "behavior": "balanced",
+  "behavior": "exploit",
   "analysis": "explore",
   "decision": "run_module",
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 284,
+  "cycle": 285,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 238,
-    "entropy": 11,
+    "fail": 239,
+    "entropy": 14,
     "experience": 0,
     "level": 1,
     "last_reward": -1,
@@ -219,7 +242,7 @@
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 284,
+    "cycles": 285,
     "mode": "exploit",
     "phase": "normal",
     "focus": "recovery",
@@ -227,7 +250,6 @@
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      37,
       43,
       54,
       66,
@@ -236,7 +258,8 @@
       12,
       16,
       27,
-      38
+      38,
+      52
     ],
     "trend": "up",
     "stagnation": false

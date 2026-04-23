@@ -6,7 +6,7 @@ on:
       task:
         description: "Введите задачу для Megabot"
         required: true
-        default: "развивай себя"
+        default: "{\"type\":\"self_improve\"}"
 
 jobs:
   run-bot:
@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: 📥 Клонирование репозитория
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # 🔥 СКАЧИВАЕМ ПАМЯТЬ
       - name: 📥 Загрузка памяти
@@ -37,7 +37,7 @@ jobs:
           fi
 
       - name: 🐍 Установка Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -45,13 +45,15 @@ jobs:
         run: pip install -r requirements.txt || true
 
       # =========================
-      # 🤖 ЗАПУСК МЕГАБОТА
+      # 🤖 ЗАПУСК МЕГАБОТА (FIXED)
       # =========================
       - name: 🤖 Запуск Megabot
-        run: python main.py "${{ github.event.inputs.task }}"
+        env:
+          TASK_JSON: ${{ github.event.inputs.task }}
+        run: python main.py
 
       # =========================
-      # 👁 OBLIVION (ОТДЕЛЬНО!)
+      # 👁 OBLIVION
       # =========================
       - name: 👁 Oblivion Check
         run: |

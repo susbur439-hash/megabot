@@ -16,7 +16,7 @@ def decision(data):
     trend = data.get("local_trend", "stable")
 
     # =========================
-    # 🧠 ОПЫТ
+    # 🧠 EXPERIENCE ANALYSIS
     # =========================
     module_scores = {}
 
@@ -37,18 +37,39 @@ def decision(data):
         if scores:
             avg = sum(scores) / len(scores)
 
-            if len(scores) < 2:
-                avg *= 0.9
+            # штраф за нестабильность
+            if len(scores) < 3:
+                avg *= 0.85
 
             if avg > best_score:
                 best_score = avg
                 best_module = m
 
-    has_strong_module = best_score >= 70
+    has_strong_module = best_score >= 65
     has_any_module = len(module_scores) > 0
 
     # =========================
-    # 🚨 BOOTSTRAP
+    # 🚨 MEMORY CONTROL
+    # =========================
+    recent = memory[-7:]
+
+    too_many_creates = recent.count("create_module") >= 3
+    too_many_runs = recent.count("run_module") >= 4
+    too_many_improves = recent.count("improve_module") >= 3
+
+    # =========================
+    # 🧠 STAGNATION DETECTION (УЛУЧШЕНО)
+    # =========================
+    stagnation = (
+        trend == "stable"
+        and score < 70
+        and (too_many_runs or too_many_improves)
+    )
+
+    heavy_create_loop = recent.count("create_module") >= 4
+
+    # =========================
+    # 🚨 BOOTSTRAP (СТРОГИЙ КОНТРОЛЬ)
     # =========================
     if not has_any_module:
         if memory.count("create_module") < 2:
@@ -61,23 +82,9 @@ def decision(data):
         return data
 
     # =========================
-    # 🧠 АНТИ-ЗАЦИКЛИВАНИЕ
+    # 🔥 MAIN LOGIC (УЛУЧШЕННАЯ)
     # =========================
-    recent = memory[-5:]
 
-    too_many_creates = recent.count("create_module") >= 3
-    too_many_runs = recent.count("run_module") >= 3
-    too_many_improves = recent.count("improve_module") >= 3
-
-    stagnation = (
-        trend == "stable"
-        and score < 75
-        and (too_many_runs or too_many_improves)
-    )
-
-    # =========================
-    # 🔥 ОСНОВНАЯ ЛОГИКА
-    # =========================
     if analysis_type == "recovery":
         action = "run_module" if has_strong_module else "improve_module"
 
@@ -85,11 +92,14 @@ def decision(data):
         action = "create_module"
 
     elif analysis_type == "build":
-        action = "run_module" if too_many_creates else "create_module"
+        if heavy_create_loop:
+            action = "run_module"
+        else:
+            action = "create_module"
 
     elif analysis_type == "explore":
         if stagnation:
-            action = "create_module"
+            action = "improve_module"
         elif has_strong_module:
             action = "run_module"
         else:
@@ -106,27 +116,40 @@ def decision(data):
 
     elif analysis_type == "improve":
         if has_strong_module:
-            action = "run_module" if too_many_improves else "improve_module"
+            action = "improve_module" if too_many_improves else "run_module"
         else:
             action = "create_module"
 
     elif analysis_type == "optimize":
-        action = "run_module" if has_strong_module else "create_module"
+        action = "run_module" if has_strong_module else "improve_module"
 
     else:
-        action = "run_module" if score >= 50 else "improve_module"
+        # безопасный дефолт
+        action = "run_module" if score >= 55 else "improve_module"
 
     # =========================
-    # 🛡 ФИКСЫ
+    # 🛡 HARD SAFETY FIXES
     # =========================
+
+    # стоп бесконечного создания
     if too_many_creates and action == "create_module":
         action = "run_module"
 
+    # стоп бесконечного run
     if too_many_runs and action == "run_module":
         action = "improve_module"
 
+    # стоп мусорных действий
     if action not in ["create_module", "run_module", "improve_module"]:
         action = "run_module"
+
+    # =========================
+    # 📈 PROGRESS BIAS (ВАЖНО)
+    # =========================
+
+    # если совсем нет прогресса — толкаем к улучшению
+    if progress < 20 and action == "run_module":
+        action = "improve_module"
 
     # =========================
     # 💾 SAVE

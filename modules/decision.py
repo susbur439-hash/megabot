@@ -48,10 +48,9 @@ def decision(data):
     has_any_module = len(module_scores) > 0
 
     # =========================
-    # 🚨 BOOTSTRAP (ФИКС)
+    # 🚨 BOOTSTRAP
     # =========================
     if not has_any_module:
-        # создаём, но не бесконечно
         if memory.count("create_module") < 2:
             action = "create_module"
         else:
@@ -79,7 +78,6 @@ def decision(data):
     # =========================
     # 🔥 ОСНОВНАЯ ЛОГИКА
     # =========================
-
     if analysis_type == "recovery":
         action = "run_module" if has_strong_module else "improve_module"
 
@@ -119,18 +117,14 @@ def decision(data):
         action = "run_module" if score >= 50 else "improve_module"
 
     # =========================
-    # 🛡 ЖЁСТКИЙ ФИКС (ВАЖНО)
+    # 🛡 ФИКСЫ
     # =========================
-
-    # нельзя застревать в create
     if too_many_creates and action == "create_module":
         action = "run_module"
 
-    # нельзя застревать в run
     if too_many_runs and action == "run_module":
         action = "improve_module"
 
-    # всегда должен быть прогресс
     if action not in ["create_module", "run_module", "improve_module"]:
         action = "run_module"
 

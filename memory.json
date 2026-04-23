@@ -76,6 +76,25 @@
     "🧹 control: entropy cleanup",
     "🧠 control: mode=safe | phase=crisis | trend=up | progress=33/100",
     "module +7",
+    "🧪 explore",
+    "adaptive_goal: 39/100 | level: 1 | trend: stable | state: normal | delta: 6",
+    "analysis: explore | behavior: aggressive | trend: down | stagnation: False | score: 60 | delta: 6 | best: module_347(63.0)",
+    "❌ missing module: task_interpreter",
+    "❌ missing module: evaluation",
+    "❌ missing module: learning",
+    "⚠️ doctor issues: ['missing_task_interpreter', 'missing_evaluation', 'missing_learning']",
+    "❌ missing module: task_interpreter",
+    "❌ missing module: evaluation",
+    "❌ missing module: learning",
+    "⚠️ doctor issues: ['missing_task_interpreter', 'missing_evaluation', 'missing_learning']",
+    "analysis: explore | behavior: aggressive | trend: down | stagnation: False | score: 60 | delta: 0 | best: module_347(63.0)",
+    "decision: create_module | analysis: explore | score: 60 | best: module_347(63.0)",
+    "🧠 state: mode=explore | phase=crisis | trend=up",
+    "🚨 control: crisis detected",
+    "🔋 control: low energy → safe mode",
+    "🧹 control: entropy cleanup",
+    "🧠 control: mode=safe | phase=crisis | trend=up | progress=39/100",
+    "module +5",
     "🧪 explore"
   ],
   "memory": [],
@@ -99,6 +118,11 @@
       "module": "module_349",
       "score": 30,
       "delta": 6
+    },
+    {
+      "module": "module_350",
+      "score": 20,
+      "delta": 4
     }
   ],
   "repeat_count": 0,
@@ -111,33 +135,34 @@
   ],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 39,
+    "progress": 43,
     "level": 1,
     "target": 100,
     "history": [
+      60,
       60,
       60,
       60
     ],
     "state": "normal"
   },
-  "prev_progress": 33,
+  "prev_progress": 39,
   "task_type": "unknown",
-  "local_trend": "stable",
+  "local_trend": "down",
   "last_delta": 0,
-  "behavior": "balanced",
+  "behavior": "aggressive",
   "analysis": "explore",
   "decision": "run_module",
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 301,
+  "cycle": 302,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 255,
-    "entropy": 16,
+    "fail": 256,
+    "entropy": 12,
     "experience": 0,
     "level": 1,
     "last_reward": -1,
@@ -197,7 +222,7 @@
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 301,
+    "cycles": 302,
     "mode": "explore",
     "phase": "crisis",
     "focus": "recovery",
@@ -205,7 +230,6 @@
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      23,
       29,
       36,
       49,
@@ -214,7 +238,8 @@
       0,
       5,
       19,
-      33
+      33,
+      39
     ],
     "trend": "up",
     "stagnation": false

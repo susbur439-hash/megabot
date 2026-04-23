@@ -92,6 +92,20 @@
     "🧹 control: entropy cleanup",
     "🧠 control: mode=safe | phase=crisis | trend=up | progress=50/100",
     "module +11",
+    "🧪 explore",
+    "adaptive_goal: 60/100 | level: 1 | trend: stable | state: normal | delta: 10",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 10 | best: module_596(63.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 0 | best: module_596(63.0)",
+    "decision: create_module | analysis: build | score: 60 | best: module_596(63.0)",
+    "🧹 improver: too many weak modules",
+    "🧠 state: mode=explore | phase=crisis | trend=up",
+    "🚨 control: crisis detected",
+    "🔋 control: low energy → safe mode",
+    "🧹 control: entropy cleanup",
+    "🧠 control: mode=safe | phase=crisis | trend=up | progress=60/100",
+    "module +6",
     "🧪 explore"
   ],
   "memory": [],
@@ -130,6 +144,11 @@
       "module": "module_598",
       "score": 50,
       "delta": 10
+    },
+    {
+      "module": "module_599",
+      "score": 25,
+      "delta": 5
     }
   ],
   "repeat_count": 0,
@@ -138,10 +157,11 @@
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 60,
+    "progress": 65,
     "level": 1,
     "target": 100,
     "history": [
+      60,
       60,
       60,
       60,
@@ -151,7 +171,7 @@
     ],
     "state": "normal"
   },
-  "prev_progress": 50,
+  "prev_progress": 60,
   "task_type": "development",
   "local_trend": "stable",
   "last_delta": 0,
@@ -161,18 +181,17 @@
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 521,
+  "cycle": 522,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 475,
-    "entropy": 17,
+    "fail": 476,
+    "entropy": 14,
     "experience": 0,
     "level": 1,
     "last_reward": -1,
     "history": [
-      -1,
       -1,
       -1,
       -1,
@@ -221,13 +240,14 @@
       -1,
       -1,
       -1,
+      -1,
       -1
     ],
     "state": "decline"
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 521,
+    "cycles": 522,
     "mode": "explore",
     "phase": "crisis",
     "focus": "recovery",
@@ -235,7 +255,6 @@
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      43,
       55,
       61,
       0,
@@ -244,7 +263,8 @@
       25,
       31,
       45,
-      50
+      50,
+      60
     ],
     "trend": "up",
     "stagnation": false

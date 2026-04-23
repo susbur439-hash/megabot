@@ -105,6 +105,20 @@
     "🔋 control: low energy → safe mode",
     "🧠 control: mode=safe | phase=normal | trend=up | progress=50/100",
     "module +12",
+    "🧪 explore",
+    "adaptive_goal: 61/100 | level: 1 | trend: stable | state: normal | delta: 11",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 11 | best: module_632(54.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 0 | best: module_632(54.0)",
+    "decision: create_module | analysis: build | score: 60 | best: module_632(51.0)",
+    "🧹 improver: too many weak modules",
+    "🧠 state: mode=explore | phase=crisis | trend=up",
+    "🚨 control: crisis detected",
+    "🔋 control: low energy → safe mode",
+    "🧹 control: entropy cleanup",
+    "🧠 control: mode=safe | phase=crisis | trend=up | progress=61/100",
+    "module +9",
     "🧪 explore"
   ],
   "memory": [],
@@ -148,6 +162,11 @@
       "module": "module_639",
       "score": 55,
       "delta": 11
+    },
+    {
+      "module": "module_640",
+      "score": 40,
+      "delta": 8
     }
   ],
   "repeat_count": 0,
@@ -156,10 +175,11 @@
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 61,
+    "progress": 69,
     "level": 1,
     "target": 100,
     "history": [
+      60,
       60,
       60,
       60,
@@ -170,7 +190,7 @@
     ],
     "state": "normal"
   },
-  "prev_progress": 50,
+  "prev_progress": 61,
   "task_type": "development",
   "local_trend": "stable",
   "last_delta": 0,
@@ -180,13 +200,13 @@
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 558,
+  "cycle": 559,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 512,
-    "entropy": 17,
+    "fail": 513,
+    "entropy": 12,
     "experience": 0,
     "level": 1,
     "last_reward": -1,
@@ -246,15 +266,14 @@
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 558,
-    "mode": "exploit",
-    "phase": "normal",
+    "cycles": 559,
+    "mode": "explore",
+    "phase": "crisis",
     "focus": "recovery",
     "last_action": null,
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      65,
       76,
       0,
       12,
@@ -263,14 +282,15 @@
       27,
       36,
       46,
-      50
+      50,
+      61
     ],
     "trend": "up",
     "stagnation": false
   },
   "mode": "safe",
   "force_explore": false,
-  "control_state": "normal",
+  "control_state": "crisis",
   "fail_count": 0,
   "trend": "stable",
   "strategy": "optimize",

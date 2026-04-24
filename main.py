@@ -1,7 +1,9 @@
 import sys
 import os
 
-# добавляем путь к проекту
+# =========================
+# 📦 PATH
+# =========================
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # =========================
@@ -15,15 +17,15 @@ except Exception as e:
     ENGINE_AVAILABLE = False
 
 # =========================
-# 🎯 DIRECTOR (старый слой)
+# 🎯 DIRECTOR (fallback слой)
 # =========================
 from modules.director import run as director_run
 
 
+# =========================
+# 🔥 DIRECT EXECUTION MODE
+# =========================
 def run_direct_command(cmd):
-    """
-    🔥 Прямой запуск python-файлов (обход Megabot)
-    """
     if isinstance(cmd, str) and cmd.endswith(".py") and os.path.exists(cmd):
         print(f"🚀 Direct run: {cmd}")
         os.system(f"python {cmd}")
@@ -31,26 +33,24 @@ def run_direct_command(cmd):
     return False
 
 
+# =========================
+# 🧠 ENGINE VALIDATION
+# =========================
 def engine_can_handle(result):
-    """
-    🧠 определяем, смог ли Engine обработать задачу
-    """
-    if result is None:
+    if not isinstance(result, dict):
         return False
 
-    if isinstance(result, dict):
-        # если есть явный статус ошибки или пустой результат
-        if result.get("status") == "error":
-            return False
-
-        # если Engine вернул осмысленный ответ
-        if result.get("status") == "ok":
-            return True
+    if result.get("status") == "ok":
+        return True
 
     return False
 
 
+# =========================
+# 🚀 MAIN
+# =========================
 if __name__ == "__main__":
+
     task = "развивай себя"
 
     if len(sys.argv) > 1:
@@ -63,16 +63,15 @@ if __name__ == "__main__":
     # 🔥 DIRECT MODE
     # =========================
     if run_direct_command(task):
-        sys.exit()
+        sys.exit(0)
 
     engine_result = None
-    used_engine = False
 
     # =========================
-    # 🧠 ENGINE TRY FIRST
+    # 🧠 ENGINE FIRST
     # =========================
     if ENGINE_AVAILABLE:
-        print("[Main] Trying Engine...")
+        print("[Main] Engine try...")
 
         try:
             engine = Engine()
@@ -84,18 +83,17 @@ if __name__ == "__main__":
             }
 
             engine_result = engine.execute(command)
-            used_engine = True
-
             print("[Main] Engine result:", engine_result)
 
         except Exception as e:
             print("[Main] Engine error:", e)
+            engine_result = None
 
     # =========================
-    # 🔁 DECISION: ENGINE vs DIRECTOR
+    # 🔁 DECISION LAYER
     # =========================
-    if used_engine and engine_can_handle(engine_result):
-        print("[Main] Engine handled task → skipping Director")
+    if engine_can_handle(engine_result):
+        print("[Main] Engine handled task → STOP")
     else:
-        print("[Main] Running Director fallback...")
+        print("[Main] Fallback → Director")
         director_run(task)

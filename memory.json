@@ -17,6 +17,19 @@
     "🔋 control: low energy → safe mode",
     "🧠 control: mode=safe | phase=stagnation | trend=stable | progress=0/100",
     "module +7",
+    "🧪 explore",
+    "adaptive_goal: 6/100 | level: 1 | trend: stable | state: normal | delta: 6",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 6 | best: module_703(27.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 0 | best: module_703(27.0)",
+    "decision: create_module | mode: build | analysis: build | score: 60 | best: module_703(24.0)",
+    "🧠 state: mode=explore | phase=crisis | trend=stable",
+    "🚨 control: crisis detected",
+    "🔋 control: low energy → safe mode",
+    "🧹 control: entropy cleanup",
+    "🧠 control: mode=safe | phase=crisis | trend=stable | progress=6/100",
+    "module +15",
     "🧪 explore"
   ],
   "memory": [],
@@ -25,6 +38,11 @@
       "module": "module_703",
       "score": 30,
       "delta": 6
+    },
+    {
+      "module": "module_704",
+      "score": 70,
+      "delta": 14
     }
   ],
   "repeat_count": 0,
@@ -33,27 +51,30 @@
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 6,
+    "progress": 20,
     "level": 1,
     "target": 100,
-    "history": []
+    "history": [
+      60
+    ],
+    "state": "normal"
   },
-  "prev_progress": 0,
+  "prev_progress": 6,
   "task_type": "development",
   "local_trend": "stable",
   "last_delta": 0,
   "behavior": "balanced",
-  "analysis": "bootstrap",
-  "decision": "repair_core",
+  "analysis": "build",
+  "decision": "run_module",
   "errors": [],
-  "last_decision": "create_module",
+  "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 614,
+  "cycle": 615,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 568,
+    "fail": 569,
     "entropy": 17,
     "experience": 0,
     "level": 1,
@@ -114,15 +135,14 @@
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 614,
-    "mode": "improve",
-    "phase": "stagnation",
+    "cycles": 615,
+    "mode": "explore",
+    "phase": "crisis",
     "focus": "recovery",
     "last_action": null,
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      0,
       7,
       16,
       24,
@@ -131,18 +151,19 @@
       45,
       52,
       61,
-      0
+      0,
+      6
     ],
     "trend": "stable",
     "stagnation": true
   },
   "mode": "safe",
   "force_explore": false,
-  "control_state": "stagnation",
+  "control_state": "crisis",
   "fail_count": 0,
   "trend": "stable",
   "strategy": "optimize",
-  "prev_decision": "improve_module",
+  "prev_decision": "create_module",
   "best_module": {
     "module": "module_26",
     "score": 70,

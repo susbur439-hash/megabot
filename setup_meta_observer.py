@@ -11,16 +11,23 @@ def setup_meta_observer():
     print("🧠 Установка Meta-Observer...\n")
 
     # =========================
-    # scanner.py
+    # scanner.py (FIXED)
     # =========================
     scanner = '''import os
 
 def scan_repository(root="."):
     files = []
 
-    for dirpath, _, filenames in os.walk(root):
+    ignore_dirs = {"__pycache__", ".git", "venv", "env"}
+
+    for dirpath, dirnames, filenames in os.walk(root):
+
+        # фильтр мусора
+        dirnames[:] = [d for d in dirnames if d not in ignore_dirs]
+
         for f in filenames:
-            files.append(os.path.join(dirpath, f))
+            if f.endswith(".py"):
+                files.append(os.path.join(dirpath, f))
 
     return files
 '''
@@ -46,49 +53,47 @@ def scan_repository(root="."):
 '''
 
     # =========================
-    # connection_check.py
+    # connection_check.py (FIXED)
     # =========================
     connection = '''def check_connections(files):
     issues = []
 
     for f in files:
-        if not f.endswith(".py"):
-            continue
-
         try:
             with open(f, "r", encoding="utf-8") as file:
                 content = file.read()
 
-                if "execution(" in content and "decision" not in content:
+                # нормальная проверка связей
+                if "execution" in content and "decision" not in content:
                     issues.append(f"⚠️ {f}: execution без decision")
 
+                if "decision" in content and "execution" not in content:
+                    issues.append(f"⚠️ {f}: decision без execution")
+
         except:
-            pass
+            continue
 
     return issues
 '''
 
     # =========================
-    # dataflow_check.py
+    # dataflow_check.py (FIXED)
     # =========================
     dataflow = '''def check_dataflow(files):
     issues = []
 
-    keywords = ["data[", "goal", "env", "experience"]
+    required_any = ["data", "goal", "env", "memory", "state"]
 
     for f in files:
-        if not f.endswith(".py"):
-            continue
-
         try:
             with open(f, "r", encoding="utf-8") as file:
                 content = file.read()
 
-                if not any(k in content for k in keywords):
-                    issues.append(f"⚠️ {f}: нет работы с data")
+                if not any(k in content for k in required_any):
+                    issues.append(f"⚠️ {f}: слабый data-flow")
 
         except:
-            pass
+            continue
 
     return issues
 '''
@@ -100,18 +105,15 @@ def scan_repository(root="."):
     issues = []
 
     for f in files:
-        if not f.endswith(".py"):
-            continue
-
         try:
             with open(f, "r", encoding="utf-8") as file:
                 content = file.read()
 
-                if "repeat_count" not in content:
-                    issues.append(f"⚠️ {f}: нет анти-лупа")
+                if "repeat_count" not in content and "loop" in content:
+                    issues.append(f"⚠️ {f}: возможный риск зацикливания")
 
         except:
-            pass
+            continue
 
     return issues
 '''
@@ -120,28 +122,25 @@ def scan_repository(root="."):
     # report.py
     # =========================
     report = '''def generate_report(issues):
-    print("\\n📊 ОТЧЁТ:\\n")
+    print("\\n📊 META-REPORT:\\n")
 
     if not issues:
-        print("✅ Всё выглядит нормально")
+        print("✅ Система стабильна")
         return
 
     for i in issues:
         print(i)
 
-    print("\\n💡 Рекомендации:")
-
-    if any("Нет файла" in i for i in issues):
-        print("👉 Восстановить базовые файлы")
+    print("\\n💡 FIX SUGGESTIONS:")
 
     if any("execution без decision" in i for i in issues):
-        print("👉 Связать decision → execution")
+        print("→ Связать decision → execution pipeline")
 
-    if any("нет анти-лупа" in i for i in issues):
-        print("👉 Добавить repeat_count")
+    if any("data-flow" in i for i in issues):
+        print("→ Усилить memory/state/data слой")
 
-    if any("нет работы с data" in i for i in issues):
-        print("👉 Проверить data flow")
+    if any("зацикливания" in i for i in issues):
+        print("→ Добавить анти-loop механизм")
 '''
 
     # =========================
@@ -156,9 +155,9 @@ from report import generate_report
 
 
 def run():
-    print("🧠 META-OBSERVER ЗАПУЩЕН\\n")
+    print("🧠 META-OBSERVER START\\n")
 
-    files = scan_repository()
+    files = scan_repository(".")
 
     issues = []
     issues += check_structure(files)
@@ -184,9 +183,8 @@ if __name__ == "__main__":
     write_file("meta/report.py", report)
     write_file("meta/observer.py", observer)
 
-    print("✅ Meta-Observer установлен!\n")
-    print("🚀 Запуск:")
-    print("python meta/observer.py")
+    print("✅ Meta-Observer установлен!")
+    print("🚀 run: python meta/observer.py")
 
 
 if __name__ == "__main__":

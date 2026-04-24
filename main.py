@@ -24,10 +24,29 @@ def run_direct_command(cmd):
     """
     🔥 Прямой запуск python-файлов (обход Megabot)
     """
-    if cmd.endswith(".py") and os.path.exists(cmd):
+    if isinstance(cmd, str) and cmd.endswith(".py") and os.path.exists(cmd):
         print(f"🚀 Direct run: {cmd}")
         os.system(f"python {cmd}")
         return True
+    return False
+
+
+def engine_can_handle(result):
+    """
+    🧠 определяем, смог ли Engine обработать задачу
+    """
+    if result is None:
+        return False
+
+    if isinstance(result, dict):
+        # если есть явный статус ошибки или пустой результат
+        if result.get("status") == "error":
+            return False
+
+        # если Engine вернул осмысленный ответ
+        if result.get("status") == "ok":
+            return True
+
     return False
 
 
@@ -46,8 +65,11 @@ if __name__ == "__main__":
     if run_direct_command(task):
         sys.exit()
 
+    engine_result = None
+    used_engine = False
+
     # =========================
-    # 🧠 НОВАЯ АРХИТЕКТУРА (Engine)
+    # 🧠 ENGINE TRY FIRST
     # =========================
     if ENGINE_AVAILABLE:
         print("[Main] Trying Engine...")
@@ -57,18 +79,23 @@ if __name__ == "__main__":
 
             command = {
                 "module": "system",
-                "action": "list"
+                "action": "list",
+                "task": task
             }
 
-            result = engine.execute(command)
+            engine_result = engine.execute(command)
+            used_engine = True
 
-            print("[Main] Engine result:", result)
+            print("[Main] Engine result:", engine_result)
 
         except Exception as e:
             print("[Main] Engine error:", e)
 
     # =========================
-    # 🤖 СТАРАЯ СИСТЕМА (fallback)
+    # 🔁 DECISION: ENGINE vs DIRECTOR
     # =========================
-    print("[Main] Running Director fallback...")
-    director_run(task)
+    if used_engine and engine_can_handle(engine_result):
+        print("[Main] Engine handled task → skipping Director")
+    else:
+        print("[Main] Running Director fallback...")
+        director_run(task)

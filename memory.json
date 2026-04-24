@@ -76,6 +76,17 @@
     "🔋 control: low energy → safe mode",
     "🧠 control: mode=safe | phase=normal | trend=up | progress=51/100",
     "module +10",
+    "🧪 explore",
+    "adaptive_goal: 61/100 | level: 1 | trend: stable | state: normal | delta: 10",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 10 | best: module_704(63.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 0 | best: module_704(63.0)",
+    "decision: create_module | mode: build | analysis: build | score: 60 | best: module_704(56.0)",
+    "🧠 state: mode=exploit | phase=normal | trend=up",
+    "🔋 control: low energy → safe mode",
+    "🧠 control: mode=safe | phase=normal | trend=up | progress=61/100",
+    "module +10",
     "🧪 explore"
   ],
   "memory": [],
@@ -109,6 +120,11 @@
       "module": "module_708",
       "score": 50,
       "delta": 10
+    },
+    {
+      "module": "module_709",
+      "score": 50,
+      "delta": 10
     }
   ],
   "repeat_count": 0,
@@ -117,10 +133,11 @@
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 61,
+    "progress": 71,
     "level": 1,
     "target": 100,
     "history": [
+      60,
       60,
       60,
       60,
@@ -129,7 +146,7 @@
     ],
     "state": "normal"
   },
-  "prev_progress": 51,
+  "prev_progress": 61,
   "task_type": "development",
   "local_trend": "stable",
   "last_delta": 0,
@@ -139,12 +156,12 @@
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 619,
+  "cycle": 620,
   "env": {
     "energy": 0,
     "knowledge": 0,
     "success": 0,
-    "fail": 573,
+    "fail": 574,
     "entropy": 9,
     "experience": 0,
     "level": 1,
@@ -198,14 +215,14 @@
       -1,
       -1,
       -1,
-      -1,
+      0,
       0
     ],
     "state": "decline"
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 619,
+    "cycles": 620,
     "mode": "exploit",
     "phase": "normal",
     "focus": "recovery",
@@ -213,7 +230,6 @@
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      36,
       45,
       52,
       61,
@@ -222,7 +238,8 @@
       20,
       32,
       39,
-      51
+      51,
+      61
     ],
     "trend": "up",
     "stagnation": false

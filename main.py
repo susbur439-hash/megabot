@@ -4,8 +4,20 @@ import os
 # добавляем путь к проекту
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# ✅ ПРАВИЛЬНЫЙ ИМПОРТ
-from modules.director import run
+# =========================
+# 🔌 ENGINE
+# =========================
+try:
+    from core.engine import Engine
+    ENGINE_AVAILABLE = True
+except Exception as e:
+    print("[Engine] not available:", e)
+    ENGINE_AVAILABLE = False
+
+# =========================
+# 🎯 DIRECTOR (старый слой)
+# =========================
+from modules.director import run as director_run
 
 
 def run_direct_command(cmd):
@@ -25,16 +37,38 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         task = " ".join(sys.argv[1:])
 
-    print("🚀 Megabot Director запущен")
+    print("🚀 Megabot старт")
     print("🎯 Задача:", task)
 
     # =========================
-    # 🔥 НОВОЕ: режим команды
+    # 🔥 DIRECT MODE
     # =========================
     if run_direct_command(task):
         sys.exit()
 
     # =========================
-    # 🤖 Обычный режим Megabot
+    # 🧠 НОВАЯ АРХИТЕКТУРА (Engine)
     # =========================
-    run(task)
+    if ENGINE_AVAILABLE:
+        print("[Main] Trying Engine...")
+
+        try:
+            engine = Engine()
+
+            command = {
+                "module": "system",
+                "action": "list"
+            }
+
+            result = engine.execute(command)
+
+            print("[Main] Engine result:", result)
+
+        except Exception as e:
+            print("[Main] Engine error:", e)
+
+    # =========================
+    # 🤖 СТАРАЯ СИСТЕМА (fallback)
+    # =========================
+    print("[Main] Running Director fallback...")
+    director_run(task)

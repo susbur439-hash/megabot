@@ -17,7 +17,7 @@ def run(task_data):
     # =========================
     # 🧠 ОПРЕДЕЛЕНИЕ ТИПА ЗАДАЧИ
     # =========================
-    if "развивай" in task or "развитие" in task:
+    if "развивай" in task.lower() or "развитие" in task.lower():
         result["type"] = "self_improvement"
         result["goal"] = "improve_system"
 
@@ -28,7 +28,7 @@ def run(task_data):
             "оптимизация логики"
         ]
 
-    elif "исправь" in task or "fix" in task:
+    elif "исправь" in task.lower() or "fix" in task.lower():
         result["type"] = "fix"
         result["priority"] = "high"
 
@@ -39,7 +39,7 @@ def run(task_data):
             "проверить систему"
         ]
 
-    elif "создай" in task or "create" in task:
+    elif "создай" in task.lower() or "create" in task.lower():
         result["type"] = "creation"
 
         result["steps"] = [
@@ -61,7 +61,61 @@ def run(task_data):
     # =========================
     # 🔥 УЛУЧШЕНИЕ ПРИОРИТЕТА
     # =========================
-    if "crash" in task or "error" in task:
+    if "crash" in task.lower() or "error" in task.lower():
         result["priority"] = "critical"
 
     return result
+
+
+# =========================
+# 🔥 НОВОЕ: ENGINE INTERFACE
+# =========================
+def interpret(task: str):
+    """
+    Преобразует задачу в команду для Engine
+    """
+
+    print(f"[TaskInterpreter] Received task: {task}")
+
+    structured = run({"task": task})
+
+    task_type = structured.get("type")
+
+    # =========================
+    # 🎯 МАППИНГ В ENGINE
+    # =========================
+    if task_type == "self_improvement":
+        command = {
+            "module": "learning",
+            "action": "self_improve",
+            "task": task,
+            "meta": structured
+        }
+
+    elif task_type == "fix":
+        command = {
+            "module": "system",
+            "action": "fix",
+            "task": task,
+            "meta": structured
+        }
+
+    elif task_type == "creation":
+        command = {
+            "module": "planning",
+            "action": "create",
+            "task": task,
+            "meta": structured
+        }
+
+    else:
+        command = {
+            "module": "system",
+            "action": "list",
+            "task": task,
+            "meta": structured
+        }
+
+    print(f"[TaskInterpreter] Interpreted as: {command}")
+
+    return command

@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 
 # =========================
 # 📦 PATH
@@ -17,7 +18,17 @@ except Exception as e:
     ENGINE_AVAILABLE = False
 
 # =========================
-# 🎯 DIRECTOR (fallback слой)
+# 🧠 TASK INTERPRETER (КЛЮЧЕВОЕ!)
+# =========================
+try:
+    from modules.task_interpreter import interpret
+    INTERPRETER_AVAILABLE = True
+except Exception as e:
+    print("[TaskInterpreter] not available:", e)
+    INTERPRETER_AVAILABLE = False
+
+# =========================
+# 🎯 DIRECTOR (fallback)
 # =========================
 from modules.director import run as director_run
 
@@ -51,10 +62,18 @@ def engine_can_handle(result):
 # =========================
 if __name__ == "__main__":
 
-    task = "развивай себя"
+    # =========================
+    # 📥 TASK FROM CONTROL PANEL
+    # =========================
+    task = os.environ.get("TASK_JSON", "развивай себя")
 
-    if len(sys.argv) > 1:
-        task = " ".join(sys.argv[1:])
+    # если это JSON → превращаем в строку
+    try:
+        parsed = json.loads(task)
+        if isinstance(parsed, dict) and "task" in parsed:
+            task = parsed["task"]
+    except:
+        pass
 
     print("🚀 Megabot старт")
     print("🎯 Задача:", task)
@@ -66,22 +85,30 @@ if __name__ == "__main__":
         sys.exit(0)
 
     engine_result = None
+    command = None
 
     # =========================
-    # 🧠 ENGINE FIRST
+    # 🧠 INTERPRET TASK
+    # =========================
+    if INTERPRETER_AVAILABLE:
+        command = interpret(task)
+    else:
+        command = {
+            "module": "system",
+            "action": "list",
+            "task": task
+        }
+
+    print("[Main] Command:", command)
+
+    # =========================
+    # 🧠 ENGINE EXECUTION
     # =========================
     if ENGINE_AVAILABLE:
         print("[Main] Engine try...")
 
         try:
             engine = Engine()
-
-            command = {
-                "module": "system",
-                "action": "list",
-                "task": task
-            }
-
             engine_result = engine.execute(command)
             print("[Main] Engine result:", engine_result)
 

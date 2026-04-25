@@ -1,12 +1,27 @@
 import os
 import re
+import json
 
 
 def run(data):
-    print("👁 OBSERVER v4 SCAN START")
+    print("👁 OBSERVER v4 FIXED START")
 
     root = "."
     skip_dirs = {"__pycache__", ".git", "venv", "env"}
+
+    # =========================
+    # 📦 LOAD RUNTIME (НОВОЕ)
+    # =========================
+    runtime_calls = []
+    try:
+        with open("runtime_log.json", "r", encoding="utf-8") as f:
+            runtime_calls = json.load(f).get("calls", [])
+    except:
+        runtime_calls = []
+
+    runtime_used = set(
+        c.get("module") for c in runtime_calls if c.get("module")
+    )
 
     report = {
         "nodes": {},
@@ -23,10 +38,9 @@ def run(data):
     }
 
     imports_map = {}
-    usage_map = {}
 
     # =========================
-    # 📁 SCAN PROJECT
+    # 📁 SCAN
     # =========================
     for r, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if d not in skip_dirs]
@@ -44,11 +58,7 @@ def run(data):
                 with open(full, "r", encoding="utf-8") as file:
                     content = file.read()
             except Exception as e:
-                report["critical"].append({
-                    "type": "read_error",
-                    "file": rel,
-                    "error": str(e)
-                })
+                report["critical"].append({"file": rel, "error": str(e)})
                 continue
 
             imports = set()
@@ -60,57 +70,45 @@ def run(data):
 
             report["nodes"][rel] = {
                 "has_run": "def run(" in content,
-                "size": len(content),
-                "complexity": content.count("\n"),
                 "is_core": "engine" in rel or "core" in rel,
-                "is_router": "router" in content.lower()
+                "size": len(content)
             }
 
-            usage_map[rel] = 0
-
-    # =========================
-    # 🔗 BUILD GRAPH
-    # =========================
     module_set = set(report["modules"])
 
+    # =========================
+    # 🔗 EDGES (SAFE MATCH)
+    # =========================
     for mod, imports in imports_map.items():
         for imp in imports:
             for target in module_set:
-                if target.endswith(f"{imp}.py"):
+                if imp in target:
                     report["edges"].append((mod, target))
-                    usage_map[target] = usage_map.get(target, 0) + 1
 
     # =========================
-    # 🧠 CLASSIFICATION
+    # 🧠 CLASSIFICATION (FIXED)
     # =========================
     for mod, node in report["nodes"].items():
-        usage = usage_map.get(mod, 0)
+
+        static_usage = any(mod in e[1] for e in report["edges"])
+        runtime_usage = mod in runtime_used
 
         score = 0
 
-        # usage weight
-        if usage > 0:
-            score += 50
+        if static_usage or runtime_usage:
+            score += 60
         else:
-            score -= 20
+            score -= 30
 
-        # logic presence
         if node["has_run"]:
-            score += 25
+            score += 20
 
-        # complexity
-        if node["complexity"] > 50:
-            score += 10
-
-        # core system boost
         if node["is_core"]:
             score += 10
 
-        # router boost
-        if node["is_router"]:
-            score += 15
+        if runtime_usage:
+            score += 20
 
-        # classification
         if score >= 70:
             report["hot"].append(mod)
         elif score >= 30:
@@ -119,35 +117,27 @@ def run(data):
             report["dead"].append(mod)
 
     # =========================
-    # 🧠 SELF-HEAL SUGGESTIONS
+    # 💀 DEAD (FIXED LOGIC)
     # =========================
     for mod in report["dead"]:
         report["suggestions"].append({
             "module": mod,
-            "problem": "module is unused or isolated",
-            "fix": "connect module to router or remove if obsolete"
-        })
-
-    for mod in report["cold"]:
-        report["suggestions"].append({
-            "module": mod,
-            "problem": "low activity module",
-            "fix": "increase usage or integrate into engine flow"
+            "problem": "low or no usage (static + runtime)",
+            "fix": "connect to runtime flow or remove"
         })
 
     # =========================
-    # 📊 HEALTH SCORE
+    # 📊 HEALTH
     # =========================
     total = len(report["modules"]) or 1
 
     score = int(
-        (len(report["hot"]) * 100 +
-         len(report["cold"]) * 40) / total
+        (len(report["hot"]) * 100 + len(report["cold"]) * 50) / total
     )
 
     report["health_score"] = score
 
-    if score >= 75:
+    if score >= 70:
         report["health_status"] = "healthy"
     elif score >= 40:
         report["health_status"] = "unstable"
@@ -155,7 +145,7 @@ def run(data):
         report["health_status"] = "critical"
 
     # =========================
-    # 📤 RETURN
+    # 📤 OUTPUT
     # =========================
     data["observer_v4"] = report
 
@@ -167,10 +157,6 @@ def run(data):
     for s in report["suggestions"][:10]:
         print("🛠", s)
 
-    print("\n=== END OBSERVER v4 ===")
-
-    data.setdefault("log", []).append(
-        f"observer_v4: score={score} status={report['health_status']}"
-    )
+    print("\n=== END OBSERVER v4 FIXED ===")
 
     return data

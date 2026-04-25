@@ -1,6 +1,8 @@
 import json
 
-# пробуем подключить оба ядра
+# =========================
+# 🧠 Подключение ядер
+# =========================
 try:
     from modules.director import run as director_run
 except:
@@ -11,43 +13,64 @@ try:
 except:
     engine_run = None
 
+# (опционально) внешний источник
+try:
+    from external_gateway import ExternalGateway
+    gateway = ExternalGateway()
+except:
+    gateway = None
 
-def decide_mode(task: str) -> str:
-    """
-    🧠 Улучшенная логика выбора системы
-    (более стабильный роутинг)
-    """
 
-    task_lower = task.lower()
+# =========================
+# 🧠 Анализ задачи
+# =========================
+def analyze(task: str) -> dict:
+    t = task.lower()
 
-    engine_keywords = [
-        "system", "list", "modules", "router", "status",
-        "scan", "repo", "health", "debug", "logs"
-    ]
+    return {
+        "raw": task,
+        "is_system": any(k in t for k in [
+            "system", "list", "modules", "router",
+            "status", "scan", "repo", "health", "debug", "logs"
+        ]),
+        "needs_external": any(k in t for k in [
+            "search", "internet", "learn", "external"
+        ])
+    }
 
-    # 🟢 engine — только системные/технические команды
-    if any(k in task_lower for k in engine_keywords):
+
+# =========================
+# 🧠 Выбор стратегии
+# =========================
+def decide_strategy(analysis: dict) -> str:
+
+    if analysis["needs_external"] and gateway:
+        return "external"
+
+    if analysis["is_system"]:
         return "engine"
 
-    # 🔴 всё остальное → director (мышление / развитие)
     return "director"
 
 
-def run(task: str):
-    """
-    🚀 Единая точка входа в Megabot
-    """
+# =========================
+# ⚙️ Выполнение
+# =========================
+def execute(strategy: str, task: str):
 
-    mode = decide_mode(task)
+    print(f"[CentralDecision] strategy={strategy} task='{task}'")
 
-    print(f"[CentralDecision] task='{task}' → mode={mode}")
+    # 🌐 внешний источник
+    if strategy == "external":
+        print("[CentralDecision] → External Gateway")
+        return gateway.call("search", task)
 
-    # 🟢 Engine слой
-    if mode == "engine" and engine_run:
+    # ⚙️ engine
+    if strategy == "engine" and engine_run:
         print("[CentralDecision] → Engine selected")
         return engine_run(task)
 
-    # 🔴 Director слой
+    # 🧠 director
     if director_run:
         print("[CentralDecision] → Director selected")
         return director_run(task)
@@ -56,3 +79,14 @@ def run(task: str):
         "status": "error",
         "message": "No execution layer available"
     }
+
+
+# =========================
+# 🚀 Главная точка входа
+# =========================
+def run(task: str):
+
+    analysis = analyze(task)
+    strategy = decide_strategy(analysis)
+
+    return execute(strategy, task)

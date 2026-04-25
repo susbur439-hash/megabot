@@ -2,196 +2,187 @@ import os
 import re
 import json
 
+ROOT = "."
+RUNTIME_FILE = "runtime_log.json"
 
-def run(data):
-    print("👁 OBSERVER v5 CORE START")
 
-    root = "."
-    skip_dirs = {"__pycache__", ".git", "venv", "env"}
+# =========================
+# 🧠 NORMALIZATION (КЛЮЧЕВОЕ)
+# =========================
+def norm(path: str) -> str:
+    return os.path.splitext(os.path.basename(path))[0]
 
-    # =========================
-    # 📦 LOAD RUNTIME
-    # =========================
-    runtime_calls = []
+
+# =========================
+# 📦 LOAD RUNTIME
+# =========================
+def load_runtime():
+    if not os.path.exists(RUNTIME_FILE):
+        return []
+
     try:
-        with open("runtime_log.json", "r", encoding="utf-8") as f:
-            runtime_calls = json.load(f).get("calls", [])
+        with open(RUNTIME_FILE, "r", encoding="utf-8") as f:
+            return json.load(f).get("calls", [])
     except:
-        runtime_calls = []
+        return []
 
-    # =========================
-    # 🧠 RUNTIME MAP
-    # =========================
-    runtime_used = set()
-    runtime_edges = set()
 
-    for c in runtime_calls:
-        mod = c.get("module")
-        if mod:
-            runtime_used.add(mod)
+# =========================
+# 📁 SCAN
+# =========================
+def scan():
+    structure = {}
 
-        if c.get("prev_module") and mod:
-            runtime_edges.add((c["prev_module"], mod))
+    for root, dirs, files in os.walk(ROOT):
+        if ".git" in root or "__pycache__" in root:
+            continue
+        structure[root] = files
 
-    # =========================
-    # 📊 STORAGE
-    # =========================
-    nodes = {}
-    modules = []
+    return structure
+
+
+# =========================
+# 🧠 INDEX
+# =========================
+def index(structure):
+    modules = {}
     imports_map = {}
-    static_edges = set()
 
-    # =========================
-    # 📁 SCAN
-    # =========================
-    for r, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if d not in skip_dirs]
-
+    for path, files in structure.items():
         for f in files:
             if not f.endswith(".py"):
                 continue
 
-            full = os.path.join(r, f)
-            rel = os.path.relpath(full, root)
-
-            modules.append(rel)
+            full = os.path.join(path, f)
 
             try:
-                with open(full, "r", encoding="utf-8") as file:
-                    content = file.read()
+                content = open(full, "r", encoding="utf-8").read()
             except:
                 continue
+
+            name = norm(f)
+
+            modules[name] = {
+                "path": full,
+                "has_run": "def run(" in content,
+                "is_entry": f in ["main.py", "app.py", "bot_start.py"],
+                "size": len(content)
+            }
 
             imports = set()
             imports.update(re.findall(r"^\s*import\s+([\w\.]+)", content, re.MULTILINE))
             imports.update(re.findall(r"^\s*from\s+([\w\.]+)\s+import", content, re.MULTILINE))
 
-            cleaned = {i.split(".")[0] for i in imports}
-            imports_map[rel] = cleaned
+            imports_map[name] = {i.split(".")[0] for i in imports}
 
-            nodes[rel] = {
-                "has_run": "def run(" in content,
-                "is_entry": f in ["main.py", "app.py", "bot_start.py"],
-                "is_core": any(x in rel for x in ["core", "engine", "control", "system"]),
-                "size": len(content)
-            }
+    return modules, imports_map
 
-    module_set = set(modules)
 
-    # =========================
-    # 🔗 STATIC GRAPH (CLEAN MATCH)
-    # =========================
-    for mod, imports in imports_map.items():
-        mod_name = os.path.splitext(os.path.basename(mod))[0]
+# =========================
+# 🔥 RUNTIME TRUTH
+# =========================
+def runtime_truth(calls):
+    used = {}
+    edges = set()
 
-        for imp in imports:
-            for target in module_set:
-                target_name = os.path.splitext(os.path.basename(target))[0]
+    for c in calls:
+        m = c.get("module")
+        p = c.get("prev_module")
 
-                if imp == target_name:
-                    static_edges.add((mod, target))
+        if m:
+            nm = norm(m)
+            used[nm] = used.get(nm, 0) + 1
 
-    # =========================
-    # 🧠 ACTIVITY SCORE
-    # =========================
+        if m and p:
+            edges.add((norm(p), norm(m)))
+
+    return used, edges
+
+
+# =========================
+# 🧠 CLASSIFIER (TRUTH-BASED)
+# =========================
+def classify(modules, imports_map, runtime_used, runtime_edges):
     hot, cold, dead = [], [], []
 
-    for mod in modules:
-        node = nodes.get(mod, {})
+    for name, meta in modules.items():
 
-        static_usage = any(mod == e[1] for e in static_edges)
-        runtime_usage = mod in runtime_used
-        runtime_flow = any(mod == e[1] for e in runtime_edges)
+        runtime_score = runtime_used.get(name, 0) > 0
+        static_score = any(name in imports_map.get(name2, set()) for name2 in imports_map)
+        flow_score = any(name == b for a, b in runtime_edges)
 
         score = 0
 
-        if static_usage:
-            score += 40
+        # 🔥 MAIN TRUTH = RUNTIME
+        if runtime_score:
+            score += 70
 
-        if runtime_usage:
-            score += 40
-
-        if runtime_flow:
+        if flow_score:
             score += 20
 
-        if node.get("has_run"):
-            score += 15
-
-        if node.get("is_core"):
+        if static_score:
             score += 10
 
-        if node.get("is_entry"):
-            score += 20
+        if meta["has_run"]:
+            score += 10
+
+        if meta["is_entry"]:
+            score += 15
 
         if score >= 80:
-            hot.append(mod)
+            hot.append(name)
         elif score >= 40:
-            cold.append(mod)
+            cold.append(name)
         else:
-            dead.append(mod)
+            dead.append(name)
 
-    # =========================
-    # 💀 DEAD ANALYSIS
-    # =========================
-    suggestions = []
+    return hot, cold, dead
 
-    for mod in dead:
-        if mod in ["main.py", "app.py", "bot_start.py"]:
-            continue
 
-        suggestions.append({
-            "module": mod,
-            "problem": "module is isolated (no runtime + no graph usage)",
-            "fix": "connect into execution flow or remove"
-        })
+# =========================
+# 🧠 MAIN OBSERVER v6 TRUTH
+# =========================
+def run(data=None):
+    print("👁 OBSERVER v6 TRUTH START")
 
-    # =========================
-    # 🔗 FULL FLOW GRAPH
-    # =========================
-    full_edges = list(static_edges.union(runtime_edges))
+    structure = scan()
+    modules, imports_map = index(structure)
 
-    # =========================
-    # 📊 HEALTH SCORE
-    # =========================
+    runtime = load_runtime()
+    runtime_used, runtime_edges = runtime_truth(runtime)
+
+    hot, cold, dead = classify(modules, imports_map, runtime_used, runtime_edges)
+
     total = len(modules) or 1
 
     health = int(
         (len(hot) * 100 + len(cold) * 50) / total
     )
 
-    if health >= 75:
-        status = "healthy"
-    elif health >= 40:
-        status = "unstable"
-    else:
-        status = "critical"
+    health = max(0, min(100, health))
 
     # =========================
     # 📤 OUTPUT
     # =========================
-    report = {
-        "modules": total,
-        "hot": hot,
-        "cold": cold,
-        "dead": dead,
-        "edges": list(full_edges),
-        "runtime_edges": list(runtime_edges),
-        "static_edges": list(static_edges),
-        "health": health,
-        "status": status,
-        "suggestions": suggestions
-    }
-
-    data["observer_v5"] = report
-
-    print(f"📊 modules={total} edges={len(full_edges)}")
+    print(f"📊 modules={total}")
     print(f"🔥 hot={len(hot)} ⚪ cold={len(cold)} 💀 dead={len(dead)}")
-    print(f"🧠 HEALTH: {health}/100 → {status}")
+    print(f"🧠 HEALTH: {health}/100")
 
-    print("\n=== TOP SUGGESTIONS ===")
-    for s in suggestions[:10]:
-        print("🛠", s)
+    print("\n=== HOT ===")
+    for m in hot[:10]:
+        print("🔥", m)
 
-    print("\n=== END OBSERVER v5 CORE ===")
+    print("\n=== DEAD ===")
+    for m in dead[:10]:
+        print("💀", m)
 
-    return data
+    return {
+        "system_map": {
+            "health": health,
+            "hot": hot,
+            "cold": cold,
+            "dead": dead,
+            "runtime_used": runtime_used,
+            "runtime_edges": list(runtime_edges)
+        }
+    }

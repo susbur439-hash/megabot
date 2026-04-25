@@ -3,196 +3,172 @@ import json
 import re
 
 ROOT = "."
-
-skip_dirs = {"__pycache__", ".git", "venv", "env"}
-
-std_libs = {
-    "os", "sys", "json", "re", "math", "random",
-    "time", "datetime", "collections", "itertools",
-    "subprocess", "threading", "asyncio", "logging",
-    "importlib", "traceback"
-}
+RUNTIME_FILE = "runtime_log.json"
 
 
 # =========================
-# 📦 SCAN FILES
+# 📦 LOAD RUNTIME (НОВОЕ)
+# =========================
+def load_runtime():
+    if not os.path.exists(RUNTIME_FILE):
+        return []
+    try:
+        with open(RUNTIME_FILE, "r", encoding="utf-8") as f:
+            return json.load(f).get("calls", [])
+    except:
+        return []
+
+
+# =========================
+# 📁 SCAN FILES
 # =========================
 def scan_files():
-    modules = []
     structure = {}
 
     for root, dirs, files in os.walk(ROOT):
-        dirs[:] = [d for d in dirs if d not in skip_dirs]
-
+        if ".git" in root:
+            continue
         structure[root] = files
 
-        for f in files:
-            if f.endswith(".py"):
-                full = os.path.join(root, f)
-                rel = os.path.relpath(full, ROOT)
-                modules.append(rel)
-
-    return modules, structure
+    return structure
 
 
 # =========================
-# 🔗 IMPORT ANALYSIS
+# 🔗 BUILD IMPORT GRAPH
 # =========================
-def analyze_imports(modules):
+def build_import_map(structure):
     imports_map = {}
 
-    for module in modules:
-        try:
-            with open(module, "r", encoding="utf-8") as f:
-                content = f.read()
+    for path, files in structure.items():
+        for file in files:
+            if not file.endswith(".py"):
+                continue
 
-            imports = set()
+            full_path = os.path.join(path, file)
 
-            matches = re.findall(r"^\s*import\s+([\w\.]+)", content, re.MULTILINE)
-            matches += re.findall(r"^\s*from\s+([\w\.]+)\s+import", content, re.MULTILINE)
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    content = f.read()
 
-            for m in matches:
-                base = m.split(".")[0]
-                if base:
-                    imports.add(base)
+                imports = set()
 
-            imports_map[module] = list(imports)
+                imports += set(re.findall(r"^\s*import\s+([\w\.]+)", content, re.MULTILINE))
+                imports += set(re.findall(r"^\s*from\s+([\w\.]+)\s+import", content, re.MULTILINE))
 
-        except:
-            imports_map[module] = []
+                imports_map[full_path] = list(imports)
+
+            except:
+                continue
 
     return imports_map
 
 
 # =========================
-# 🔗 CONNECTION GRAPH
+# 🧠 RUNTIME ANALYSIS (ГЛАВНОЕ ДОБАВЛЕНИЕ)
 # =========================
-def build_connections(modules, imports_map):
-    connections = {}
+def analyze_runtime(calls):
+    module_stats = {}
+    edges = set()
 
-    for m in modules:
-        connections[m] = {
-            "imports": imports_map.get(m, []),
-            "used_by": []
-        }
+    for c in calls:
+        mod = c.get("module", "unknown")
+        module_stats[mod] = module_stats.get(mod, 0) + 1
 
-    for module, imports in imports_map.items():
-        for imp in imports:
-            if imp in std_libs:
-                continue
+        # цепочка вызовов (если есть предыдущий модуль)
+        if "prev_module" in c:
+            edges.add((c["prev_module"], mod))
 
-            for other in modules:
-                if imp in other:
-                    connections[other]["used_by"].append(module)
+    hot = sorted(module_stats.items(), key=lambda x: x[1], reverse=True)[:10]
 
-    return connections
-
-
-# =========================
-# 🧟 DEAD + CORE
-# =========================
-def classify_modules(connections):
-    dead = []
-    core = []
-
-    for m, conn in connections.items():
-        if not conn["used_by"] and "main.py" not in m:
-            dead.append(m)
-
-        if len(conn["used_by"]) > 2:
-            core.append(m)
-
-    return dead, core
-
-
-# =========================
-# 📊 STRUCTURE CHECK
-# =========================
-def check_structure(structure):
-    warnings = []
-    issues = []
-
-    found_paths = set(structure.keys())
-
-    expected_dirs = ["modules", "meta", "megabot_core"]
-
-    for d in expected_dirs:
-        if not any(d in path for path in found_paths):
-            warnings.append(f"missing layer: {d}")
-
-    if not any("main.py" in files for files in structure.values()):
-        issues.append("missing main.py")
-
-    return issues, warnings
-
-
-# =========================
-# 🧠 SCORE
-# =========================
-def system_score(issues, warnings, dead_count):
-    score = 100
-    score -= len(issues) * 25
-    score -= len(warnings) * 5
-    score -= int(dead_count * 0.05)
-
-    return max(0, min(100, score))
-
-
-# =========================
-# 🚀 MAIN OBSERVER
-# =========================
-def run(data):
-    print("👁 OBSERVER v6 START")
-
-    modules, structure = scan_files()
-    imports_map = analyze_imports(modules)
-    connections = build_connections(modules, imports_map)
-    dead, core = classify_modules(connections)
-
-    issues, warnings = check_structure(structure)
-
-    score = system_score(issues, warnings, len(dead))
-
-    # =========================
-    # 💾 SYSTEM MAP
-    # =========================
-    system_map = {
-        "modules": modules,
-        "connections": connections,
-        "dead_modules": dead,
-        "core_modules": core,
-        "issues": issues,
-        "warnings": warnings,
-        "stats": {
-            "total": len(modules),
-            "dead": len(dead),
-            "core": len(core),
-            "score": score
-        }
+    return {
+        "module_stats": module_stats,
+        "hot": hot,
+        "edges": list(edges)
     }
 
-    try:
-        with open("system_map.json", "w", encoding="utf-8") as f:
-            json.dump(system_map, f, ensure_ascii=False, indent=2)
-        print("💾 system_map.json saved")
-    except Exception as e:
-        print("❌ save error:", e)
+
+# =========================
+# 🧟 DEAD MODULES
+# =========================
+def detect_dead_modules(structure, runtime):
+    used = set([c.get("module") for c in runtime])
+
+    dead = []
+
+    for path, files in structure.items():
+        for f in files:
+            if f.endswith(".py"):
+                name = f.replace(".py", "")
+                if name not in used and f != "main.py":
+                    dead.append(os.path.join(path, f))
+
+    return dead
+
+
+# =========================
+# 🧠 MAIN OBSERVER
+# =========================
+def run(data=None):
+    print("👁 OBSERVER v5 START")
+
+    structure = scan_files()
+    runtime = load_runtime()
+    imports_map = build_import_map(structure)
+
+    runtime_analysis = analyze_runtime(runtime)
+    dead_modules = detect_dead_modules(structure, runtime)
 
     # =========================
-    # 📊 OUTPUT
+    # 📊 STATS
     # =========================
-    print(f"📊 modules={len(modules)}")
-    print(f"💀 dead={len(dead)}")
-    print(f"🧠 core={len(core)}")
-    print(f"🏁 score={score}/100")
+    stats = {
+        "modules": sum(len(v) for v in structure.values()),
+        "edges": len(runtime_analysis["edges"]),
+        "hot": len(runtime_analysis["hot"]),
+        "dead": len(dead_modules)
+    }
 
-    if issues:
-        print("❌ issues:", issues[:3])
+    # =========================
+    # 🧠 HEALTH SCORE
+    # =========================
+    health = 100
+    health -= stats["dead"] * 0.1
+    health -= (100 - min(stats["hot"], 20))
 
-    if warnings:
-        print("⚠️ warnings:", warnings[:3])
+    health = max(0, int(health))
 
-    print("✅ OBSERVER v6 DONE")
+    print(f"📊 modules={stats['modules']} edges={stats['edges']}")
+    print(f"🔥 hot={stats['hot']} 💀 dead={stats['dead']}")
+    print(f"🧠 HEALTH: {health}/100")
 
-    data["system_map"] = system_map
-    return data
+    # =========================
+    # 🔥 TOP MODULES
+    # =========================
+    print("\n=== HOT MODULES ===")
+    for m, c in runtime_analysis["hot"][:10]:
+        print(f"🔥 {m}: {c}")
+
+    # =========================
+    # 💀 DEAD MODULES
+    # =========================
+    print("\n=== DEAD MODULES ===")
+    for d in dead_modules[:10]:
+        print("💀", d)
+
+    # =========================
+    # 🔗 EDGES (FLOW)
+    # =========================
+    print("\n=== EXECUTION FLOW ===")
+    for e in runtime_analysis["edges"][:10]:
+        print(f"{e[0]} → {e[1]}")
+
+    print("\n=== END OBSERVER ===")
+
+    return {
+        "system_map": {
+            "health": health,
+            "hot": runtime_analysis["hot"],
+            "dead": dead_modules,
+            "edges": runtime_analysis["edges"]
+        }
+    }

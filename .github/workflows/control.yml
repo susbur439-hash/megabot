@@ -6,7 +6,7 @@ on:
       task:
         description: "Введите задачу для Megabot"
         required: true
-        default: "{\"type\":\"self_improve\"}"
+        default: '{"task": "развивай себя"}'
 
 jobs:
   run-bot:
@@ -49,8 +49,10 @@ jobs:
       # =========================
       - name: 🤖 Запуск Megabot
         env:
-          TASK_JSON: ${{ github.event.inputs.task }}
-        run: python main.py
+          TASK_JSON: '${{ github.event.inputs.task }}'
+        run: |
+          echo "📨 TASK_JSON = $TASK_JSON"
+          python main.py
 
       # =========================
       # 👁 OBLIVION

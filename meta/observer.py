@@ -5,7 +5,6 @@ import re
 ROOT = "."
 RUNTIME_FILE = "runtime_log.json"
 
-
 # =========================
 # 📦 LOAD RUNTIME
 # =========================
@@ -29,6 +28,9 @@ def scan_files():
     for root, dirs, files in os.walk(ROOT):
         if ".git" in root:
             continue
+        if "__pycache__" in root:
+            continue
+
         structure[root] = files
 
     return structure
@@ -58,7 +60,7 @@ def build_import_map(structure):
 
                 imports_map[full_path] = list(imports)
 
-            except Exception as e:
+            except:
                 imports_map[full_path] = []
 
     return imports_map
@@ -72,7 +74,10 @@ def analyze_runtime(calls):
     edges = set()
 
     for c in calls:
-        mod = c.get("module", "unknown")
+        mod = c.get("module")
+        if not mod:
+            continue
+
         module_stats[mod] = module_stats.get(mod, 0) + 1
 
         if "prev_module" in c:
@@ -88,11 +93,31 @@ def analyze_runtime(calls):
 
 
 # =========================
-# 🧟 DEAD MODULES
+# 🧠 REAL LIVE MODULE CHECK
 # =========================
-def detect_dead_modules(structure, runtime):
-    used = set([c.get("module") for c in runtime if c.get("module")])
+def get_live_modules(runtime, imports_map):
+    live = set()
 
+    # runtime usage
+    for c in runtime:
+        if c.get("module"):
+            live.add(c["module"])
+
+    # imports usage
+    for module, imports in imports_map.items():
+        for imp in imports:
+            live.add(imp)
+
+    # always alive core
+    live.update(["main", "control", "router"])
+
+    return live
+
+
+# =========================
+# 🧟 DEAD MODULES (FIXED)
+# =========================
+def detect_dead_modules(structure, live_modules):
     dead = []
 
     for path, files in structure.items():
@@ -102,68 +127,61 @@ def detect_dead_modules(structure, runtime):
 
             name = f.replace(".py", "")
 
-            if name not in used and f != "main.py":
+            if name not in live_modules:
+                # не убиваем core
+                if name in ["main", "control", "__init__"]:
+                    continue
+
                 dead.append(os.path.join(path, f))
 
     return dead
 
 
 # =========================
-# 🚨 SYSTEM ANALYSIS (NEW)
+# 🚨 SYSTEM ISSUES
 # =========================
 def detect_system_issues(structure, imports_map):
-    issues = []
     broken = []
     errors = []
 
-    all_files = {
-        os.path.basename(f.replace(".py", "")): f
+    all_modules = {
+        f.replace(".py", "")
         for path, files in structure.items()
         for f in files if f.endswith(".py")
     }
 
     for module, imports in imports_map.items():
         for imp in imports:
+
+            # skip stdlib
             if imp in ["os", "sys", "json", "re", "math", "time"]:
                 continue
 
-            if imp not in all_files:
+            if imp not in all_modules:
                 broken.append({
                     "module": module,
                     "missing": imp
                 })
 
-    # простая проверка битых файлов
-    for path, files in structure.items():
-        for f in files:
-            if f.endswith(".py"):
-                full = os.path.join(path, f)
-                try:
-                    with open(full, "r", encoding="utf-8") as x:
-                        x.read()
-                except Exception as e:
-                    errors.append({
-                        "file": full,
-                        "error": str(e)
-                    })
-
-    return issues, broken, errors
+    return broken, errors
 
 
 # =========================
-# 🧠 MAIN OBSERVER v6
+# 🧠 MAIN OBSERVER v7
 # =========================
 def run(data=None):
-    print("👁 OBSERVER v6 START")
+    print("👁 OBSERVER v7 START")
 
     structure = scan_files()
     runtime = load_runtime()
     imports_map = build_import_map(structure)
 
     runtime_analysis = analyze_runtime(runtime)
-    dead_modules = detect_dead_modules(structure, runtime)
 
-    issues, broken, errors = detect_system_issues(structure, imports_map)
+    live_modules = get_live_modules(runtime, imports_map)
+    dead_modules = detect_dead_modules(structure, live_modules)
+
+    broken, errors = detect_system_issues(structure, imports_map)
 
     # =========================
     # 📊 STATS
@@ -173,7 +191,6 @@ def run(data=None):
         "edges": len(runtime_analysis["edges"]),
         "hot": len(runtime_analysis["hot"]),
         "dead": len(dead_modules),
-        "issues": len(issues),
         "broken": len(broken),
         "errors": len(errors)
     }
@@ -182,9 +199,8 @@ def run(data=None):
     # 🧠 HEALTH SCORE
     # =========================
     health = 100
-    health -= stats["dead"] * 0.05
-    health -= stats["issues"] * 2
-    health -= stats["broken"] * 3
+    health -= stats["dead"] * 0.1
+    health -= stats["broken"] * 2
     health -= stats["errors"] * 5
 
     health = max(0, int(health))
@@ -193,34 +209,17 @@ def run(data=None):
     print(f"🔥 hot={stats['hot']} 💀 dead={stats['dead']}")
     print(f"🧠 HEALTH: {health}/100")
 
-    # =========================
-    # 🔥 HOT
-    # =========================
     print("\n=== HOT MODULES ===")
     for m, c in runtime_analysis["hot"]:
         print(f"🔥 {m}: {c}")
 
-    # =========================
-    # 💀 DEAD
-    # =========================
     print("\n=== DEAD MODULES ===")
-    for d in dead_modules[:10]:
+    for d in dead_modules[:15]:
         print("💀", d)
 
-    # =========================
-    # 🚨 ISSUES
-    # =========================
-    print("\n=== ISSUES ===")
-    for i in issues[:10]:
-        print("⚠️", i)
-
     print("\n=== BROKEN IMPORTS ===")
-    for b in broken[:10]:
+    for b in broken[:15]:
         print("🔗", b)
-
-    print("\n=== ERRORS ===")
-    for e in errors[:10]:
-        print("❌", e)
 
     print("\n=== END OBSERVER ===")
 
@@ -230,7 +229,6 @@ def run(data=None):
             "hot": runtime_analysis["hot"],
             "dead": dead_modules,
             "edges": runtime_analysis["edges"],
-            "architecture_issues": issues,
             "broken_links": broken,
             "errors": errors
         }

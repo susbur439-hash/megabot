@@ -1,167 +1,198 @@
 import os
 import json
+import re
 
 ROOT = "."
 
+skip_dirs = {"__pycache__", ".git", "venv", "env"}
+
+std_libs = {
+    "os", "sys", "json", "re", "math", "random",
+    "time", "datetime", "collections", "itertools",
+    "subprocess", "threading", "asyncio", "logging",
+    "importlib", "traceback"
+}
+
 
 # =========================
-# 📦 SCAN SYSTEM
+# 📦 SCAN FILES
 # =========================
 def scan_files():
+    modules = []
     structure = {}
 
     for root, dirs, files in os.walk(ROOT):
-        # игнорируем мусор
-        if ".git" in root:
-            continue
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+
         structure[root] = files
 
-    return structure
+        for f in files:
+            if f.endswith(".py"):
+                full = os.path.join(root, f)
+                rel = os.path.relpath(full, ROOT)
+                modules.append(rel)
+
+    return modules, structure
 
 
 # =========================
-# 🧠 STRUCTURE CHECK
+# 🔗 IMPORT ANALYSIS
+# =========================
+def analyze_imports(modules):
+    imports_map = {}
+
+    for module in modules:
+        try:
+            with open(module, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            imports = set()
+
+            matches = re.findall(r"^\s*import\s+([\w\.]+)", content, re.MULTILINE)
+            matches += re.findall(r"^\s*from\s+([\w\.]+)\s+import", content, re.MULTILINE)
+
+            for m in matches:
+                base = m.split(".")[0]
+                if base:
+                    imports.add(base)
+
+            imports_map[module] = list(imports)
+
+        except:
+            imports_map[module] = []
+
+    return imports_map
+
+
+# =========================
+# 🔗 CONNECTION GRAPH
+# =========================
+def build_connections(modules, imports_map):
+    connections = {}
+
+    for m in modules:
+        connections[m] = {
+            "imports": imports_map.get(m, []),
+            "used_by": []
+        }
+
+    for module, imports in imports_map.items():
+        for imp in imports:
+            if imp in std_libs:
+                continue
+
+            for other in modules:
+                if imp in other:
+                    connections[other]["used_by"].append(module)
+
+    return connections
+
+
+# =========================
+# 🧟 DEAD + CORE
+# =========================
+def classify_modules(connections):
+    dead = []
+    core = []
+
+    for m, conn in connections.items():
+        if not conn["used_by"] and "main.py" not in m:
+            dead.append(m)
+
+        if len(conn["used_by"]) > 2:
+            core.append(m)
+
+    return dead, core
+
+
+# =========================
+# 📊 STRUCTURE CHECK
 # =========================
 def check_structure(structure):
-    issues = []
     warnings = []
-    ok = []
+    issues = []
 
     found_paths = set(structure.keys())
-    all_files = []
-    for files in structure.values():
-        all_files.extend(files)
 
-    # =========================
-    # 📁 CORE ARCHITECTURE (реальная)
-    # =========================
-    expected_dirs = [
-        "modules",
-        "meta",
-        "megabot_core"
-    ]
+    expected_dirs = ["modules", "meta", "megabot_core"]
 
     for d in expected_dirs:
         if not any(d in path for path in found_paths):
-            warnings.append(f"⚠️ missing optional layer: {d}")
-        else:
-            ok.append(f"✅ layer present: {d}")
+            warnings.append(f"missing layer: {d}")
 
-    # =========================
-    # ⚙️ CORE ENTRY POINT
-    # =========================
-    expected_files = ["main.py"]
+    if not any("main.py" in files for files in structure.values()):
+        issues.append("missing main.py")
 
-    for f in expected_files:
-        if f not in all_files:
-            issues.append(f"❌ missing entry file: {f}")
-        else:
-            ok.append(f"✅ entry file exists: {f}")
-
-    # =========================
-    # 🧩 MODULE SYSTEM CHECK
-    # =========================
-    module_count = len([f for f in all_files if f.startswith("module_")])
-
-    if module_count == 0:
-        warnings.append("⚠️ no generated modules found (module_###)")
-    else:
-        ok.append(f"✅ generated modules: {module_count}")
-
-    return issues, warnings, ok
+    return issues, warnings
 
 
 # =========================
-# 🧪 LOGIC CHECK
+# 🧠 SCORE
 # =========================
-def check_logic():
-    warnings = []
-
-    if not os.path.exists("memory.json"):
-        warnings.append("⚠️ memory.json missing (state will be ephemeral)")
-    else:
-        ok_size = os.path.getsize("memory.json")
-        if ok_size == 0:
-            warnings.append("⚠️ memory.json is empty")
-
-    return warnings
-
-
-# =========================
-# 📊 SYSTEM SCORE
-# =========================
-def system_score(issues, warnings):
+def system_score(issues, warnings, dead_count):
     score = 100
-
     score -= len(issues) * 25
     score -= len(warnings) * 5
+    score -= int(dead_count * 0.05)
 
     return max(0, min(100, score))
 
 
 # =========================
-# 🧠 OBSERVER CORE
+# 🚀 MAIN OBSERVER
 # =========================
-def run_observer():
-    print("\n🧠 OBSERVER START\n")
+def run(data):
+    print("👁 OBSERVER v6 START")
 
-    structure = scan_files()
+    modules, structure = scan_files()
+    imports_map = analyze_imports(modules)
+    connections = build_connections(modules, imports_map)
+    dead, core = classify_modules(connections)
 
-    issues, warnings, ok = check_structure(structure)
-    logic_warnings = check_logic()
+    issues, warnings = check_structure(structure)
 
-    warnings.extend(logic_warnings)
-
-    score = system_score(issues, warnings)
-
-    # =========================
-    # 📊 STRUCTURE OUTPUT
-    # =========================
-    print("📦 STRUCTURE SUMMARY:\n")
-    for path, files in structure.items():
-        print(f"{path}: {len(files)} files")
+    score = system_score(issues, warnings, len(dead))
 
     # =========================
-    # ❌ ISSUES
+    # 💾 SYSTEM MAP
     # =========================
-    print("\n❌ CRITICAL ISSUES:")
-    if not issues:
-        print("none")
-    else:
-        for i in issues:
-            print(i)
+    system_map = {
+        "modules": modules,
+        "connections": connections,
+        "dead_modules": dead,
+        "core_modules": core,
+        "issues": issues,
+        "warnings": warnings,
+        "stats": {
+            "total": len(modules),
+            "dead": len(dead),
+            "core": len(core),
+            "score": score
+        }
+    }
+
+    try:
+        with open("system_map.json", "w", encoding="utf-8") as f:
+            json.dump(system_map, f, ensure_ascii=False, indent=2)
+        print("💾 system_map.json saved")
+    except Exception as e:
+        print("❌ save error:", e)
 
     # =========================
-    # ⚠️ WARNINGS
+    # 📊 OUTPUT
     # =========================
-    print("\n⚠️ WARNINGS:")
-    if not warnings:
-        print("none")
-    else:
-        for w in warnings:
-            print(w)
+    print(f"📊 modules={len(modules)}")
+    print(f"💀 dead={len(dead)}")
+    print(f"🧠 core={len(core)}")
+    print(f"🏁 score={score}/100")
 
-    # =========================
-    # ✅ OK STATE
-    # =========================
-    print("\n✅ HEALTHY PARTS:")
-    for o in ok:
-        print(o)
+    if issues:
+        print("❌ issues:", issues[:3])
 
-    # =========================
-    # 🏁 SCORE
-    # =========================
-    print(f"\n🏁 SYSTEM HEALTH: {score}/100")
+    if warnings:
+        print("⚠️ warnings:", warnings[:3])
 
-    if score > 80:
-        print("🟢 SYSTEM STABLE")
-    elif score > 50:
-        print("🟡 SYSTEM DEGRADED")
-    else:
-        print("🔴 SYSTEM CRITICAL")
+    print("✅ OBSERVER v6 DONE")
 
-    print("\n🧠 OBSERVER END\n")
-
-
-if __name__ == "__main__":
-    run_observer()
+    data["system_map"] = system_map
+    return data

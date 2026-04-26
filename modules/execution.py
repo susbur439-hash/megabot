@@ -62,10 +62,23 @@ def ensure_env(data):
 
 
 # =========================
+# 🔥 SAFE TASK PARSER (FIX)
+# =========================
+def get_task_text(data):
+    task_value = data.get("task", "")
+
+    # 🔥 ключевой фикс
+    if isinstance(task_value, dict):
+        task_value = task_value.get("task", "")
+
+    return str(task_value).lower()
+
+
+# =========================
 # 🔥 REAL ACTIONS
 # =========================
 def execute_real_action(data):
-    task = data.get("task", "").lower()
+    task = get_task_text(data)
 
     try:
         os.makedirs("generated", exist_ok=True)
@@ -123,10 +136,6 @@ def run_python_module(module_path, data):
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
-        if not spec or not spec.loader:
-            data["log"].append("❌ module load failed")
-            return data, False
-
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
@@ -202,37 +211,8 @@ def execution(data):
 
     ensure_env(data)
 
-    task_text = data.get("task", "").lower()
-
-    # =========================
-    # 🎮 CONTROL COMMANDS
-    # =========================
-    if task_text.startswith("create_module"):
-        parts = task_text.split()
-
-        if len(parts) >= 2:
-            module_name = parts[1]
-            os.makedirs("modules", exist_ok=True)
-            path = os.path.join("modules", module_name + ".py")
-
-            if not os.path.exists(path):
-                code = f"""def run(data):
-    data.setdefault("goal", {{"progress": 0}})
-    data["goal"]["progress"] += 15
-    data.setdefault("log", []).append("{module_name} +15")
-    return data
-"""
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(code)
-
-                save_to_git()
-
-                data["log"].append(f"✅ создан модуль: {module_name}")
-            else:
-                data["log"].append(f"⚠️ модуль уже существует: {module_name}")
-
-        save_to_memory(data)
-        return data
+    # 🔥 ИСПРАВЛЕНИЕ ЗДЕСЬ
+    task_text = get_task_text(data)
 
     # стратегия
     if "file" in task_text or "файл" in task_text:

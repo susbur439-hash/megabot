@@ -2,26 +2,35 @@ import os
 import random
 import json
 import importlib.util
+
 from environment import run_environment
 from modules.control import control
 
 
 # =========================
-# 💾 GIT SAVE
+# 💾 SAFE GIT SAVE (FIX)
 # =========================
 def save_to_git():
     try:
         os.system('git config --global user.name "megabot"')
         os.system('git config --global user.email "bot@megabot.ai"')
+
         os.system('git add .')
         os.system('git commit -m "Megabot auto update" || echo "No changes"')
-        os.system('git push')
+
+        # 🔥 КРИТИЧЕСКИЙ ФИКС
+        os.system('git pull --rebase origin main')
+
+        os.system('git push origin main')
+
+        print("✅ Git synced")
+
     except Exception as e:
         print("Git error:", e)
 
 
 # =========================
-# 💾 MEMORY LOAD
+# 💾 MEMORY
 # =========================
 def load_memory():
     try:
@@ -33,9 +42,6 @@ def load_memory():
     return {}
 
 
-# =========================
-# 💾 MEMORY SAVE
-# =========================
 def save_to_memory(data):
     try:
         with open("memory.json", "w", encoding="utf-8") as f:
@@ -62,12 +68,11 @@ def ensure_env(data):
 
 
 # =========================
-# 🔥 SAFE TASK PARSER (FIX)
+# 🔥 TASK FIX
 # =========================
 def get_task_text(data):
     task_value = data.get("task", "")
 
-    # 🔥 ключевой фикс
     if isinstance(task_value, dict):
         task_value = task_value.get("task", "")
 
@@ -84,6 +89,7 @@ def execute_real_action(data):
         os.makedirs("generated", exist_ok=True)
         os.makedirs("modules", exist_ok=True)
 
+        # 📁 FILE
         if "файл" in task or data.get("strategy") == "force_file":
             filename = f"generated/file_{random.randint(1000,9999)}.txt"
 
@@ -96,7 +102,13 @@ def execute_real_action(data):
             data["goal"]["progress"] += 20
             return data, True
 
+        # 🧠 MODULE (ограничено)
         if "модуль" in task or data.get("strategy") == "build_module":
+
+            if len(data.get("experience", [])) > 10:
+                data["log"].append("⚠️ слишком много модулей → skip create")
+                return data, False
+
             module_name = f"auto_{random.randint(1000,9999)}.py"
             path = os.path.join("modules", module_name)
 
@@ -114,7 +126,7 @@ def execute_real_action(data):
 
             save_to_git()
 
-            data["log"].append(f"🧠 авто-модуль создан: {module_name}")
+            data["log"].append(f"🧠 авто-модуль: {module_name}")
             data["goal"]["progress"] += 25
             return data, True
 
@@ -162,10 +174,16 @@ def get_best_module(experience):
     return max(valid, key=lambda x: x.get("score", 0)).get("module")
 
 
-def create_new_module():
+def create_new_module(data):
     os.makedirs("modules", exist_ok=True)
 
     modules = [m for m in os.listdir("modules") if m.endswith(".py")]
+
+    # 🚨 ограничение
+    if len(modules) > 30:
+        data["log"].append("🚨 module limit reached")
+        return None
+
     name = f"module_{len(modules)+1}.py"
     path = os.path.join("modules", name)
 
@@ -211,10 +229,8 @@ def execution(data):
 
     ensure_env(data)
 
-    # 🔥 ИСПРАВЛЕНИЕ ЗДЕСЬ
     task_text = get_task_text(data)
 
-    # стратегия
     if "file" in task_text or "файл" in task_text:
         data["strategy"] = "force_file"
     elif "module" in task_text or "модуль" in task_text:
@@ -225,38 +241,33 @@ def execution(data):
     before = data["goal"]["progress"]
     best_module = get_best_module(data["experience"])
 
-    if len(data["experience"]) >= 2:
-        if data["experience"][-1]["module"] == data["experience"][-2]["module"]:
-            data["repeat_count"] += 1
-        else:
-            data["repeat_count"] = 0
-
-    stagnation = data["repeat_count"] >= 2
-
-    if stagnation:
-        data["log"].append("💥 stagnation → real action")
-        data["strategy"] = "force_file"
-        data, _ = execute_real_action(data)
-        module_used = "real_action"
-
-    elif best_module and data.get("strategy") == "exploit":
+    # 🔥 СНАЧАЛА ПЫТАЕМСЯ ИСПОЛЬЗОВАТЬ
+    if best_module:
         path = os.path.join("modules", best_module + ".py")
-        data, _ = run_python_module(path, data)
-        module_used = best_module
-        data["log"].append(f"🚀 exploit: {best_module}")
+        data, ok = run_python_module(path, data)
 
+        if ok:
+            module_used = best_module
+            data["log"].append(f"🚀 use: {best_module}")
+        else:
+            module_used = None
     else:
-        module_name = create_new_module()
-        path = os.path.join("modules", module_name + ".py")
-        data, _ = run_python_module(path, data)
-        module_used = module_name
-        data["log"].append("🧪 explore")
+        module_used = None
+
+    # если не сработало — создаём
+    if not module_used:
+        module_name = create_new_module(data)
+
+        if module_name:
+            path = os.path.join("modules", module_name + ".py")
+            data, _ = run_python_module(path, data)
+            module_used = module_name
+            data["log"].append("🧪 create")
 
     after = data["goal"]["progress"]
 
     if after <= before:
-        data["env"]["entropy"] += 1
-        data["log"].append("🧠 fallback → forcing action")
+        data["log"].append("🧠 fallback → real action")
         data["strategy"] = "force_file"
         data, _ = execute_real_action(data)
         module_used = "real_action"

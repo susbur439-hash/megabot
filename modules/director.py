@@ -9,21 +9,29 @@ from modules.goals import set_goal, update_goal
 from modules.system_guard import system_guard
 from modules.self_improver import self_improver
 from modules.doctor import doctor
-from modules.control_layer import ControlLayer  # 🔥 ДОБАВЛЕНО
+from modules.control_layer import ControlLayer
 
-# 👁 OBSERVER (отдельный модуль, НЕ авто)
+# 🔥 НОВОЕ: единая работа с task
+from modules.task_core import extract_task, normalize_task
+
+# 👁 OBSERVER
 try:
     from modules.system_observer import run as observer_run
 except:
     observer_run = None
 
 
-# 🧠 CONTROL LAYER INIT (ГЛОБАЛЬНЫЙ ПРЕДОХРАНИТЕЛЬ)
+# 🧠 CONTROL LAYER INIT
 control_layer = ControlLayer()
 
 
 def run_task(data):
     data.setdefault("log", [])
+
+    # 🔥 НОРМАЛИЗАЦИЯ TASK (критично)
+    task = extract_task(data)
+    task = normalize_task(task)
+    data["task"] = task
 
     # 🔥 START
     data["last_layer"] = "start"
@@ -50,7 +58,7 @@ def run_task(data):
     data["decision"] = "run_module" if best else "create_module"
     data["last_decision"] = data["decision"]
 
-    # 🛑 CONTROL LAYER FILTER (НОВЫЙ КРИТИЧЕСКИЙ СЛОЙ)
+    # 🛑 CONTROL LAYER
     existing_modules = data.get("experience", [])
     existing_modules = [m.get("module") for m in existing_modules if isinstance(m, dict)]
 
@@ -65,7 +73,7 @@ def run_task(data):
     # ⚡ BOOST
     data["boost"] = 1.2
 
-    # 🚨 HARD SAFETY STOP (ЗАЩИТА ОТ СПАМА МОДУЛЕЙ)
+    # 🚨 HARD SAFETY STOP
     if data.get("decision") == "create_module":
         missing = control_layer.missing_core
 
@@ -141,7 +149,7 @@ def run_task(data):
     data["last_layer"] = "loop_end"
     data = doctor(data)
 
-    # ✂️ ограничение лога
+    # ✂️ лог
     data["log"] = data["log"][-200:]
 
     return data
@@ -162,6 +170,9 @@ def analyze_experience(data):
 
 
 def run(task):
+    # 🔥 НОРМАЛИЗАЦИЯ НА ВХОДЕ
+    task = normalize_task(extract_task(task))
+
     print("🚀 Запуск задачи:", task)
 
     data = {

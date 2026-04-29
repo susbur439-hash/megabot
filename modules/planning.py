@@ -23,10 +23,6 @@ def update_goal(data):
 
         data["log"].append(f"🎯 LEVEL UP → {goal['level']}")
 
-    # 📊 сохраняем историю
-    goal["history"].append(progress)
-    goal["history"] = goal["history"][-20:]
-
     return data
 
 
@@ -138,6 +134,55 @@ def apply_plan(data, plan):
 
 
 # =========================
+# 🎯 APPLY RESULT (REWARD)
+# =========================
+def apply_result(data):
+    goal = data.get("goal", {})
+    strategy = data.get("strategy", "explore")
+
+    progress_gain = 0
+
+    # 🎲 базовая логика награды
+    if strategy == "explore":
+        progress_gain = random.randint(1, 5)
+
+    elif strategy == "exploit":
+        progress_gain = random.randint(5, 10)
+
+    elif strategy == "build_module":
+        progress_gain = random.randint(3, 8)
+
+    elif strategy == "optimize":
+        progress_gain = random.randint(2, 6)
+
+    elif strategy == "force_file":
+        progress_gain = random.randint(1, 4)
+
+    elif strategy == "light":
+        progress_gain = 1
+
+    # 📈 применяем
+    goal["progress"] += progress_gain
+
+    data["log"].append(f"📈 progress +{progress_gain} → {goal['progress']}")
+
+    return data
+
+
+# =========================
+# 📝 UPDATE HISTORY
+# =========================
+def update_history(data):
+    goal = data.get("goal", {})
+    history = goal.setdefault("history", [])
+
+    history.append(goal.get("progress", 0))
+    goal["history"] = history[-20:]
+
+    return data
+
+
+# =========================
 # 🚀 MAIN ENTRY
 # =========================
 def run(data):
@@ -155,5 +200,11 @@ def run(data):
 
     # 🎬 применяем план
     data = apply_plan(data, plan)
+
+    # 🚀 результат действия
+    data = apply_result(data)
+
+    # 📝 обновляем историю (ПОСЛЕ результата)
+    data = update_history(data)
 
     return data

@@ -5,14 +5,14 @@ from modules.run import run_task
 def run(data):
     data.setdefault("log", [])
 
-    # 🧠 TASK NORMALIZE
+    # 🧠 TASK PREPROCESS
     task = extract_task(data)
     task = normalize_task(task)
     data["task"] = task
 
     data["log"].append("🎬 DIRECTOR START")
 
-    # 🚀 передача в ядро
+    # 🚀 CORE EXECUTION
     data = run_task(data)
 
     data["log"].append("🎬 DIRECTOR END")

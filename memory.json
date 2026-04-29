@@ -19,10 +19,28 @@
     "🧠 control: mode=safe | phase=crisis | trend=stable | progress=0/100",
     "🚨 module limit reached",
     "🧠 fallback → real action",
-    "📁 файл создан: generated/file_7996.txt"
+    "📁 файл создан: generated/file_7996.txt",
+    "adaptive_goal: 20/100 | level: 1 | trend: stable | state: normal | delta: 20",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 20 | best: real_action(90.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: build | behavior: balanced | trend: stable | stagnation: False | score: 60 | delta: 0 | best: real_action(90.0)",
+    "decision: create_module | mode: build | analysis: build | score: 60 | best: real_action(80.0)",
+    "🧠 state: mode=improve | phase=stagnation | trend=stable",
+    "🔁 control: stagnation detected",
+    "🔋 control: low energy → safe mode",
+    "🧠 control: mode=safe | phase=stagnation | trend=stable | progress=20/100",
+    "🚨 module limit reached",
+    "🧠 fallback → real action",
+    "📁 файл создан: generated/file_5200.txt"
   ],
   "memory": [],
   "experience": [
+    {
+      "module": "real_action",
+      "score": 100,
+      "delta": 20
+    },
     {
       "module": "real_action",
       "score": 100,
@@ -35,33 +53,35 @@
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 20,
+    "progress": 40,
     "level": 1,
     "target": 100,
-    "history": []
+    "history": [
+      60
+    ],
+    "state": "normal"
   },
-  "prev_progress": 0,
+  "prev_progress": 20,
   "task_type": "development",
   "local_trend": "stable",
   "last_delta": 0,
   "behavior": "balanced",
-  "analysis": "bootstrap",
-  "decision": "repair_core",
+  "analysis": "build",
+  "decision": "run_module",
   "errors": [],
-  "last_decision": "create_module",
+  "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 668,
+  "cycle": 669,
   "env": {
     "energy": 0,
-    "knowledge": 50,
-    "success": 10,
-    "fail": 622,
-    "entropy": 15,
+    "knowledge": 55,
+    "success": 11,
+    "fail": 623,
+    "entropy": 16,
     "experience": 0,
     "level": 2,
     "last_reward": 4,
     "history": [
-      0,
       0,
       -1,
       -1,
@@ -110,21 +130,21 @@
       3,
       4,
       4,
+      4,
       4
     ],
     "state": "decline"
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 668,
-    "mode": "explore",
-    "phase": "crisis",
+    "cycles": 669,
+    "mode": "improve",
+    "phase": "stagnation",
     "focus": "recovery",
     "last_action": null,
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      0,
       20,
       40,
       60,
@@ -133,18 +153,19 @@
       20,
       40,
       60,
-      0
+      0,
+      20
     ],
     "trend": "stable",
     "stagnation": true
   },
   "mode": "safe",
   "force_explore": false,
-  "control_state": "crisis",
+  "control_state": "stagnation",
   "fail_count": 0,
   "trend": "stable",
   "strategy": "force_file",
-  "prev_decision": "improve_module",
+  "prev_decision": "create_module",
   "best_module": {
     "module": "real_action",
     "score": 100,

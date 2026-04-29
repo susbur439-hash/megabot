@@ -11,7 +11,6 @@ from modules.self_improver import self_improver
 from modules.doctor import doctor
 from modules.control_layer import ControlLayer
 
-# 🔥 НОВОЕ: единая работа с task
 from modules.task_core import extract_task, normalize_task
 
 # 👁 OBSERVER
@@ -21,65 +20,55 @@ except:
     observer_run = None
 
 
+# =========================
 # 🧠 CONTROL LAYER INIT
+# =========================
 control_layer = ControlLayer()
 
 
+# =========================
+# 🎬 MAIN TASK LOOP (CORE)
+# =========================
 def run_task(data):
     data.setdefault("log", [])
 
-    # 🔥 НОРМАЛИЗАЦИЯ TASK (критично)
     task = extract_task(data)
     task = normalize_task(task)
     data["task"] = task
 
-    # 🔥 START
     data["last_layer"] = "start"
     data = doctor(data)
 
-    # GOAL
     data["last_layer"] = "goal"
     data = set_goal(data)
 
-    # ANALYSIS
     data["last_layer"] = "analysis"
     data = analysis(data)
 
-    # DECISION
     data["last_layer"] = "decision"
     data = decision(data)
 
-    # SELF IMPROVE
     data = self_improver(data)
 
     best = data.get("best_module")
 
-    # 🎯 БАЗОВОЕ РЕШЕНИЕ
     data["decision"] = "run_module" if best else "create_module"
+
     data["last_decision"] = data["decision"]
 
-    # 🛑 CONTROL LAYER
-    existing_modules = data.get("experience", [])
-    existing_modules = [m.get("module") for m in existing_modules if isinstance(m, dict)]
-
-    health = control_layer.check_system_health(existing_modules)
-
+    # 🛑 CONTROL
     decision_result = control_layer.filter_decision(data["decision"])
 
     if not decision_result["allowed"]:
         data["decision"] = decision_result["forced_decision"]
         data["log"].append("🛑 CONTROL OVERRIDE → " + data["decision"])
 
-    # ⚡ BOOST
-    data["boost"] = 1.2
-
-    # 🚨 HARD SAFETY STOP
+    # 🚨 SAFETY
     if data.get("decision") == "create_module":
         missing = control_layer.missing_core
-
-        if len(missing) > 0:
+        if missing:
             data["decision"] = "repair_core"
-            data["log"].append("🚨 HARD BLOCK → repair_core: " + str(missing))
+            data["log"].append("🚨 repair_core: " + str(missing))
 
     # 🚀 EXECUTION
     data["last_layer"] = "execution"
@@ -87,17 +76,14 @@ def run_task(data):
 
     data = system_guard(data)
 
-    # GOAL UPDATE
     data["last_layer"] = "goal_update"
     data = update_goal(data)
 
-    # POST ANALYSIS
     data["last_layer"] = "post_analysis"
     data = analysis(data)
 
-    # 🧠 STRATEGY
     score = data.get("evaluation", {}).get("score", 0)
-    last_delta = data.get("last_delta", 0)
+    last_delta = data.get("evaluation", {}).get("delta", 0)
 
     if last_delta <= 0:
         strategy = "explore"
@@ -110,7 +96,6 @@ def run_task(data):
 
     data["strategy"] = strategy
 
-    # 🎯 КОРРЕКЦИЯ
     if strategy == "exploit" and best:
         data["decision"] = "run_module"
     elif strategy == "optimize" and best:
@@ -118,14 +103,12 @@ def run_task(data):
     else:
         data["decision"] = "create_module"
 
-    # 🎭 MODE
     data["mode"] = {
         "explore": "aggressive",
         "exploit": "balanced",
         "optimize": "safe"
     }[strategy]
 
-    # 🛑 ANTI-LOOP
     if "prev_decision" in data:
         if data["decision"] == data["prev_decision"]:
             data["repeat_count"] = data.get("repeat_count", 0) + 1
@@ -138,23 +121,23 @@ def run_task(data):
 
     data["prev_decision"] = data["decision"]
 
-    # ⚡ FINAL BOOST
     data["boost"] = {
         "aggressive": 1.5,
         "balanced": 1.0,
         "safe": 0.7
     }[data["mode"]]
 
-    # 🔥 END
     data["last_layer"] = "loop_end"
     data = doctor(data)
 
-    # ✂️ лог
     data["log"] = data["log"][-200:]
 
     return data
 
 
+# =========================
+# 👁 EXPERIENCE ANALYSIS
+# =========================
 def analyze_experience(data):
     exp = data.get("experience", [])
 
@@ -169,47 +152,47 @@ def analyze_experience(data):
     return data
 
 
-def run(task):
-    # 🔥 НОРМАЛИЗАЦИЯ НА ВХОДЕ
-    task = normalize_task(extract_task(task))
+# =========================
+# 🚀 ENTRY POINT (FIXED)
+# =========================
+def run(task_or_data):
 
-    print("🚀 Запуск задачи:", task)
+    # 🔥 FIX: поддержка director + старого входа
+    if isinstance(task_or_data, dict):
+        task = extract_task(task_or_data)
+        data = task_or_data
+    else:
+        task = normalize_task(extract_task(task_or_data))
+        data = {
+            "task": task,
+            "evaluation": {"score": 0, "delta": 0},
+            "log": [],
+            "memory": [],
+            "experience": [],
+            "repeat_count": 0,
+            "run_observer": False
+        }
 
-    data = {
-        "task": task,
-        "evaluation": {"score": 0, "delta": 0},
-        "log": [],
-        "memory": [],
-        "experience": [],
-        "repeat_count": 0,
-        "run_observer": False
-    }
+    print("🚀 TASK:", task)
 
     best_score = -1
     best_data = None
 
-    max_cycles = 10
-
-    for i in range(max_cycles):
-        print(f"\n🔁 Цикл {i+1}")
+    for i in range(10):
+        print(f"\n🔁 CYCLE {i+1}")
 
         data = analyze_experience(data)
 
         if best_data and random.random() < 0.3:
-            print("♻️ SMART EXPLOIT")
             data["best_module"] = best_data.get("best_module")
-        else:
-            print("🧪 EXPLORE")
 
         data = run_task(data)
 
-        # 👁 OBSERVER
         if data.get("run_observer") and observer_run:
-            print("👁 OBSERVER RUN")
             try:
                 data = observer_run(data)
             except Exception as e:
-                print("❌ observer error:", e)
+                print("observer error:", e)
 
             data["run_observer"] = False
 
@@ -218,15 +201,13 @@ def run(task):
         if score > best_score:
             best_score = score
             best_data = copy.deepcopy(data)
-            print(f"🏆 Новый лучший результат: {best_score}")
 
-        print("=== RESULT ===")
-        print(data)
+        print("SCORE:", score)
 
         if data.get("goal", {}).get("progress", 0) >= 100:
-            print("🎯 Цель достигнута — остановка")
+            print("🎯 DONE")
             break
 
-        time.sleep(1)
+        time.sleep(0.5)
 
-    print("\n🏁 Лучший результат:", best_score)
+    print("\n🏆 BEST:", best_score)

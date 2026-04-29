@@ -58,7 +58,20 @@
     "🧠 control: mode=safe | phase=normal | trend=up | progress=61/100",
     "🚨 module limit reached",
     "🧠 fallback → real action",
-    "📁 файл создан: generated/file_2421.txt"
+    "📁 файл создан: generated/file_2421.txt",
+    "adaptive_goal: 81/100 | level: 1 | trend: stable | state: finishing | delta: 20",
+    "analysis: explore | behavior: explore | trend: stable | stagnation: True | score: 60 | delta: 20 | best: real_action(100.0)",
+    "✅ doctor: system OK",
+    "✅ doctor: system OK",
+    "analysis: explore | behavior: explore | trend: stable | stagnation: True | score: 60 | delta: 0 | best: real_action(100.0)",
+    "decision: run_module | mode: explore | analysis: explore | score: 60 | best: real_action(100.0)",
+    "🔁 improver: stagnation detected",
+    "🧠 state: mode=exploit | phase=normal | trend=up",
+    "🔋 control: low energy → safe mode",
+    "🧠 control: mode=safe | phase=normal | trend=up | progress=81/100",
+    "🚨 module limit reached",
+    "🧠 fallback → real action",
+    "📁 файл создан: generated/file_3532.txt"
   ],
   "memory": [],
   "experience": [
@@ -81,25 +94,31 @@
       "module": "real_action",
       "score": 100,
       "delta": 20
+    },
+    {
+      "module": "real_action",
+      "score": 100,
+      "delta": 20
     }
   ],
-  "repeat_count": 1,
+  "repeat_count": 2,
   "run_observer": false,
   "last_layer": "execution",
   "doctor_issues": [],
   "goal": {
     "name": "adaptive_goal",
-    "progress": 81,
+    "progress": 101,
     "level": 1,
     "target": 100,
     "history": [
       60,
       60,
+      60,
       60
     ],
-    "state": "normal"
+    "state": "finishing"
   },
-  "prev_progress": 61,
+  "prev_progress": 81,
   "task_type": "development",
   "local_trend": "stable",
   "last_delta": 0,
@@ -109,18 +128,17 @@
   "errors": [],
   "last_decision": "run_module",
   "boost": 1.2,
-  "cycle": 671,
+  "cycle": 672,
   "env": {
     "energy": 0,
-    "knowledge": 65,
-    "success": 13,
-    "fail": 625,
-    "entropy": 15,
+    "knowledge": 70,
+    "success": 14,
+    "fail": 626,
+    "entropy": 14,
     "experience": 0,
     "level": 2,
     "last_reward": 4,
     "history": [
-      -1,
       -1,
       -1,
       -1,
@@ -169,13 +187,14 @@
       4,
       4,
       5,
+      4,
       4
     ],
     "state": "decline"
   },
   "state": {
     "created_at": 1776466354.0356014,
-    "cycles": 671,
+    "cycles": 672,
     "mode": "exploit",
     "phase": "normal",
     "focus": "recovery",
@@ -183,7 +202,6 @@
     "last_result": null,
     "score_trend": [],
     "progress_trend": [
-      60,
       80,
       0,
       20,
@@ -192,7 +210,8 @@
       0,
       20,
       40,
-      61
+      61,
+      81
     ],
     "trend": "up",
     "stagnation": false

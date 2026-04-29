@@ -1,10 +1,11 @@
-def run(task_data):
+def run(data):
     """
     Task Interpreter:
-    превращает сырую задачу в структурированный план
+    превращает задачу в структурированное представление
+    и записывает его в data
     """
 
-    task = task_data.get("task", "")
+    task = str(data.get("task", "")).lower()
 
     result = {
         "original_task": task,
@@ -15,107 +16,78 @@ def run(task_data):
     }
 
     # =========================
-    # 🧠 ОПРЕДЕЛЕНИЕ ТИПА ЗАДАЧИ
+    # 🧠 ОПРЕДЕЛЕНИЕ ТИПА
     # =========================
-    if "развивай" in task.lower() or "развитие" in task.lower():
+    if "развивай" in task or "развитие" in task:
         result["type"] = "self_improvement"
         result["goal"] = "improve_system"
 
         result["steps"] = [
-            "анализ текущего состояния",
-            "поиск слабых мест",
-            "создание недостающих модулей",
-            "оптимизация логики"
+            "analyze_system",
+            "find_weak_points",
+            "improve_modules",
+            "optimize_logic"
         ]
 
-    elif "исправь" in task.lower() or "fix" in task.lower():
+    elif "исправь" in task or "fix" in task:
         result["type"] = "fix"
         result["priority"] = "high"
 
         result["steps"] = [
-            "найти ошибку",
-            "проанализировать причину",
-            "создать патч",
-            "проверить систему"
+            "detect_error",
+            "analyze_cause",
+            "create_fix",
+            "test_system"
         ]
 
-    elif "создай" in task.lower() or "create" in task.lower():
+    elif "создай" in task or "create" in task:
         result["type"] = "creation"
 
         result["steps"] = [
-            "понять что нужно создать",
-            "определить зависимости",
-            "создать модуль",
-            "интегрировать в систему"
+            "understand_goal",
+            "define_dependencies",
+            "build_module",
+            "integrate"
         ]
 
     else:
         result["type"] = "general"
 
         result["steps"] = [
-            "проанализировать задачу",
-            "разбить на подзадачи",
-            "выбрать стратегию выполнения"
+            "analyze_task",
+            "split_into_steps",
+            "choose_strategy"
         ]
 
     # =========================
-    # 🔥 УЛУЧШЕНИЕ ПРИОРИТЕТА
+    # 🔥 ПРИОРИТЕТ
     # =========================
-    if "crash" in task.lower() or "error" in task.lower():
+    if "crash" in task or "error" in task:
         result["priority"] = "critical"
 
-    return result
+    # =========================
+    # 📦 СОХРАНЕНИЕ В DATA
+    # =========================
+    data["task_struct"] = result
+
+    # быстрый доступ
+    data["task_type"] = result["type"]
+    data["task_priority"] = result["priority"]
+
+    data.setdefault("log", []).append(
+        f"🧠 task: {result['type']} | priority: {result['priority']}"
+    )
+
+    return data
 
 
 # =========================
-# 🔥 НОВОЕ: ENGINE INTERFACE
+# 🔥 ДОПОЛНИТЕЛЬНО (если нужно)
 # =========================
 def interpret(task: str):
     """
-    Преобразует задачу в команду для Engine
+    Упрощённый интерфейс (оставляем, но не основной)
     """
 
-    print(f"[TaskInterpreter] Received task: {task}")
-
     structured = run({"task": task})
-
-    task_type = structured.get("type")
-
-    # =========================
-    # 🎯 МАППИНГ В ENGINE
-    # =========================
-    if task_type == "self_improvement":
-        command = {
-            "module": "learning",
-            "action": "self_improve",
-            "task": task,
-            "meta": structured
-        }
-
-    elif task_type == "fix":
-        command = {
-            "module": "system",
-            "action": "fix",
-            "task": task,
-            "meta": structured
-        }
-
-    elif task_type == "creation":
-        command = {
-            "module": "planning",
-            "action": "create",
-            "task": task,
-            "meta": structured
-        }
-
-    else:
-        command = {
-            "module": "system",
-            "action": "list",
-            "task": task,
-            "meta": structured
-        }
-
-    print(f"[TaskInterpreter] Interpreted as: {command}")
-
-    return command
+    return structured.get("task_struct", {})

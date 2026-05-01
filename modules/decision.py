@@ -1,14 +1,9 @@
-import random
-
-
 def decide(data):
     return decision(data)
 
 
 def decision(data):
-    # =========================
-    # 🛡 SAFE INIT
-    # =========================
+
     if not isinstance(data, dict):
         data = {}
 
@@ -27,8 +22,7 @@ def decision(data):
 
     score = evaluation.get("score", 50)
     progress = goal.get("progress", 0)
-    analysis_type = data.get("analysis")
-    trend = data.get("local_trend", "stable")
+    analysis_type = data.get("analysis", "explore")
 
     # =========================
     # 🧠 EXPERIENCE ANALYSIS
@@ -54,9 +48,6 @@ def decision(data):
 
         avg = sum(scores) / len(scores)
 
-        variance_penalty = abs(max(scores) - min(scores)) if len(scores) > 1 else 0
-        avg -= variance_penalty * 0.05
-
         if len(scores) < 3:
             avg *= 0.8
 
@@ -65,106 +56,34 @@ def decision(data):
             best_module = m
 
     has_strong_module = best_score >= 65
-    has_any_module = len(module_scores) > 0
 
     # =========================
-    # 🧠 PATTERN DETECTION
+    # 🧠 SIMPLE MODE
     # =========================
-    recent = memory[-10:]
-
-    def count(x):
-        return recent.count(x)
-
-    too_many_creates = count("create_module") >= 3
-    too_many_runs = count("run_module") >= 4
-    too_many_improves = count("improve_module") >= 3
-
-    heavy_create_loop = count("create_module") >= 5
-    full_loop_stuck = too_many_creates and too_many_runs
-
-    # =========================
-    # 📉 STAGNATION
-    # =========================
-    stagnation = (
-        trend == "stable"
-        and score < 70
-        and (too_many_runs or too_many_improves)
-    )
-
-    no_real_progress = progress < 25 and score < 60
-
-    # =========================
-    # 🚨 BOOTSTRAP
-    # =========================
-    if not has_any_module:
-        action = "create_module" if memory.count("create_module") < 2 else "run_module"
-        data["decision"] = action
-        data["log"].append(f"decision: {action} | BOOTSTRAP")
-        return data
-
-    # =========================
-    # 🧠 MODE SELECTION
-    # =========================
-    if stagnation and heavy_create_loop:
-        mode = "stabilize"
-    elif score >= 70 and has_strong_module:
+    if score >= 70 and has_strong_module:
         mode = "exploit"
     elif score < 50:
         mode = "explore"
     else:
-        mode = analysis_type or "explore"
+        mode = analysis_type
 
     # =========================
-    # 🔥 MAIN LOGIC
+    # 🔥 SIMPLE DECISION
     # =========================
     if mode == "explore":
-        action = (
-            "improve_module"
-            if (stagnation or no_real_progress)
-            else ("run_module" if has_strong_module else "create_module")
-        )
-
-    elif mode == "exploit":
         if has_strong_module:
-            action = "improve_module" if (stagnation or too_many_runs) else "run_module"
+            action = "run_module"
         else:
             action = "create_module"
 
-    elif mode == "stabilize":
-        action = "improve_module" if has_strong_module else "run_module"
+    elif mode == "exploit":
+        action = "run_module" if has_strong_module else "create_module"
 
     elif mode == "improve":
-        action = "improve_module" if has_strong_module else "create_module"
-
-    elif mode == "optimize":
-        action = "run_module" if has_strong_module else "improve_module"
+        action = "improve_module"
 
     else:
-        action = "run_module" if score >= 55 else "improve_module"
-
-    # =========================
-    # 🛡 SAFETY LAYER
-    # =========================
-    if too_many_creates and action == "create_module":
         action = "run_module"
-
-    if too_many_runs and action == "run_module":
-        action = "improve_module"
-
-    if full_loop_stuck:
-        action = "stabilize"
-
-    if action not in ["create_module", "run_module", "improve_module"]:
-        action = "run_module"
-
-    # =========================
-    # 📈 PROGRESS FIX
-    # =========================
-    if progress < 20 and action == "run_module":
-        action = "improve_module"
-
-    if no_real_progress and action == "run_module":
-        action = "improve_module"
 
     # =========================
     # 💾 OUTPUT

@@ -8,7 +8,7 @@ from modules.control import control
 
 
 # =========================
-# 💾 SAFE GIT SAVE (FIX)
+# 💾 SAFE GIT SAVE
 # =========================
 def save_to_git():
     try:
@@ -18,9 +18,7 @@ def save_to_git():
         os.system('git add .')
         os.system('git commit -m "Megabot auto update" || echo "No changes"')
 
-        # 🔥 КРИТИЧЕСКИЙ ФИКС
         os.system('git pull --rebase origin main')
-
         os.system('git push origin main')
 
         print("✅ Git synced")
@@ -89,7 +87,6 @@ def execute_real_action(data):
         os.makedirs("generated", exist_ok=True)
         os.makedirs("modules", exist_ok=True)
 
-        # 📁 FILE
         if "файл" in task or data.get("strategy") == "force_file":
             filename = f"generated/file_{random.randint(1000,9999)}.txt"
 
@@ -102,12 +99,7 @@ def execute_real_action(data):
             data["goal"]["progress"] += 20
             return data, True
 
-        # 🧠 MODULE (ограничено)
         if "модуль" in task or data.get("strategy") == "build_module":
-
-            if len(data.get("experience", [])) > 10:
-                data["log"].append("⚠️ слишком много модулей → skip create")
-                return data, False
 
             module_name = f"auto_{random.randint(1000,9999)}.py"
             path = os.path.join("modules", module_name)
@@ -156,7 +148,6 @@ def run_python_module(module_path, data):
             if isinstance(result, dict):
                 return result, True
 
-        data["log"].append("⚠️ invalid module result")
         return data, False
 
     except Exception as e:
@@ -179,7 +170,6 @@ def create_new_module(data):
 
     modules = [m for m in os.listdir("modules") if m.endswith(".py")]
 
-    # 🚨 ограничение
     if len(modules) > 30:
         data["log"].append("🚨 module limit reached")
         return None
@@ -205,7 +195,7 @@ def create_new_module(data):
 
 
 # =========================
-# 🚀 EXECUTION
+# 🚀 MAIN EXECUTION
 # =========================
 def execution(data):
 
@@ -217,23 +207,15 @@ def execution(data):
 
     data.setdefault("log", [])
     data.setdefault("experience", [])
-    data.setdefault("goal", {
-        "name": "adaptive_goal",
-        "progress": 0,
-        "level": 1,
-        "target": 100
-    })
-    data.setdefault("repeat_count", 0)
-
-    data["cycle"] = data.get("cycle", 0) + 1
+    data.setdefault("goal", {"progress": 0})
 
     ensure_env(data)
 
     task_text = get_task_text(data)
 
-    if "file" in task_text or "файл" in task_text:
+    if "file" in task_text:
         data["strategy"] = "force_file"
-    elif "module" in task_text or "модуль" in task_text:
+    elif "module" in task_text:
         data["strategy"] = "build_module"
 
     data = control(data)
@@ -241,34 +223,22 @@ def execution(data):
     before = data["goal"]["progress"]
     best_module = get_best_module(data["experience"])
 
-    # 🔥 СНАЧАЛА ПЫТАЕМСЯ ИСПОЛЬЗОВАТЬ
+    module_used = None
+
     if best_module:
         path = os.path.join("modules", best_module + ".py")
         data, ok = run_python_module(path, data)
-
         if ok:
             module_used = best_module
-            data["log"].append(f"🚀 use: {best_module}")
-        else:
-            module_used = None
-    else:
-        module_used = None
 
-    # если не сработало — создаём
     if not module_used:
         module_name = create_new_module(data)
-
         if module_name:
             path = os.path.join("modules", module_name + ".py")
             data, _ = run_python_module(path, data)
             module_used = module_name
-            data["log"].append("🧪 create")
 
-    after = data["goal"]["progress"]
-
-    if after <= before:
-        data["log"].append("🧠 fallback → real action")
-        data["strategy"] = "force_file"
+    if data["goal"]["progress"] <= before:
         data, _ = execute_real_action(data)
         module_used = "real_action"
 
@@ -276,17 +246,17 @@ def execution(data):
         data, reward = run_environment(data, data["log"][-1])
         data["goal"]["progress"] += reward // 5
 
-    delta = data["goal"]["progress"] - before
-    score = max(0, min(100, delta * 5))
-
     data["experience"].append({
         "module": module_used,
-        "score": score,
-        "delta": delta
+        "score": 50,
+        "delta": data["goal"]["progress"] - before
     })
-
-    data["log"] = data["log"][-200:]
 
     save_to_memory(data)
 
     return data
+
+
+# 🔥 ВАЖНО: АЛИАС ДЛЯ ИМПОРТА
+def execute(data):
+    return execution(data)

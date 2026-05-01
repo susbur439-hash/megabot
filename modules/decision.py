@@ -7,85 +7,71 @@ def decision(data):
     if not isinstance(data, dict):
         data = {}
 
-    evaluation = data.get("evaluation") or {}
-    experience = data.get("experience") or []
-
     data.setdefault("log", [])
+    data.setdefault("experience", [])
+    data.setdefault("evaluation", {})
 
-    score = evaluation.get("score", 50)
+    score = data["evaluation"].get("score", 50)
+    experience = data["experience"]
 
     # =========================
-    # 🧠 EXPERIENCE ANALYSIS
+    # 🧠 поиск лучшего модуля
     # =========================
-    module_scores = {}
-
-    for exp in experience:
-        if not isinstance(exp, dict):
-            continue
-
-        m = exp.get("module")
-        s = exp.get("score", 0)
-
-        if m and isinstance(s, (int, float)):
-            module_scores.setdefault(m, []).append(s)
-
     best_module = None
     best_score = 0
 
-    for m, scores in module_scores.items():
+    module_map = {}
+
+    for e in experience:
+        if not isinstance(e, dict):
+            continue
+
+        m = e.get("module")
+        s = e.get("score", 0)
+
+        if m:
+            module_map.setdefault(m, []).append(s)
+
+    for m, scores in module_map.items():
         avg = sum(scores) / len(scores)
-
-        if len(scores) < 3:
-            avg *= 0.8
-
         if avg > best_score:
             best_score = avg
             best_module = m
 
-    has_strong_module = best_score >= 65
+    has_module = best_module is not None and best_score >= 50
 
     # =========================
-    # 🧠 MODE
+    # 🧠 ЖЁСТКАЯ ЛОГИКА (без пустоты)
     # =========================
     if score < 45:
-        mode = "explore"
-    elif score > 75 and has_strong_module:
-        mode = "exploit"
-    else:
-        mode = "balanced"
-
-    # =========================
-    # 🔥 DECISION
-    # =========================
-    if mode == "explore":
         action = "create_module"
-        selected_module = None
+        module = None
 
-    elif mode == "exploit":
+    elif score > 75 and has_module:
         action = "run_module"
-        selected_module = best_module
+        module = best_module
 
     else:
-        # ⚠️ ВАЖНО: НЕ ПАДАЕМ В CREATE
-        action = "run_module"
-        selected_module = best_module
+        # 🔥 ВАЖНО: НЕТ СТЕЙТА "НИЧЕГО"
+        if has_module:
+            action = "run_module"
+            module = best_module
+        else:
+            action = "create_module"
+            module = None
 
     # =========================
-    # 🧠 SAFE CLEAN FALLBACK (ИСПРАВЛЕНО)
+    # 🧨 АНТИ-ЗАВИСАНИЕ
     # =========================
-    if action == "run_module" and not selected_module:
-        # вместо create_module → уходим в explore
-        action = "explore"
-        selected_module = None
+    if action == "run_module" and not module:
+        action = "create_module"
+        module = None
 
-    # =========================
-    # 💾 OUTPUT
-    # =========================
     data["decision"] = action
-    data["module"] = selected_module
+    data["module"] = module
 
     data["log"].append(
-        f"decision: {action} | mode: {mode} | score: {score} | best: {best_module}({round(best_score,1)})"
+        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)})"
     )
 
     return data

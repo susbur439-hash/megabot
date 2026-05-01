@@ -22,7 +22,6 @@ def decision(data):
 
     score = evaluation.get("score", 50)
     progress = goal.get("progress", 0)
-    analysis_type = data.get("analysis", "explore")
 
     # =========================
     # 🧠 EXPERIENCE ANALYSIS
@@ -58,32 +57,28 @@ def decision(data):
     has_strong_module = best_score >= 65
 
     # =========================
-    # 🧠 SIMPLE MODE
+    # 🧠 MODE (ЖЁСТКАЯ ЛОГИКА)
     # =========================
-    if score >= 70 and has_strong_module:
-        mode = "exploit"
-    elif score < 50:
+    if score < 45:
         mode = "explore"
+
+    elif score > 75 and has_strong_module:
+        mode = "exploit"
+
     else:
-        mode = analysis_type
+        mode = "balanced"
 
     # =========================
-    # 🔥 SIMPLE DECISION
+    # 🔥 DECISION
     # =========================
     if mode == "explore":
-        if has_strong_module:
-            action = "run_module"
-        else:
-            action = "create_module"
+        action = "create_module" if not has_strong_module else "run_module"
 
     elif mode == "exploit":
-        action = "run_module" if has_strong_module else "create_module"
-
-    elif mode == "improve":
-        action = "improve_module"
+        action = "run_module" if has_strong_module else "improve_module"
 
     else:
-        action = "run_module"
+        action = "run_module" if has_strong_module else "create_module"
 
     # =========================
     # 💾 OUTPUT

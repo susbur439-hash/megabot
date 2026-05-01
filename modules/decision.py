@@ -1,11 +1,27 @@
 import random
 
 
+def decide(data):
+    return decision(data)
+
+
 def decision(data):
-    memory = data.get("memory", []) or []
-    evaluation = data.get("evaluation", {}) or {}
-    goal = data.get("goal", {}) or {}
-    experience = data.get("experience", []) or []
+    # =========================
+    # 🛡 SAFE INIT
+    # =========================
+    if not isinstance(data, dict):
+        data = {}
+
+    memory = data.get("memory") or []
+    evaluation = data.get("evaluation") or {}
+    goal = data.get("goal") or {}
+    experience = data.get("experience") or []
+
+    if not isinstance(memory, list):
+        memory = []
+
+    if not isinstance(experience, list):
+        experience = []
 
     data.setdefault("log", [])
 
@@ -16,7 +32,7 @@ def decision(data):
     trend = data.get("local_trend", "stable")
 
     # =========================
-    # 🧠 EXPERIENCE ANALYSIS (УЛУЧШЕНО)
+    # 🧠 EXPERIENCE ANALYSIS
     # =========================
     module_scores = {}
 
@@ -27,7 +43,7 @@ def decision(data):
         m = exp.get("module")
         s = exp.get("score", 0)
 
-        if isinstance(s, (int, float)) and m:
+        if m and isinstance(s, (int, float)):
             module_scores.setdefault(m, []).append(s)
 
     best_module = None
@@ -39,11 +55,9 @@ def decision(data):
 
         avg = sum(scores) / len(scores)
 
-        # штраф за нестабильность
         variance_penalty = abs(max(scores) - min(scores)) if len(scores) > 1 else 0
         avg -= variance_penalty * 0.05
 
-        # штраф за малый опыт
         if len(scores) < 3:
             avg *= 0.8
 
@@ -55,9 +69,9 @@ def decision(data):
     has_any_module = len(module_scores) > 0
 
     # =========================
-    # 🧠 PATTERN DETECTION (НОВОЕ)
+    # 🧠 PATTERN DETECTION
     # =========================
-    recent = memory[-10:]
+    recent = memory[-10:] if len(memory) > 10 else memory
 
     def count(x):
         return recent.count(x)
@@ -70,7 +84,7 @@ def decision(data):
     full_loop_stuck = too_many_creates and too_many_runs
 
     # =========================
-    # 📉 STAGNATION DETECTION (УЛУЧШЕНО)
+    # 📉 STAGNATION
     # =========================
     stagnation = (
         trend == "stable"
@@ -81,20 +95,16 @@ def decision(data):
     no_real_progress = progress < 25 and score < 60
 
     # =========================
-    # 🚨 BOOTSTRAP CONTROL
+    # 🚨 BOOTSTRAP
     # =========================
     if not has_any_module:
-        if memory.count("create_module") < 2:
-            action = "create_module"
-        else:
-            action = "run_module"
-
+        action = "create_module" if memory.count("create_module") < 2 else "run_module"
         data["decision"] = action
         data["log"].append(f"decision: {action} | BOOTSTRAP")
         return data
 
     # =========================
-    # 🧠 MODE SWITCHING (НОВОЕ)
+    # 🧠 MODE
     # =========================
     if stagnation and heavy_create_loop:
         mode = "stabilize"
@@ -108,7 +118,6 @@ def decision(data):
     # =========================
     # 🔥 MAIN LOGIC
     # =========================
-
     if mode == "recovery":
         action = "run_module" if has_strong_module else "improve_module"
 
@@ -119,45 +128,31 @@ def decision(data):
         action = "run_module" if heavy_create_loop else "create_module"
 
     elif mode == "explore":
-        if stagnation or no_real_progress:
-            action = "improve_module"
-        elif has_strong_module:
-            action = "run_module"
-        else:
-            action = "create_module"
+        action = "improve_module" if (stagnation or no_real_progress) else (
+            "run_module" if has_strong_module else "create_module"
+        )
 
     elif mode == "exploit":
         if has_strong_module:
-            if stagnation or too_many_runs:
-                action = "improve_module"
-            else:
-                action = "run_module"
+            action = "improve_module" if (stagnation or too_many_runs) else "run_module"
         else:
             action = "create_module"
 
     elif mode == "improve":
-        if has_strong_module:
-            action = "improve_module" if too_many_improves else "run_module"
-        else:
-            action = "create_module"
+        action = "improve_module" if has_strong_module else "create_module"
 
     elif mode == "optimize":
         action = "run_module" if has_strong_module else "improve_module"
 
     elif mode == "stabilize":
-        # 🔥 НОВЫЙ РЕЖИМ — ВАЖНЕЙШИЙ
-        if has_strong_module:
-            action = "improve_module"
-        else:
-            action = "run_module"
+        action = "improve_module" if has_strong_module else "run_module"
 
     else:
         action = "run_module" if score >= 55 else "improve_module"
 
     # =========================
-    # 🛡 HARD SAFETY FIXES
+    # 🛡 SAFETY
     # =========================
-
     if too_many_creates and action == "create_module":
         action = "run_module"
 
@@ -171,23 +166,21 @@ def decision(data):
         action = "run_module"
 
     # =========================
-    # 📈 PROGRESS FORCE (НОВОЕ)
+    # 📈 PROGRESS FIX
     # =========================
-
     if progress < 20 and action == "run_module":
         action = "improve_module"
 
-    # если система “живая но не растёт”
     if no_real_progress and action == "run_module":
         action = "improve_module"
 
     # =========================
-    # 💾 SAVE
+    # 💾 OUTPUT
     # =========================
     data["decision"] = action
 
     data["log"].append(
-        f"decision: {action} | mode: {mode} | analysis: {analysis_type} | score: {score} | best: {best_module}({round(best_score,1)})"
+        f"decision: {action} | mode: {mode} | score: {score} | best: {best_module}({round(best_score,1)})"
     )
 
     return data

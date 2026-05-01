@@ -28,7 +28,6 @@ def decision(data):
     score = evaluation.get("score", 50)
     progress = goal.get("progress", 0)
     analysis_type = data.get("analysis")
-    behavior = data.get("behavior", "balanced")
     trend = data.get("local_trend", "stable")
 
     # =========================
@@ -71,7 +70,7 @@ def decision(data):
     # =========================
     # 🧠 PATTERN DETECTION
     # =========================
-    recent = memory[-10:] if len(memory) > 10 else memory
+    recent = memory[-10:]
 
     def count(x):
         return recent.count(x)
@@ -104,7 +103,7 @@ def decision(data):
         return data
 
     # =========================
-    # 🧠 MODE
+    # 🧠 MODE SELECTION
     # =========================
     if stagnation and heavy_create_loop:
         mode = "stabilize"
@@ -113,23 +112,16 @@ def decision(data):
     elif score < 50:
         mode = "explore"
     else:
-        mode = analysis_type
+        mode = analysis_type or "explore"
 
     # =========================
     # 🔥 MAIN LOGIC
     # =========================
-    if mode == "recovery":
-        action = "run_module" if has_strong_module else "improve_module"
-
-    elif mode == "bootstrap":
-        action = "create_module"
-
-    elif mode == "build":
-        action = "run_module" if heavy_create_loop else "create_module"
-
-    elif mode == "explore":
-        action = "improve_module" if (stagnation or no_real_progress) else (
-            "run_module" if has_strong_module else "create_module"
+    if mode == "explore":
+        action = (
+            "improve_module"
+            if (stagnation or no_real_progress)
+            else ("run_module" if has_strong_module else "create_module")
         )
 
     elif mode == "exploit":
@@ -138,20 +130,20 @@ def decision(data):
         else:
             action = "create_module"
 
+    elif mode == "stabilize":
+        action = "improve_module" if has_strong_module else "run_module"
+
     elif mode == "improve":
         action = "improve_module" if has_strong_module else "create_module"
 
     elif mode == "optimize":
         action = "run_module" if has_strong_module else "improve_module"
 
-    elif mode == "stabilize":
-        action = "improve_module" if has_strong_module else "run_module"
-
     else:
         action = "run_module" if score >= 55 else "improve_module"
 
     # =========================
-    # 🛡 SAFETY
+    # 🛡 SAFETY LAYER
     # =========================
     if too_many_creates and action == "create_module":
         action = "run_module"

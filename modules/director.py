@@ -1,5 +1,6 @@
 from modules.task_core import extract_task, normalize_task
 from modules.run import run_task
+from modules.decision import decide
 
 
 def run(data):
@@ -24,6 +25,15 @@ def run(data):
             pass
 
         data["task"] = task
+
+        # 🧠 DECISION LAYER (НОВОЕ)
+        try:
+            decision = decide(data)
+        except Exception as e:
+            decision = {"action": "run", "error": str(e)}
+
+        data["decision"] = decision
+        data["log"].append(f"🧠 DECISION: {decision}")
 
         # 🚀 EXECUTION
         result = run_task(data)
@@ -50,7 +60,6 @@ def run(data):
         data["error"] = str(e)
         data["trace"] = traceback.format_exc()
 
-        if "log" in data:
-            data["log"].append(f"❌ ERROR: {e}")
+        data["log"].append(f"❌ DIRECTOR ERROR: {e}")
 
         return data

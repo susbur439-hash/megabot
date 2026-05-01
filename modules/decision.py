@@ -7,7 +7,6 @@ def decision(data):
     if not isinstance(data, dict):
         data = {}
 
-    memory = data.get("memory") or []
     evaluation = data.get("evaluation") or {}
     goal = data.get("goal") or {}
     experience = data.get("experience") or []
@@ -15,7 +14,6 @@ def decision(data):
     data.setdefault("log", [])
 
     score = evaluation.get("score", 50)
-    progress = goal.get("progress", 0)
 
     # =========================
     # 🧠 EXPERIENCE ANALYSIS
@@ -36,9 +34,6 @@ def decision(data):
     best_score = 0
 
     for m, scores in module_scores.items():
-        if not scores:
-            continue
-
         avg = sum(scores) / len(scores)
 
         if len(scores) < 3:
@@ -61,24 +56,32 @@ def decision(data):
         mode = "balanced"
 
     # =========================
-    # 🔥 DECISION (ВАЖНО: ЕДИНЫЙ ФОРМАТ)
+    # 🔥 DECISION
     # =========================
     if mode == "explore":
         action = "create_module"
+        selected_module = None
 
     elif mode == "exploit":
         action = "run_module"
+        selected_module = best_module
 
     else:
         action = "run_module"
+        selected_module = best_module
+
+    # =========================
+    # 🧨 SAFE FALLBACK (КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ)
+    # =========================
+    if action == "run_module" and not selected_module:
+        action = "create_module"
+        selected_module = None
 
     # =========================
     # 💾 OUTPUT
     # =========================
     data["decision"] = action
-
-    # ⚠️ ДОБАВЛЯЕМ СОВМЕСТИМОСТЬ С EXECUTION
-    data["module"] = best_module if action == "run_module" else None
+    data["module"] = selected_module
 
     data["log"].append(
         f"decision: {action} | mode: {mode} | score: {score} | best: {best_module}({round(best_score,1)})"

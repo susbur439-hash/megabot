@@ -12,12 +12,6 @@ def decision(data):
     goal = data.get("goal") or {}
     experience = data.get("experience") or []
 
-    if not isinstance(memory, list):
-        memory = []
-
-    if not isinstance(experience, list):
-        experience = []
-
     data.setdefault("log", [])
 
     score = evaluation.get("score", 50)
@@ -57,33 +51,34 @@ def decision(data):
     has_strong_module = best_score >= 65
 
     # =========================
-    # 🧠 MODE (ЖЁСТКАЯ ЛОГИКА)
+    # 🧠 MODE
     # =========================
     if score < 45:
         mode = "explore"
-
     elif score > 75 and has_strong_module:
         mode = "exploit"
-
     else:
         mode = "balanced"
 
     # =========================
-    # 🔥 DECISION
+    # 🔥 DECISION (ВАЖНО: ЕДИНЫЙ ФОРМАТ)
     # =========================
     if mode == "explore":
-        action = "create_module" if not has_strong_module else "run_module"
+        action = "create_module"
 
     elif mode == "exploit":
-        action = "run_module" if has_strong_module else "improve_module"
+        action = "run_module"
 
     else:
-        action = "run_module" if has_strong_module else "create_module"
+        action = "run_module"
 
     # =========================
     # 💾 OUTPUT
     # =========================
     data["decision"] = action
+
+    # ⚠️ ДОБАВЛЯЕМ СОВМЕСТИМОСТЬ С EXECUTION
+    data["module"] = best_module if action == "run_module" else None
 
     data["log"].append(
         f"decision: {action} | mode: {mode} | score: {score} | best: {best_module}({round(best_score,1)})"

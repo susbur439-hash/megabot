@@ -12,45 +12,37 @@ def control(data):
     goal = data["goal"]
 
     # =========================
-    # 🧠 STATE MANAGER (ГЛАВНОЕ)
+    # 🧠 STATE MANAGER
     # =========================
     data = state_manager(data)
     state = data.get("state", {})
 
     mode = state.get("mode", "explore")
     phase = state.get("phase", "normal")
-    trend = state.get("trend", "stable")
 
     progress = goal.get("progress", 0)
     target = goal.get("target", 100)
 
     # =========================
-    # 🚨 АНТИ-ДЕГРАДАЦИЯ (через state)
+    # 🚨 CRISIS FLAGS
     # =========================
     if phase == "crisis":
         data["log"].append("🚨 control: crisis detected")
-        data["mode"] = "explore"
         data["force_explore"] = True
 
     elif phase == "stagnation":
         data["log"].append("🔁 control: stagnation detected")
-        data["mode"] = "improve"
         data["force_explore"] = True
 
-    else:
-        data["mode"] = mode
-        data["force_explore"] = False
-
     # =========================
-    # 🔋 ЭНЕРГИЯ (приоритет)
+    # 🔋 ENERGY LIMIT
     # =========================
     if env.get("energy", 100) < 20:
         data["log"].append("🔋 control: low energy → safe mode")
-        data["mode"] = "safe"
-        data["force_explore"] = False
+        data["force_safe"] = True
 
     # =========================
-    # 🧹 ENTROPY CONTROL
+    # 🧹 ENTROPY CLEANUP
     # =========================
     if env.get("entropy", 0) > 15:
         data["log"].append("🧹 control: entropy cleanup")
@@ -64,26 +56,13 @@ def control(data):
         goal["progress"] = 0
         goal["target"] = int(target * 1.2)
 
-        data["log"].append(f"🚀 CONTROL LEVEL UP → {goal['level']}")
+        data["log"].append(f"🚀 LEVEL UP → {goal['level']}")
 
         env["energy"] = min(100, env.get("energy", 100) + 10)
         env["entropy"] = max(0, env.get("entropy", 0) - 3)
 
     # =========================
-    # 🧠 УМНОЕ ПОВЕДЕНИЕ (через state)
-    # =========================
-    task = data.get("task", "").lower()
-
-    if "файл" in task and progress > 60:
-        data["task"] = "создай модуль и улучши систему"
-        data["log"].append("🧠 control: shift → module")
-
-    elif "модуль" in task and progress > 70:
-        data["task"] = "создай отчет и проанализируй себя"
-        data["log"].append("🧠 control: shift → report")
-
-    # =========================
-    # 🛡 АНТИ-СПАМ МОДУЛЕЙ
+    # 🛡 ANTI-SPAM
     # =========================
     if len(data["experience"]) >= 5:
         last = [x.get("module") for x in data["experience"][-5:]]
@@ -92,12 +71,12 @@ def control(data):
             data["force_explore"] = True
 
     # =========================
-    # 📊 СОСТОЯНИЕ
+    # 📊 STATE OUTPUT
     # =========================
     data["control_state"] = phase
 
     data["log"].append(
-        f"🧠 control: mode={data.get('mode')} | phase={phase} | trend={trend} | progress={progress}/{target}"
+        f"🧠 control: mode={mode} | phase={phase} | progress={progress}/{target}"
     )
 
     return data

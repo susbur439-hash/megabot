@@ -3,36 +3,54 @@ from modules.run import run_task
 
 
 def run(data):
-    # 🛡️ Гарантируем структуру
+    # 🛡️ Полная защита входа
     if not isinstance(data, dict):
         data = {}
 
     data.setdefault("log", [])
 
     try:
-        # 🧠 TASK PREPROCESS
-        task = extract_task(data)
-        task = normalize_task(task)
-        data["task"] = task
-
         data["log"].append("🎬 DIRECTOR START")
 
-        # 🚀 CORE EXECUTION
+        # 🧠 SAFE TASK PREPROCESS
+        try:
+            task = extract_task(data)
+        except Exception:
+            task = data.get("task", data)
+
+        try:
+            task = normalize_task(task)
+        except Exception:
+            pass
+
+        data["task"] = task
+
+        # 🚀 EXECUTION
         result = run_task(data)
 
-        # 🛡️ Защита от кривого результата
+        # 🛡️ SAFE MERGE RESULT
         if isinstance(result, dict):
-            data.update(result)
+            for k, v in result.items():
+                # не затираем лог
+                if k == "log" and isinstance(v, list):
+                    data["log"].extend(v)
+                else:
+                    data[k] = v
         else:
             data["result"] = result
 
         data["log"].append("🎬 DIRECTOR END")
 
+        return data
+
     except Exception as e:
         import traceback
+
         data["status"] = "error"
         data["error"] = str(e)
         data["trace"] = traceback.format_exc()
-        data["log"].append(f"❌ ERROR: {e}")
 
-    return data
+        if "log" in data:
+            data["log"].append(f"❌ ERROR: {e}")
+
+        return data

@@ -12,7 +12,7 @@ def control(data):
     goal = data["goal"]
 
     # =========================
-    # 🧠 STATE MANAGER
+    # 🧠 STATE MANAGER (источник состояния)
     # =========================
     data = state_manager(data)
     state = data.get("state", {})
@@ -24,25 +24,30 @@ def control(data):
     target = goal.get("target", 100)
 
     # =========================
-    # 🚨 CRISIS FLAGS
+    # 🧠 DEFAULT MODE FROM STATE
+    # =========================
+    final_mode = mode
+
+    # =========================
+    # 🚨 CRISIS / STAGNATION OVERRIDE
     # =========================
     if phase == "crisis":
         data["log"].append("🚨 control: crisis detected")
-        data["force_explore"] = True
+        final_mode = "explore"
 
     elif phase == "stagnation":
         data["log"].append("🔁 control: stagnation detected")
-        data["force_explore"] = True
+        final_mode = "explore"
 
     # =========================
-    # 🔋 ENERGY LIMIT
+    # 🔋 ENERGY SAFETY OVERRIDE
     # =========================
     if env.get("energy", 100) < 20:
         data["log"].append("🔋 control: low energy → safe mode")
-        data["force_safe"] = True
+        final_mode = "safe"
 
     # =========================
-    # 🧹 ENTROPY CLEANUP
+    # 🧹 ENTROPY CONTROL
     # =========================
     if env.get("entropy", 0) > 15:
         data["log"].append("🧹 control: entropy cleanup")
@@ -62,21 +67,22 @@ def control(data):
         env["entropy"] = max(0, env.get("entropy", 0) - 3)
 
     # =========================
-    # 🛡 ANTI-SPAM
+    # 🛡 ANTI-SPAM MODULES
     # =========================
     if len(data["experience"]) >= 5:
         last = [x.get("module") for x in data["experience"][-5:]]
         if len(set(last)) == 1:
             data["log"].append("🚫 control: module spam detected")
-            data["force_explore"] = True
+            final_mode = "explore"
 
     # =========================
-    # 📊 STATE OUTPUT
+    # 📌 FINAL OUTPUT CONTRACT (ВАЖНО)
     # =========================
+    data["mode"] = final_mode
     data["control_state"] = phase
 
     data["log"].append(
-        f"🧠 control: mode={mode} | phase={phase} | progress={progress}/{target}"
+        f"🧠 control: mode={final_mode} | phase={phase} | progress={progress}/{target}"
     )
 
     return data

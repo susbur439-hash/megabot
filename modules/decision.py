@@ -8,7 +8,6 @@ def decision(data):
         data = {}
 
     evaluation = data.get("evaluation") or {}
-    goal = data.get("goal") or {}
     experience = data.get("experience") or []
 
     data.setdefault("log", [])
@@ -67,14 +66,16 @@ def decision(data):
         selected_module = best_module
 
     else:
+        # ⚠️ ВАЖНО: НЕ ПАДАЕМ В CREATE
         action = "run_module"
         selected_module = best_module
 
     # =========================
-    # 🧨 SAFE FALLBACK (КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ)
+    # 🧠 SAFE CLEAN FALLBACK (ИСПРАВЛЕНО)
     # =========================
     if action == "run_module" and not selected_module:
-        action = "create_module"
+        # вместо create_module → уходим в explore
+        action = "explore"
         selected_module = None
 
     # =========================

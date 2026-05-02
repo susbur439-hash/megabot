@@ -1,8 +1,17 @@
 from modules.decision import decide
-from modules.execution import execute  # если есть execution слой
+
+
+def safe_import_execute():
+    try:
+        from modules.execution import execute
+        return execute
+    except Exception as e:
+        print(f"[EXECUTION IMPORT ERROR] {e}")
+        return None
 
 
 def run_task(data):
+
     if not isinstance(data, dict):
         data = {"task": data}
 
@@ -25,13 +34,18 @@ def run_task(data):
     data["log"].append(f"[RUN] decision -> {decision}")
 
     # =========================
-    # ⚙ EXECUTION LAYER
+    # ⚙ EXECUTION LAYER (SAFE)
     # =========================
+    execute = safe_import_execute()
+
+    if execute is None:
+        data["status"] = "error"
+        data["error"] = "execution module not available"
+        data["log"].append("❌ execution missing")
+        return data
+
     try:
-        if hasattr(execute, "__call__"):
-            result = execute(data)
-        else:
-            result = {"status": "skipped_execution"}
+        result = execute(data)
 
     except Exception as e:
         data["status"] = "error"

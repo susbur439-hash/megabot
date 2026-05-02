@@ -11,15 +11,12 @@ def decision(data):
     data.setdefault("experience", [])
     data.setdefault("evaluation", {})
 
-    score = data["evaluation"].get("score", 50)
-    experience = data["experience"]
+    score = data.get("evaluation", {}).get("score", 50)
+    experience = data.get("experience", [])
 
     # =========================
-    # 🧠 поиск лучшего модуля
+    # 🧠 CLEAN EXPERIENCE MAP
     # =========================
-    best_module = None
-    best_score = 0
-
     module_map = {}
 
     for e in experience:
@@ -27,21 +24,40 @@ def decision(data):
             continue
 
         m = e.get("module")
-        s = e.get("score", 0)
+        s = e.get("score")
 
-        if m:
-            module_map.setdefault(m, []).append(s)
+        if m is None or s is None:
+            continue
+
+        if not isinstance(s, (int, float)):
+            continue
+
+        module_map.setdefault(m, []).append(s)
+
+    # =========================
+    # 🧠 BEST MODULE SEARCH
+    # =========================
+    best_module = None
+    best_score = 0
 
     for m, scores in module_map.items():
+        if not scores:
+            continue
+
         avg = sum(scores) / len(scores)
+
+        # стабильность штраф
+        if len(scores) < 3:
+            avg *= 0.85
+
         if avg > best_score:
             best_score = avg
             best_module = m
 
-    has_module = best_module is not None and best_score >= 50
+    has_module = best_module is not None and best_score >= 55
 
     # =========================
-    # 🧠 ЖЁСТКАЯ ЛОГИКА (без пустоты)
+    # 🧠 MODE LOGIC (СТАБИЛЬНАЯ)
     # =========================
     if score < 45:
         action = "create_module"
@@ -52,21 +68,19 @@ def decision(data):
         module = best_module
 
     else:
-        # 🔥 ВАЖНО: НЕТ СТЕЙТА "НИЧЕГО"
-        if has_module:
-            action = "run_module"
-            module = best_module
-        else:
-            action = "create_module"
-            module = None
+        action = "run_module" if has_module else "create_module"
+        module = best_module if has_module else None
 
     # =========================
-    # 🧨 АНТИ-ЗАВИСАНИЕ
+    # 🧨 HARD SAFETY CONTRACT
     # =========================
     if action == "run_module" and not module:
         action = "create_module"
         module = None
 
+    # =========================
+    # 💾 OUTPUT CONTRACT (ВАЖНО)
+    # =========================
     data["decision"] = action
     data["module"] = module
 

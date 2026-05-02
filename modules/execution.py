@@ -11,17 +11,22 @@ def run_python_module(module_path, data):
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
 
         if spec is None or spec.loader is None:
+            data.setdefault("log", []).append(f"❌ invalid module spec: {module_path}")
             return data, False
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
-        if hasattr(module, "run"):
-            result = module.run(data)
-            if isinstance(result, dict):
-                return result, True
+        if not hasattr(module, "run"):
+            data.setdefault("log", []).append("❌ module has no run()")
+            return data, False
 
-        return data, False
+        result = module.run(data)
+
+        if isinstance(result, dict):
+            data = result
+
+        return data, True
 
     except Exception as e:
         data.setdefault("log", []).append(f"❌ module error: {e}")
@@ -29,7 +34,7 @@ def run_python_module(module_path, data):
 
 
 # =========================
-# 🚀 EXECUTION CORE (БЕЗ ПУСТОТЫ)
+# 🚀 EXECUTION CORE (STABLE)
 # =========================
 def execution(data):
 
@@ -41,9 +46,10 @@ def execution(data):
     success = False
 
     # =========================
-    # 🔥 ALWAYS EXECUTE SOMETHING
+    # 🚀 EXECUTE ONLY IF MODULE EXISTS
     # =========================
     if module_used:
+        module_used = module_used.replace(".py", "")
         path = os.path.join("modules", module_used + ".py")
 
         data, success = run_python_module(path, data)
@@ -51,29 +57,14 @@ def execution(data):
         if success:
             data["log"].append(f"🚀 executed: {module_used}")
         else:
-            data["log"].append(f"❌ failed: {module_used}")
+            data["log"].append(f"❌ failed execution: {module_used}")
 
     # =========================
-    # 🧨 FALLBACK (КЛЮЧЕВОЕ)
+    # ⚠️ NO MODULE → SAFE STATE (NO GENERATION!)
     # =========================
     else:
-        fallback = f"auto_{len(os.listdir('modules')) if os.path.exists('modules') else 0}.py"
-        path = os.path.join("modules", fallback)
-
-        os.makedirs("modules", exist_ok=True)
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("""
-def run(data):
-    data.setdefault("log", []).append("⚙️ fallback module active")
-    data.setdefault("goal", {}).setdefault("progress", 0)
-    data["goal"]["progress"] += 5
-    return data
-""")
-
-        data, success = run_python_module(path, data)
-
-        data["log"].append(f"🧩 fallback created: {fallback}")
+        data["log"].append("⚠️ no module provided (execution skipped safely)")
+        success = False
 
     # =========================
     # 📦 RESULT
@@ -84,3 +75,7 @@ def run(data):
     }
 
     return data
+
+
+def execute(data):
+    return execution(data)

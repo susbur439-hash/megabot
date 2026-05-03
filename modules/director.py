@@ -32,26 +32,42 @@ def run(data):
         data["task"] = task
 
         # =========================
-        # 🧠 DECISION (ОДИН РАЗ)
+        # 🧠 DECISION (СТАБИЛЬНОЕ)
         # =========================
         decision_data = decide(data)
 
-        # НЕ ПЕРЕЗАТИРАЕМ ВСЮ DATA
-        data["decision"] = decision_data.get("decision")
-        data["module"] = decision_data.get("module")
+        action = decision_data.get("decision")
+        module = decision_data.get("module")
+
+        data["decision"] = action
+        data["module"] = module
 
         data["log"].append(
-            f"🧠 DECISION: {data['decision']} | module: {data['module']}"
+            f"🧠 DECISION: {action} | module: {module}"
         )
 
         # =========================
-        # 🚀 EXECUTION (ТОЛЬКО ОДИН ПУСК)
+        # 🧨 SAFETY STOP (АНТИ-ЦИКЛ)
+        # =========================
+        if action == "create_module":
+            create_count = data.get("create_count", 0) + 1
+            data["create_count"] = create_count
+
+            # если слишком часто создаёт — принудительно переключаем
+            if create_count >= 3:
+                if data.get("experience"):
+                    best = max(data["experience"], key=lambda x: x.get("score", 0))
+                    data["module"] = best.get("module")
+                    data["decision"] = "run_module"
+                    data["log"].append("🧠 ANTI-LOOP → forcing run_module")
+        else:
+            data["create_count"] = 0
+
+        # =========================
+        # 🚀 EXECUTION (ОДИН РАЗ)
         # =========================
         result = run_task(data)
 
-        # =========================
-        # 🔗 MERGE RESULT
-        # =========================
         if isinstance(result, dict):
             for k, v in result.items():
                 if k == "log" and isinstance(v, list):
@@ -74,9 +90,9 @@ def run(data):
         data["evaluation"] = eval_result
 
         # =========================
-        # 💾 EXPERIENCE FIX
+        # 💾 EXPERIENCE FIX (без дублей)
         # =========================
-        if data.get("module") and score is not None:
+        if data.get("module"):
             if not data["experience"] or data["experience"][-1].get("module") != data["module"]:
                 data["experience"].append({
                     "module": data["module"],

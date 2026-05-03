@@ -4,6 +4,9 @@ def run(context):
     оценивает результат выполнения задачи и качество системы
     """
 
+    if not isinstance(context, dict):
+        context = {}
+
     score = 50
     reasons = []
 
@@ -26,7 +29,7 @@ def run(context):
     # 🧱 МОДУЛИ
     # =========================
     if modules_created:
-        score += len(modules_created) * 2
+        score += len(modules_created) * 3
     else:
         score -= 5
         reasons.append("no_modules_created")
@@ -49,20 +52,17 @@ def run(context):
     # 📜 ЛОГ АНАЛИЗ
     # =========================
     if log:
-        useful_logs = [l for l in log if "create_module" in l or "analysis" in l]
-        score += len(useful_logs) * 1
+        useful_logs = [
+            l for l in log
+            if "create" in l or "executed" in l or "decision" in l
+        ]
+        score += len(useful_logs)
 
     # =========================
     # 🔒 НОРМАЛИЗАЦИЯ
     # =========================
-    if score > 100:
-        score = 100
-    if score < 0:
-        score = 0
+    score = max(0, min(100, score))
 
-    # =========================
-    # 📊 РЕЗУЛЬТАТ
-    # =========================
     result = {
         "score": score,
         "result": "good" if score >= 70 else "neutral" if score >= 40 else "bad",
@@ -70,4 +70,7 @@ def run(context):
         "delta": score - 50
     }
 
-    return result
+    # 🔥 КЛЮЧ: записываем обратно в систему
+    context["evaluation"] = result
+
+    return context

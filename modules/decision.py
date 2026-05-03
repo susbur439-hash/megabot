@@ -15,7 +15,7 @@ def decision(data):
     experience = data.get("experience", [])
 
     # =========================
-    # 🧠 CLEAN EXPERIENCE MAP
+    # 🧠 EXPERIENCE MAP
     # =========================
     module_map = {}
 
@@ -46,40 +46,44 @@ def decision(data):
 
         avg = sum(scores) / len(scores)
 
-        # стабильность штраф
+        # небольшой штраф за нестабильность
         if len(scores) < 3:
-            avg *= 0.85
+            avg *= 0.9
 
         if avg > best_score:
             best_score = avg
             best_module = m
 
-    has_module = best_module is not None and best_score >= 55
+    has_any_module = best_module is not None
 
     # =========================
-    # 🧠 MODE LOGIC (СТАБИЛЬНАЯ)
+    # 🧠 НОВАЯ ЛОГИКА (БЕЗ ЗАСТРЕВАНИЯ)
     # =========================
-    if score < 45:
+    if not has_any_module:
         action = "create_module"
         module = None
 
-    elif score > 75 and has_module:
-        action = "run_module"
-        module = best_module
-
     else:
-        action = "run_module" if has_module else "create_module"
-        module = best_module if has_module else None
+        # 🔥 ключ: сначала пробуем использовать
+        if score < 60:
+            action = "run_module"
+            module = best_module
+        elif score < 80:
+            action = "run_module"
+            module = best_module
+        else:
+            action = "create_module"
+            module = None
 
     # =========================
-    # 🧨 HARD SAFETY CONTRACT
+    # 🧨 SAFETY
     # =========================
     if action == "run_module" and not module:
         action = "create_module"
         module = None
 
     # =========================
-    # 💾 OUTPUT CONTRACT (ВАЖНО)
+    # 💾 OUTPUT
     # =========================
     data["decision"] = action
     data["module"] = module

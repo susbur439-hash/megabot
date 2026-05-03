@@ -3,6 +3,7 @@ from modules.run import run_task
 from modules.decision import decide
 from modules.evaluation import run as evaluate
 from modules.learning_writer import learn
+from modules.snapshot_learning_core import inject_snapshot_learning  # 🔥 ДОБАВЛЕНО
 
 
 def run(data):
@@ -34,7 +35,7 @@ def run(data):
         data["task"] = task
 
         # =========================
-        # 🧠 DECISION (SINGLE SOURCE OF TRUTH)
+        # 🧠 DECISION (core)
         # =========================
         decide(data)
 
@@ -44,6 +45,14 @@ def run(data):
         data["log"].append(
             f"🧠 DECISION: {action} | module: {module}"
         )
+
+        # =========================
+        # 🧠 SNAPSHOT LEARNING CORE (🔥 НОВЫЙ СЛОЙ)
+        # =========================
+        try:
+            data = inject_snapshot_learning(data)
+        except Exception as e:
+            data["log"].append(f"❌ SNAPSHOT ERROR: {e}")
 
         # =========================
         # 🧨 ANTI-LOOP PROTECTION
@@ -81,11 +90,7 @@ def run(data):
         eval_result = evaluate(data)
 
         if not isinstance(eval_result, dict):
-            eval_result = {
-                "score": 0,
-                "delta": -50,
-                "result": "error"
-            }
+            eval_result = {"score": 0, "delta": -50, "result": "error"}
 
         data["evaluation"] = eval_result
         score = eval_result.get("score", 0)
@@ -99,10 +104,8 @@ def run(data):
             data["log"].append(f"❌ LEARNING ERROR: {e}")
 
         # =========================
-        # 💾 EXPERIENCE (FIXED)
+        # 💾 EXPERIENCE
         # =========================
-        module = data.get("module")
-
         if module:
             if (
                 not data["experience"]

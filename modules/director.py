@@ -2,7 +2,7 @@ from modules.task_core import extract_task, normalize_task
 from modules.run import run_task
 from modules.decision import decide
 from modules.evaluation import run as evaluate
-from modules.learning_writer import learn   # 🔥 learning layer
+from modules.learning_writer import learn
 
 
 def run(data):
@@ -13,6 +13,7 @@ def run(data):
     data.setdefault("log", [])
     data.setdefault("experience", [])
     data.setdefault("evaluation", {})
+    data.setdefault("create_count", 0)
 
     try:
         data["log"].append("🎬 DIRECTOR START")
@@ -33,15 +34,12 @@ def run(data):
         data["task"] = task
 
         # =========================
-        # 🧠 DECISION
+        # 🧠 DECISION (SINGLE SOURCE OF TRUTH)
         # =========================
-        decision_data = decide(data)
+        decide(data)
 
-        action = decision_data.get("decision")
-        module = decision_data.get("module")
-
-        data["decision"] = action
-        data["module"] = module
+        action = data.get("decision")
+        module = data.get("module")
 
         data["log"].append(
             f"🧠 DECISION: {action} | module: {module}"
@@ -51,14 +49,15 @@ def run(data):
         # 🧨 ANTI-LOOP PROTECTION
         # =========================
         if action == "create_module":
-            data["create_count"] = data.get("create_count", 0) + 1
+            data["create_count"] += 1
 
-            if data["create_count"] >= 3:
-                if data.get("experience"):
-                    best = max(data["experience"], key=lambda x: x.get("score", 0))
-                    data["module"] = best.get("module")
-                    data["decision"] = "run_module"
-                    data["log"].append("🧠 ANTI-LOOP → forced run_module")
+            if data["create_count"] >= 3 and data.get("experience"):
+                best = max(data["experience"], key=lambda x: x.get("score", 0))
+
+                data["module"] = best.get("module")
+                data["decision"] = "run_module"
+
+                data["log"].append("🧠 ANTI-LOOP → forced run_module")
         else:
             data["create_count"] = 0
 
@@ -82,13 +81,17 @@ def run(data):
         eval_result = evaluate(data)
 
         if not isinstance(eval_result, dict):
-            eval_result = {"score": 0, "delta": -50, "result": "error"}
+            eval_result = {
+                "score": 0,
+                "delta": -50,
+                "result": "error"
+            }
 
         data["evaluation"] = eval_result
         score = eval_result.get("score", 0)
 
         # =========================
-        # 🧠 LEARNING (SAFE HOOK)
+        # 🧠 LEARNING
         # =========================
         try:
             data = learn(data)
@@ -96,15 +99,17 @@ def run(data):
             data["log"].append(f"❌ LEARNING ERROR: {e}")
 
         # =========================
-        # 💾 EXPERIENCE UPDATE (NO DUPLICATES)
+        # 💾 EXPERIENCE (FIXED)
         # =========================
-        if data.get("module"):
+        module = data.get("module")
+
+        if module:
             if (
                 not data["experience"]
-                or data["experience"][-1].get("module") != data["module"]
+                or data["experience"][-1].get("module") != module
             ):
                 data["experience"].append({
-                    "module": data["module"],
+                    "module": module,
                     "score": score
                 })
 

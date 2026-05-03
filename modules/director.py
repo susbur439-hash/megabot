@@ -22,7 +22,7 @@ def run(data):
         try:
             task = extract_task(data)
         except Exception:
-            task = data.get("task", data)
+            task = data.get("task", "")
 
         try:
             task = normalize_task(task)
@@ -32,16 +32,20 @@ def run(data):
         data["task"] = task
 
         # =========================
-        # 🧠 DECISION
+        # 🧠 DECISION (ОДИН РАЗ)
         # =========================
-        data = decide(data)
+        decision_data = decide(data)
+
+        # НЕ ПЕРЕЗАТИРАЕМ ВСЮ DATA
+        data["decision"] = decision_data.get("decision")
+        data["module"] = decision_data.get("module")
 
         data["log"].append(
-            f"🧠 DECISION: {data.get('decision')} | module: {data.get('module')}"
+            f"🧠 DECISION: {data['decision']} | module: {data['module']}"
         )
 
         # =========================
-        # 🚀 EXECUTION
+        # 🚀 EXECUTION (ТОЛЬКО ОДИН ПУСК)
         # =========================
         result = run_task(data)
 
@@ -58,45 +62,42 @@ def run(data):
             data["result"] = result
 
         # =========================
-        # 📊 EVALUATION (ЖЁСТКИЙ ФИКС)
+        # 📊 EVALUATION
         # =========================
         eval_result = evaluate(data)
 
-        # 🛡️ гарантия структуры
         if not isinstance(eval_result, dict):
             eval_result = {"score": 0, "delta": -50, "result": "error"}
 
         score = eval_result.get("score", 0)
-        delta = eval_result.get("delta", score - 50)
 
-        data["evaluation"] = {
-            "score": score,
-            "delta": delta,
-            "result": eval_result.get("result", "unknown")
-        }
+        data["evaluation"] = eval_result
 
         # =========================
-        # 💾 EXPERIENCE (ФИКС ДУБЛЕЙ)
+        # 💾 EXPERIENCE FIX
         # =========================
-        if data.get("module"):
-            module_name = data.get("module")
-
-            # не добавляем дубликаты подряд
-            if not data["experience"] or data["experience"][-1].get("module") != module_name:
+        if data.get("module") and score is not None:
+            if not data["experience"] or data["experience"][-1].get("module") != data["module"]:
                 data["experience"].append({
-                    "module": module_name,
+                    "module": data["module"],
                     "score": score
                 })
 
         # =========================
-        # 🧠 АНТИ-ЗАЦИКЛИВАНИЕ
+        # 📊 LOG
         # =========================
-        if data.get("decision") == "create_module":
-            repeats = data.get("create_repeats", 0) + 1
-            data["create_repeats"] = repeats
+        data["log"].append(f"📊 SCORE: {score}")
+        data["log"].append("🎬 DIRECTOR END")
 
-            if repeats >= 3 and data["experience"]:
-                # пробуем лучший модуль вместо создания
-                best = max(data["experience"], key=lambda x: x.get("score", 0))
-                data["decision"] = "run_module"
-                data["module"] = best.get("module
+        return data
+
+    except Exception as e:
+        import traceback
+
+        data["status"] = "error"
+        data["error"] = str(e)
+        data["trace"] = traceback.format_exc()
+
+        data["log"].append(f"❌ DIRECTOR ERROR: {e}")
+
+        return data

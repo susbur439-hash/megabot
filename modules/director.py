@@ -1,10 +1,11 @@
 from modules.task_core import extract_task, normalize_task
 from modules.run import run_task
 from modules.decision import decide
+from modules.evaluation import run as evaluate
 
 
 def run(data):
-    # 🛡️ Полная защита входа
+    # 🛡️ защита входа
     if not isinstance(data, dict):
         data = {}
 
@@ -13,7 +14,9 @@ def run(data):
     try:
         data["log"].append("🎬 DIRECTOR START")
 
-        # 🧠 SAFE TASK PREPROCESS
+        # =========================
+        # 🧠 TASK PREPROCESS
+        # =========================
         try:
             task = extract_task(data)
         except Exception:
@@ -26,28 +29,40 @@ def run(data):
 
         data["task"] = task
 
-        # 🧠 DECISION LAYER (НОВОЕ)
-        try:
-            decision = decide(data)
-        except Exception as e:
-            decision = {"action": "run", "error": str(e)}
+        # =========================
+        # 🧠 DECISION (FIX)
+        # =========================
+        data = decide(data)   # ❗ НЕ ПЕРЕЗАТИРАЕМ decision
 
-        data["decision"] = decision
-        data["log"].append(f"🧠 DECISION: {decision}")
+        data["log"].append(
+            f"🧠 DECISION: {data.get('decision')} | module: {data.get('module')}"
+        )
 
+        # =========================
         # 🚀 EXECUTION
+        # =========================
         result = run_task(data)
 
-        # 🛡️ SAFE MERGE RESULT
+        # =========================
+        # 🔗 MERGE RESULT
+        # =========================
         if isinstance(result, dict):
             for k, v in result.items():
-                # не затираем лог
                 if k == "log" and isinstance(v, list):
                     data["log"].extend(v)
                 else:
                     data[k] = v
         else:
             data["result"] = result
+
+        # =========================
+        # 📊 EVALUATION (КЛЮЧЕВОЕ)
+        # =========================
+        data = evaluate(data)
+
+        data["log"].append(
+            f"📊 SCORE: {data.get('evaluation', {}).get('score')}"
+        )
 
         data["log"].append("🎬 DIRECTOR END")
 

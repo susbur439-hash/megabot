@@ -16,12 +16,17 @@ def decision(data):
     experience = data.get("experience", [])
 
     # =========================
-    # 🌐 INTERNET BIAS (🔥 НОВОЕ)
+    # 🌐 INTERNET + SNAPSHOT BIAS (FIXED)
     # =========================
     internet_weights = data.get("internet_weights", {})
+    snapshot_bias = data.get("snapshot_bias", {})
 
-    decision_bias = internet_weights.get("decision:create_module", 0)
-    module_bias = internet_weights.get("module", {})
+    decision_bias = (
+        internet_weights.get("decision:create_module", 0)
+        + snapshot_bias.get("create", 0)
+    )
+
+    run_bias = snapshot_bias.get("run", 0)
 
     # =========================
     # 🧠 EXPERIENCE MAP
@@ -50,17 +55,10 @@ def decision(data):
     best_score = 0
 
     for m, scores in module_map.items():
-        if not scores:
-            continue
-
         avg = sum(scores) / len(scores)
 
-        # стабильность
         if len(scores) < 3:
             avg *= 0.85
-
-        # 🌐 INTERNET BOOST (если есть знания о модуле)
-        avg += module_bias.get(m, 0)
 
         if avg > best_score:
             best_score = avg
@@ -73,39 +71,36 @@ def decision(data):
     # =========================
     create_streak = data.get("create_repeats", 0)
 
-    # =========================
-    # 🧠 DECISION LOGIC (INTERNET-AWARE)
-    # =========================
-
     action = None
     module = None
 
-    # 🔥 ИНТЕРНЕТ СИЛЬНО ХОЧЕТ CREATE → даём шанс
-    if decision_bias > 50 and score > 70:
-        action = "create_module"
+    # =========================
+    # 🚨 FIX: SAFE FIRST RULE
+    # =========================
 
-    # ❌ нет опыта
-    elif not has_good_module:
-        action = "create_module"
+    # 1. если есть хороший модуль → всегда run
+    if has_good_module and score < 90:
+        action = "run_module"
+        module = best_module
 
-    # 🔁 защита от зацикливания
+    # 2. анти-спам create (ВАЖНО)
     elif create_streak >= 2:
         action = "run_module"
         module = best_module
 
-    # 📉 низкий score
+    # 3. низкий score → run, а не create
     elif score < 60:
         action = "run_module"
         module = best_module
 
-    # 📊 средний
-    elif score < 85:
+    # 4. только при хорошем состоянии создаём
+    elif score >= 85 and decision_bias > 0:
+        action = "create_module"
+
+    # 5. fallback
+    else:
         action = "run_module"
         module = best_module
-
-    # 🚀 высокий
-    else:
-        action = "create_module"
 
     # =========================
     # 🧨 SAFETY LOCK
@@ -121,7 +116,7 @@ def decision(data):
     data["module"] = module
 
     # =========================
-    # 📈 UPDATE STREAK
+    # 📈 STREAK UPDATE
     # =========================
     if action == "create_module":
         data["create_repeats"] = create_streak + 1
@@ -132,7 +127,7 @@ def decision(data):
     # 🧾 LOG
     # =========================
     data["log"].append(
-        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | bias:{decision_bias}"
+        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | bias:{decision_bias:.2f}"
     )
 
     return data

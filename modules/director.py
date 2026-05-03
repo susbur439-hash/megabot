@@ -11,6 +11,7 @@ def run(data):
 
     data.setdefault("log", [])
     data.setdefault("experience", [])
+    data.setdefault("evaluation", {})
 
     try:
         data["log"].append("🎬 DIRECTOR START")
@@ -57,35 +58,45 @@ def run(data):
             data["result"] = result
 
         # =========================
-        # 📊 EVALUATION (FIXED)
+        # 📊 EVALUATION (ЖЁСТКИЙ ФИКС)
         # =========================
-        eval_result = evaluate(data)   # ❗ НЕ ПЕРЕЗАТИРАЕМ data
+        eval_result = evaluate(data)
 
-        if isinstance(eval_result, dict):
-            data["evaluation"] = eval_result
+        # 🛡️ гарантия структуры
+        if not isinstance(eval_result, dict):
+            eval_result = {"score": 0, "delta": -50, "result": "error"}
 
-            # 💾 СОХРАНЯЕМ В ОПЫТ
-            if data.get("module"):
+        score = eval_result.get("score", 0)
+        delta = eval_result.get("delta", score - 50)
+
+        data["evaluation"] = {
+            "score": score,
+            "delta": delta,
+            "result": eval_result.get("result", "unknown")
+        }
+
+        # =========================
+        # 💾 EXPERIENCE (ФИКС ДУБЛЕЙ)
+        # =========================
+        if data.get("module"):
+            module_name = data.get("module")
+
+            # не добавляем дубликаты подряд
+            if not data["experience"] or data["experience"][-1].get("module") != module_name:
                 data["experience"].append({
-                    "module": data.get("module"),
-                    "score": eval_result.get("score", 50)
+                    "module": module_name,
+                    "score": score
                 })
 
-        data["log"].append(
-            f"📊 SCORE: {data.get('evaluation', {}).get('score')}"
-        )
+        # =========================
+        # 🧠 АНТИ-ЗАЦИКЛИВАНИЕ
+        # =========================
+        if data.get("decision") == "create_module":
+            repeats = data.get("create_repeats", 0) + 1
+            data["create_repeats"] = repeats
 
-        data["log"].append("🎬 DIRECTOR END")
-
-        return data
-
-    except Exception as e:
-        import traceback
-
-        data["status"] = "error"
-        data["error"] = str(e)
-        data["trace"] = traceback.format_exc()
-
-        data["log"].append(f"❌ DIRECTOR ERROR: {e}")
-
-        return data
+            if repeats >= 3 and data["experience"]:
+                # пробуем лучший модуль вместо создания
+                best = max(data["experience"], key=lambda x: x.get("score", 0))
+                data["decision"] = "run_module"
+                data["module"] = best.get("module

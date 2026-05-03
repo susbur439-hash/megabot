@@ -10,6 +10,7 @@ def decision(data):
     data.setdefault("log", [])
     data.setdefault("experience", [])
     data.setdefault("evaluation", {})
+    data.setdefault("create_repeats", 0)
 
     score = data.get("evaluation", {}).get("score", 50)
     experience = data.get("experience", [])
@@ -26,7 +27,7 @@ def decision(data):
         m = e.get("module")
         s = e.get("score")
 
-        if m is None or s is None:
+        if not m or s is None:
             continue
 
         if not isinstance(s, (int, float)):
@@ -54,38 +55,42 @@ def decision(data):
             best_score = avg
             best_module = m
 
-    # =========================
-    # 🔥 УМНЫЙ ПОРОГ
-    # =========================
     has_good_module = best_module is not None and best_score >= 45
 
     # =========================
-    # 🧠 ЛОГИКА РЕШЕНИЯ (ФИКС ЦИКЛА)
+    # 🧠 CREATE STREAK
     # =========================
-
     create_streak = data.get("create_repeats", 0)
 
-    # 1) если нет модулей → создаём
+    # =========================
+    # 🧠 DECISION LOGIC (FIXED)
+    # =========================
+
+    action = None
+    module = None
+
+    # ❌ нет опыта → создаём
     if not has_good_module:
         action = "create_module"
-        module = None
 
-    # 2) если уже много create подряд → заставляем использовать модуль
+    # 🔁 защита от зацикливания
     elif create_streak >= 2:
         action = "run_module"
         module = best_module
 
-    # 3) нормальный режим
+    # 📉 низкий score → используем опыт
+    elif score < 60:
+        action = "run_module"
+        module = best_module
+
+    # 📊 средний → тоже используем опыт
+    elif score < 85:
+        action = "run_module"
+        module = best_module
+
+    # 🚀 высокий → создаём новый модуль
     else:
-        if score < 55:
-            action = "run_module"
-            module = best_module
-        elif score < 80:
-            action = "run_module"
-            module = best_module
-        else:
-            action = "create_module"
-            module = None
+        action = "create_module"
 
     # =========================
     # 🧨 SAFETY LOCK
@@ -100,6 +105,17 @@ def decision(data):
     data["decision"] = action
     data["module"] = module
 
+    # =========================
+    # 📈 UPDATE STREAK
+    # =========================
+    if action == "create_module":
+        data["create_repeats"] = create_streak + 1
+    else:
+        data["create_repeats"] = 0
+
+    # =========================
+    # 🧾 LOG
+    # =========================
     data["log"].append(
         f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)})"
     )

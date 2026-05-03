@@ -2,6 +2,7 @@ from modules.task_core import extract_task, normalize_task
 from modules.run import run_task
 from modules.decision import decide
 from modules.evaluation import run as evaluate
+from modules.learning_writer import learn   # 🔥 ДОБАВЛЕНО
 
 
 def run(data):
@@ -32,7 +33,7 @@ def run(data):
         data["task"] = task
 
         # =========================
-        # 🧠 DECISION (СТАБИЛЬНОЕ)
+        # 🧠 DECISION
         # =========================
         decision_data = decide(data)
 
@@ -47,24 +48,22 @@ def run(data):
         )
 
         # =========================
-        # 🧨 SAFETY STOP (АНТИ-ЦИКЛ)
+        # 🧨 ANTI-LOOP
         # =========================
         if action == "create_module":
-            create_count = data.get("create_count", 0) + 1
-            data["create_count"] = create_count
+            data["create_count"] = data.get("create_count", 0) + 1
 
-            # если слишком часто создаёт — принудительно переключаем
-            if create_count >= 3:
+            if data["create_count"] >= 3:
                 if data.get("experience"):
                     best = max(data["experience"], key=lambda x: x.get("score", 0))
                     data["module"] = best.get("module")
                     data["decision"] = "run_module"
-                    data["log"].append("🧠 ANTI-LOOP → forcing run_module")
+                    data["log"].append("🧠 ANTI-LOOP → forced run_module")
         else:
             data["create_count"] = 0
 
         # =========================
-        # 🚀 EXECUTION (ОДИН РАЗ)
+        # 🚀 EXECUTION
         # =========================
         result = run_task(data)
 
@@ -85,12 +84,16 @@ def run(data):
         if not isinstance(eval_result, dict):
             eval_result = {"score": 0, "delta": -50, "result": "error"}
 
+        data["evaluation"] = eval_result
         score = eval_result.get("score", 0)
 
-        data["evaluation"] = eval_result
+        # =========================
+        # 🧠 LEARNING (🔥 НОВОЕ)
+        # =========================
+        data = learn(data)
 
         # =========================
-        # 💾 EXPERIENCE FIX (без дублей)
+        # 💾 EXPERIENCE
         # =========================
         if data.get("module"):
             if not data["experience"] or data["experience"][-1].get("module") != data["module"]:

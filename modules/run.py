@@ -10,12 +10,31 @@ def safe_import_execute():
         return None
 
 
+# =========================
+# 🛡️ DATA TYPE GUARD
+# =========================
+def normalize_data(data):
+    if not isinstance(data, dict):
+        data = {"task": str(data)}
+
+    if not isinstance(data.get("log"), list):
+        data["log"] = []
+
+    if not isinstance(data.get("experience"), list):
+        data["experience"] = []
+
+    if not isinstance(data.get("evaluation"), dict):
+        data["evaluation"] = {}
+
+    return data
+
+
+# =========================
+# 🚀 RUN TASK
+# =========================
 def run_task(data):
 
-    if not isinstance(data, dict):
-        data = {"task": data}
-
-    data.setdefault("log", [])
+    data = normalize_data(data)
 
     print(f"[RUN] Выполнение задачи: {data}")
 
@@ -54,14 +73,37 @@ def run_task(data):
         return data
 
     # =========================
-    # 🔗 MERGE RESULT
+    # 🧩 SAFE MERGE (CRITICAL FIX)
     # =========================
     if isinstance(result, dict):
         for k, v in result.items():
+
+            # log merge
             if k == "log" and isinstance(v, list):
                 data["log"].extend(v)
+
+            # strict type safety (fix crash source)
+            elif k == "experience":
+                if isinstance(v, list):
+                    data["experience"] = v
+
+            elif k == "evaluation":
+                if isinstance(v, dict):
+                    data["evaluation"] = v
+
+            elif k == "module":
+                data["module"] = v
+
+            elif k == "status":
+                data["status"] = v
+
             else:
                 data[k] = v
+
+    # =========================
+    # 🛡️ FINAL SAFETY CHECK
+    # =========================
+    data = normalize_data(data)
 
     data["status"] = data.get("status", "ok")
 

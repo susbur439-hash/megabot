@@ -47,7 +47,7 @@ def create_module(data):
         name = f"module_auto_{random.randint(1000, 999999)}"
         path = os.path.join("modules", name + ".py")
 
-        code = f'''
+        code = f"""
 def run(data):
     data.setdefault("log", []).append("⚙️ {name} running")
 
@@ -60,7 +60,7 @@ def run(data):
     data["log"].append("📈 progress +10")
 
     return data
-'''
+"""
 
         with open(path, "w", encoding="utf-8") as f:
             f.write(code)
@@ -104,7 +104,11 @@ def execution(data):
     # 🚀 RUN MODULE
     # =========================
     elif decision == "run_module" and module_used:
+
+        module_used = str(module_used)
         module_used = module_used.replace(".py", "")
+        module_used = module_used.replace("modules/", "")
+
         path = os.path.join("modules", module_used + ".py")
 
         data, success = run_python_module(path, data)
@@ -118,12 +122,16 @@ def execution(data):
         data["log"].append("⚠️ execution skipped")
 
     # =========================
-    # 🧠 EXPERIENCE (ВАЖНО)
+    # 🧠 EXPERIENCE (FIXED)
     # =========================
-    data["experience"].append({
-        "module": module_used,
-        "score": data.get("evaluation", {}).get("score", 50)
-    })
+    score = data.get("evaluation", {}).get("score", 50)
+
+    if module_used:
+        data["experience"].append({
+            "module": module_used,
+            "score": score,
+            "success": success
+        })
 
     # =========================
     # 📦 RESULT
@@ -132,6 +140,14 @@ def execution(data):
         "module": module_used,
         "success": success
     }
+
+    # =========================
+    # 📊 LEARNING SIGNAL
+    # =========================
+    if success:
+        data.setdefault("log", []).append("🧠 learning signal: success")
+    else:
+        data.setdefault("log", []).append("🧠 learning signal: failure")
 
     return data
 

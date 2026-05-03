@@ -2,7 +2,7 @@ from modules.task_core import extract_task, normalize_task
 from modules.run import run_task
 from modules.decision import decide
 from modules.evaluation import run as evaluate
-from modules.learning_writer import learn   # 🔥 ДОБАВЛЕНО
+from modules.learning_writer import learn   # 🔥 learning layer
 
 
 def run(data):
@@ -48,7 +48,7 @@ def run(data):
         )
 
         # =========================
-        # 🧨 ANTI-LOOP
+        # 🧨 ANTI-LOOP PROTECTION
         # =========================
         if action == "create_module":
             data["create_count"] = data.get("create_count", 0) + 1
@@ -88,15 +88,21 @@ def run(data):
         score = eval_result.get("score", 0)
 
         # =========================
-        # 🧠 LEARNING (🔥 НОВОЕ)
+        # 🧠 LEARNING (SAFE HOOK)
         # =========================
-        data = learn(data)
+        try:
+            data = learn(data)
+        except Exception as e:
+            data["log"].append(f"❌ LEARNING ERROR: {e}")
 
         # =========================
-        # 💾 EXPERIENCE
+        # 💾 EXPERIENCE UPDATE (NO DUPLICATES)
         # =========================
         if data.get("module"):
-            if not data["experience"] or data["experience"][-1].get("module") != data["module"]:
+            if (
+                not data["experience"]
+                or data["experience"][-1].get("module") != data["module"]
+            ):
                 data["experience"].append({
                     "module": data["module"],
                     "score": score

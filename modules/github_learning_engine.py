@@ -1,10 +1,14 @@
 import requests
 import json
 import re
+from collections import defaultdict
 
 MEM_FILE = "internet_memory_v2.json"
 
 
+# =========================
+# 💾 MEMORY
+# =========================
 def load_memory():
     try:
         with open(MEM_FILE, "r", encoding="utf-8") as f:
@@ -22,14 +26,11 @@ def save_memory(memory):
 
 
 # =========================
-# 🌐 GITHUB FETCH
+# 🌐 GITHUB FETCH (STABLE)
 # =========================
 def fetch_repo_code(url):
-    """
-    Очень упрощённый fetch (public raw files only)
-    """
     try:
-        if "github.com" in url:
+        if "github.com" in url and "raw" not in url:
             url = url.replace("github.com", "raw.githubusercontent.com")
             url = url.replace("/blob/", "/")
 
@@ -46,48 +47,63 @@ def fetch_repo_code(url):
 # 🧠 PATTERN EXTRACTION
 # =========================
 def extract_patterns(code):
-    patterns = []
+    patterns = defaultdict(int)
 
     # функции
-    functions = re.findall(r"def ([a-zA-Z_]+)\(", code)
-    for f in functions:
-        patterns.append(f"func:{f}")
+    for f in re.findall(r"def ([a-zA-Z_]+)\(", code):
+        patterns[f"func:{f}"] += 1
 
     # классы
-    classes = re.findall(r"class ([a-zA-Z_]+)", code)
-    for c in classes:
-        patterns.append(f"class:{c}")
+    for c in re.findall(r"class ([a-zA-Z_]+)", code):
+        patterns[f"class:{c}"] += 2
 
-    # важные конструкции
-    if "for " in code:
-        patterns.append("loop_for")
-    if "while " in code:
-        patterns.append("loop_while")
-    if "import " in code:
-        patterns.append("imports")
+    # сигналы архитектуры
     if "try:" in code:
-        patterns.append("error_handling")
+        patterns["error_handling"] += 3
+    if "import " in code:
+        patterns["imports"] += 2
+    if "for " in code:
+        patterns["loop_for"] += 1
+    if "while " in code:
+        patterns["loop_while"] += 1
 
-    return patterns
+    return dict(patterns)
 
 
 # =========================
-# 📊 SCORING
+# 📊 SCORING (WEIGHTED)
 # =========================
 def score_patterns(patterns):
     score = 0
 
-    for p in patterns:
+    for p, w in patterns.items():
         if "error_handling" in p:
-            score += 5
-        if "class:" in p:
-            score += 3
-        if "func:" in p:
-            score += 2
-        if "loop" in p:
+            score += 5 * w
+        elif "class:" in p:
+            score += 3 * w
+        elif "func:" in p:
+            score += 2 * w
+        elif "loop" in p:
+            score += 1 * w
+        elif "imports" in p:
             score += 1
 
     return score
+
+
+# =========================
+# 🧠 MERGE MEMORY (IMPORTANT FIX)
+# =========================
+def merge_memory(memory, new_item):
+    for item in memory:
+        if item.get("url") == new_item["url"]:
+            item["score"] = (item.get("score", 0) + new_item["score"]) / 2
+            for k, v in new_item["patterns"].items():
+                item["patterns"][k] = item["patterns"].get(k, 0) + v
+            return memory
+
+    memory.append(new_item)
+    return memory
 
 
 # =========================
@@ -105,12 +121,14 @@ def learn_from_github(repo_urls):
         patterns = extract_patterns(code)
         score = score_patterns(patterns)
 
-        memory.append({
+        new_item = {
             "source": "github",
             "url": url,
             "patterns": patterns,
             "score": score
-        })
+        }
+
+        memory = merge_memory(memory, new_item)
 
     # ограничение памяти
     memory = memory[-2000:]

@@ -46,26 +46,38 @@ def decision(data):
 
         avg = sum(scores) / len(scores)
 
-        # небольшой штраф за нестабильность
+        # штраф за нестабильность
         if len(scores) < 3:
-            avg *= 0.9
+            avg *= 0.85
 
         if avg > best_score:
             best_score = avg
             best_module = m
 
-    has_any_module = best_module is not None
+    # =========================
+    # 🔥 УМНЫЙ ПОРОГ
+    # =========================
+    has_good_module = best_module is not None and best_score >= 45
 
     # =========================
-    # 🧠 НОВАЯ ЛОГИКА (БЕЗ ЗАСТРЕВАНИЯ)
+    # 🧠 ЛОГИКА РЕШЕНИЯ (ФИКС ЦИКЛА)
     # =========================
-    if not has_any_module:
+
+    create_streak = data.get("create_repeats", 0)
+
+    # 1) если нет модулей → создаём
+    if not has_good_module:
         action = "create_module"
         module = None
 
+    # 2) если уже много create подряд → заставляем использовать модуль
+    elif create_streak >= 2:
+        action = "run_module"
+        module = best_module
+
+    # 3) нормальный режим
     else:
-        # 🔥 ключ: сначала пробуем использовать
-        if score < 60:
+        if score < 55:
             action = "run_module"
             module = best_module
         elif score < 80:
@@ -76,14 +88,14 @@ def decision(data):
             module = None
 
     # =========================
-    # 🧨 SAFETY
+    # 🧨 SAFETY LOCK
     # =========================
     if action == "run_module" and not module:
         action = "create_module"
         module = None
 
     # =========================
-    # 💾 OUTPUT
+    # 📦 OUTPUT
     # =========================
     data["decision"] = action
     data["module"] = module

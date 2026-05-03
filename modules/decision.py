@@ -16,6 +16,14 @@ def decision(data):
     experience = data.get("experience", [])
 
     # =========================
+    # 🌐 INTERNET BIAS (🔥 НОВОЕ)
+    # =========================
+    internet_weights = data.get("internet_weights", {})
+
+    decision_bias = internet_weights.get("decision:create_module", 0)
+    module_bias = internet_weights.get("module", {})
+
+    # =========================
     # 🧠 EXPERIENCE MAP
     # =========================
     module_map = {}
@@ -47,9 +55,12 @@ def decision(data):
 
         avg = sum(scores) / len(scores)
 
-        # штраф за нестабильность
+        # стабильность
         if len(scores) < 3:
             avg *= 0.85
+
+        # 🌐 INTERNET BOOST (если есть знания о модуле)
+        avg += module_bias.get(m, 0)
 
         if avg > best_score:
             best_score = avg
@@ -63,14 +74,18 @@ def decision(data):
     create_streak = data.get("create_repeats", 0)
 
     # =========================
-    # 🧠 DECISION LOGIC (FIXED)
+    # 🧠 DECISION LOGIC (INTERNET-AWARE)
     # =========================
 
     action = None
     module = None
 
-    # ❌ нет опыта → создаём
-    if not has_good_module:
+    # 🔥 ИНТЕРНЕТ СИЛЬНО ХОЧЕТ CREATE → даём шанс
+    if decision_bias > 50 and score > 70:
+        action = "create_module"
+
+    # ❌ нет опыта
+    elif not has_good_module:
         action = "create_module"
 
     # 🔁 защита от зацикливания
@@ -78,17 +93,17 @@ def decision(data):
         action = "run_module"
         module = best_module
 
-    # 📉 низкий score → используем опыт
+    # 📉 низкий score
     elif score < 60:
         action = "run_module"
         module = best_module
 
-    # 📊 средний → тоже используем опыт
+    # 📊 средний
     elif score < 85:
         action = "run_module"
         module = best_module
 
-    # 🚀 высокий → создаём новый модуль
+    # 🚀 высокий
     else:
         action = "create_module"
 
@@ -117,7 +132,7 @@ def decision(data):
     # 🧾 LOG
     # =========================
     data["log"].append(
-        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)})"
+        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | bias:{decision_bias}"
     )
 
     return data

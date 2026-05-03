@@ -10,6 +10,7 @@ def run(data):
         data = {}
 
     data.setdefault("log", [])
+    data.setdefault("experience", [])
 
     try:
         data["log"].append("🎬 DIRECTOR START")
@@ -30,9 +31,9 @@ def run(data):
         data["task"] = task
 
         # =========================
-        # 🧠 DECISION (FIX)
+        # 🧠 DECISION
         # =========================
-        data = decide(data)   # ❗ НЕ ПЕРЕЗАТИРАЕМ decision
+        data = decide(data)
 
         data["log"].append(
             f"🧠 DECISION: {data.get('decision')} | module: {data.get('module')}"
@@ -56,9 +57,19 @@ def run(data):
             data["result"] = result
 
         # =========================
-        # 📊 EVALUATION (КЛЮЧЕВОЕ)
+        # 📊 EVALUATION (FIXED)
         # =========================
-        data = evaluate(data)
+        eval_result = evaluate(data)   # ❗ НЕ ПЕРЕЗАТИРАЕМ data
+
+        if isinstance(eval_result, dict):
+            data["evaluation"] = eval_result
+
+            # 💾 СОХРАНЯЕМ В ОПЫТ
+            if data.get("module"):
+                data["experience"].append({
+                    "module": data.get("module"),
+                    "score": eval_result.get("score", 50)
+                })
 
         data["log"].append(
             f"📊 SCORE: {data.get('evaluation', {}).get('score')}"

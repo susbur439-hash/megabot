@@ -20,23 +20,34 @@ def load_snapshot_text():
 
 
 # =========================
-# 📦 LOAD MEMORY
+# 📦 LOAD MEMORY (SAFE FIX)
 # =========================
 def load_memory():
     try:
         if not os.path.exists(MEMORY_FILE):
-            return {}
+            return []
+
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+
+        # 🔥 FIX: memory must ALWAYS be list
+        if isinstance(data, list):
+            return data
+
+        return []
+
     except:
-        return {}
+        return []
 
 
 # =========================
-# 🧠 PATTERN EXTRACTION
+# 🧠 PATTERN EXTRACTION (SAFE)
 # =========================
 def extract_patterns(text):
     patterns = {}
+
+    if not isinstance(text, str):
+        return patterns
 
     # modules
     modules = re.findall(r"module_[a-zA-Z0-9_]+", text)
@@ -51,7 +62,11 @@ def extract_patterns(text):
     # scores
     scores = re.findall(r"score[:= ]+(\d+)", text)
     for s in scores:
-        s = int(s)
+        try:
+            s = int(s)
+        except:
+            continue
+
         if s >= 80:
             patterns["success_high"] = patterns.get("success_high", 0) + 1
         elif s >= 60:
@@ -70,24 +85,39 @@ def extract_patterns(text):
 
 
 # =========================
-# 🧠 BUILD WEIGHTS
+# 🧠 BUILD WEIGHTS (SAFE)
 # =========================
 def build_weights(patterns, memory):
     weights = {}
 
-    for k, v in patterns.items():
-        weights[k] = v
+    if not isinstance(patterns, dict):
+        patterns = {}
 
-    # усиливаем через старую память
+    if not isinstance(memory, list):
+        memory = []
+
+    # current snapshot
+    for k, v in patterns.items():
+        weights[k] = weights.get(k, 0) + (v or 0)
+
+    # historical memory boost
     for item in memory:
-        for k, v in item.get("patterns", {}).items():
-            weights[k] = weights.get(k, 0) + v * 0.5
+        if not isinstance(item, dict):
+            continue
+
+        mem_patterns = item.get("patterns", {})
+
+        if not isinstance(mem_patterns, dict):
+            continue
+
+        for k, v in mem_patterns.items():
+            weights[k] = weights.get(k, 0) + (v or 0) * 0.5
 
     return weights
 
 
 # =========================
-# 🚀 MAIN CORE
+# 🚀 CORE ENGINE
 # =========================
 def snapshot_learning_core():
     text = load_snapshot_text()
@@ -96,13 +126,14 @@ def snapshot_learning_core():
     patterns = extract_patterns(text)
     weights = build_weights(patterns, memory)
 
-    # сохраняем обновлённую память
+    # safe append
     memory.append({
         "patterns": patterns,
         "weights": weights
     })
 
-    memory = memory[-50:]  # ограничение
+    # limit memory
+    memory = memory[-50:]
 
     try:
         with open(MEMORY_FILE, "w", encoding="utf-8") as f:
@@ -114,20 +145,29 @@ def snapshot_learning_core():
 
 
 # =========================
-# 🔌 INJECT INTO DATA
+# 🔌 INJECT INTO DATA (FIXED)
 # =========================
 def inject_snapshot_learning(data):
+    if not isinstance(data, dict):
+        data = {}
+
     data.setdefault("log", [])
 
     weights = snapshot_learning_core()
 
+    if not isinstance(weights, dict):
+        weights = {}
+
     data["snapshot_weights"] = weights
 
-    # превращаем в bias для decision
+    # safe bias extraction
     data["snapshot_bias"] = {
         "create": weights.get("mode:create", 0),
         "run": weights.get("mode:run", 0),
-        "success": weights.get("success_mid", 0) + weights.get("success_high", 0),
+        "success": (
+            weights.get("success_mid", 0) +
+            weights.get("success_high", 0)
+        )
     }
 
     data["log"].append(

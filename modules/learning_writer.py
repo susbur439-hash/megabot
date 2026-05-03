@@ -4,6 +4,9 @@ import os
 MEM_FILE = "internet_memory_v2.json"
 
 
+# =========================
+# 📦 LOAD
+# =========================
 def load_memory():
     if not os.path.exists(MEM_FILE):
         return []
@@ -15,6 +18,9 @@ def load_memory():
         return []
 
 
+# =========================
+# 💾 SAVE
+# =========================
 def save_memory(memory):
     try:
         with open(MEM_FILE, "w", encoding="utf-8") as f:
@@ -23,27 +29,29 @@ def save_memory(memory):
         pass
 
 
+# =========================
+# ⚙️ WEIGHTS ENGINE (FIXED)
+# =========================
 def update_weights(memory):
-    """
-    пересчитывает влияние паттернов
-    """
     weights = {}
 
     for item in memory:
-        patterns = item.get("patterns", [])
-        score = item.get("score", 0)
+        patterns = item.get("patterns", {})
+        score = item.get("score", 50)
 
-        for p in patterns:
-            if isinstance(p, str):
-                weights[p] = weights.get(p, 0) + (score - 50) / 10
+        delta = (score - 50) / 10  # нормализация
+
+        for k in patterns:
+            if isinstance(k, str):
+                weights[k] = weights.get(k, 0) + delta
 
     return weights
 
 
+# =========================
+# 🧠 LEARN CORE (V3 FIXED)
+# =========================
 def learn(data):
-    """
-    🔥 главный вход обучения
-    """
 
     data.setdefault("log", [])
 
@@ -59,44 +67,59 @@ def learn(data):
     memory = load_memory()
 
     # =========================
-    # 🧠 СОЗДАЁМ ОПЫТ
+    # 🧠 CONTEXTUAL PATTERNS (FIX)
     # =========================
-    patterns = []
+    patterns = {}
 
-    patterns.append(f"decision:{decision}")
+    patterns[f"decision:{decision}"] = 1
 
     if module:
-        patterns.append(f"module:{module}")
+        patterns[f"module:{module}"] = 1
 
-    if score >= 70:
-        patterns.append("success_high")
-    elif score >= 50:
-        patterns.append("success_mid")
-    else:
-        patterns.append("fail_low")
+    patterns[f"score_range:{'high' if score>=70 else 'mid' if score>=50 else 'low'}"] = 1
+
+    if data.get("task"):
+        patterns["task_present"] = 1
+
+    if data.get("create_count", 0) > 2:
+        patterns["loop_risk"] = 1
 
     # =========================
-    # 💾 ЗАПИСЬ В ПАМЯТЬ
+    # 💾 MEMORY ENTRY (FIXED STRUCTURE)
     # =========================
     memory.append({
         "patterns": patterns,
-        "score": score
+        "score": score,
+        "decision": decision,
+        "module": module
     })
 
-    # ограничение памяти (анти-рост)
+    # ограничение памяти
     memory = memory[-2000:]
 
     save_memory(memory)
 
     # =========================
-    # ⚙️ ОБНОВЛЕНИЕ ВЕСОВ
+    # ⚙️ WEIGHTS
     # =========================
     weights = update_weights(memory)
 
     data["internet_weights"] = weights
 
+    # =========================
+    # 🔥 EXTRA SIGNALS (IMPORTANT)
+    # =========================
+    data["snapshot_bias"] = {
+        "create": weights.get("decision:create_module", 0),
+        "run": weights.get("decision:run_module", 0),
+        "fail": weights.get("score_range:low", 0)
+    }
+
+    # =========================
+    # 🧾 LOG
+    # =========================
     data["log"].append(
-        f"🧠 LEARNED | score={score} | decision={decision} | module={module}"
+        f"🧠 LEARN V3 | score={score} | decision={decision} | module={module}"
     )
 
     return data

@@ -16,15 +16,18 @@ def decision(data):
     data.setdefault("create_repeats", 0)
 
     # =========================
-    # 🧠 CONTROL BUS INJECT (ВХОД)
+    # 🧠 CONTROL BUS INJECT
     # =========================
     data = inject(data)
+
+    control_state = data.get("control_state", {})
+    control_flags = data.get("control_flags", {})
 
     score = data.get("evaluation", {}).get("score", 50)
     experience = data.get("experience", [])
 
     # =========================
-    # 🌐 INTERNET + SNAPSHOT BIAS
+    # 🌐 BIAS
     # =========================
     internet_weights = data.get("internet_weights", {})
     snapshot_bias = data.get("snapshot_bias", {})
@@ -34,7 +37,14 @@ def decision(data):
         + snapshot_bias.get("create", 0)
     )
 
-    run_bias = snapshot_bias.get("run", 0)
+    # =========================
+    # 🚨 HARD CONTROL OVERRIDES
+    # =========================
+    system_block_create = (
+        control_flags.get("overcreate", False)
+        or control_flags.get("loop_detected", False)
+        or control_state.get("mode") == "repair"
+    )
 
     # =========================
     # 🧠 EXPERIENCE MAP
@@ -57,7 +67,7 @@ def decision(data):
         module_map.setdefault(m, []).append(s)
 
     # =========================
-    # 🧠 BEST MODULE SEARCH
+    # 🧠 BEST MODULE
     # =========================
     best_module = None
     best_score = -1
@@ -81,21 +91,26 @@ def decision(data):
     module = None
 
     # =========================
-    # 🚨 SAFE DECISION CORE (ЖЁСТКИЙ)
+    # 🚨 CORE LOGIC (CONTROL-FIRST)
     # =========================
 
-    # 1. если есть хороший модуль → ВСЕГДА run
+    # 1. если есть хороший модуль → всегда run
     if has_good_module:
         action = "run_module"
         module = best_module
 
-    # 2. если есть любые модули → тоже run
+    # 2. если есть любые модули → run (никогда не create)
     elif has_modules:
         action = "run_module"
         module = best_module
 
-    # 3. только если вообще ничего нет → create (и то ограничено)
-    elif create_streak < 1:
+    # 3. если система заблокировала создание → только run/repair
+    elif system_block_create:
+        action = "run_module"
+        module = best_module
+
+    # 4. если вообще пусто → create (ОГРАНИЧЕННО)
+    elif create_streak == 0:
         action = "create_module"
 
     else:
@@ -103,10 +118,11 @@ def decision(data):
         module = best_module
 
     # =========================
-    # 🧨 SAFETY LOCK
+    # 🧨 SAFETY FIX
     # =========================
     if action == "run_module" and not module:
-        action = "create_module"
+        # НИКАКИХ create fallback больше
+        action = "run_module"
         module = None
 
     # =========================
@@ -124,8 +140,14 @@ def decision(data):
         data["cleanup_modules"] = cleanup_list
         data["log"].append(f"🧹 cleanup candidates: {cleanup_list}")
 
+        emit({
+            "phase": "cleanup",
+            "action": "delete_modules",
+            "modules": cleanup_list
+        })
+
     # =========================
-    # 📡 CONTROL BUS FEEDBACK
+    # 📡 CONTROL BUS EVENT
     # =========================
     emit({
         "phase": "decision",
@@ -133,7 +155,7 @@ def decision(data):
         "module": module,
         "score": score,
         "modules": len(module_map),
-        "best_score": best_score
+        "blocked": system_block_create
     })
 
     # =========================
@@ -143,7 +165,7 @@ def decision(data):
     data["module"] = module
 
     # =========================
-    # 📈 STREAK UPDATE
+    # 📈 STREAK
     # =========================
     if action == "create_module":
         data["create_repeats"] = create_streak + 1
@@ -154,7 +176,7 @@ def decision(data):
     # 🧾 LOG
     # =========================
     data["log"].append(
-        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | modules:{len(module_map)} | bias:{decision_bias:.2f}"
+        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | modules:{len(module_map)} | blocked:{system_block_create}"
     )
 
     return data

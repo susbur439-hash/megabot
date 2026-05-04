@@ -1,5 +1,5 @@
 # =========================
-# 🧠 MEGABOT CONTROL BUS v2 (MAX)
+# 🧠 MEGABOT CONTROL BUS v2 (FIXED MAX)
 # =========================
 
 import time
@@ -57,26 +57,32 @@ class ControlBus:
     # 📡 EMIT SIGNAL
     # =========================
     def emit(self, signal: dict):
+
         if not isinstance(signal, dict):
             return
 
-        signal = signal.copy()
+        signal = dict(signal)
         signal["ts"] = time.time()
 
         self.signals.append(signal)
 
         action = signal.get("action")
 
+        # =========================
+        # 📊 METRICS UPDATE
+        # =========================
         if action == "create_module":
             self.metrics["create"] += 1
 
         elif action == "run_module":
             self.metrics["run"] += 1
 
-        if signal.get("result") == "success":
+        result = signal.get("result")
+
+        if result == "success":
             self.metrics["success"] += 1
 
-        if signal.get("result") == "fail":
+        elif result == "fail":
             self.metrics["fail"] += 1
 
         self._detect_anomalies()
@@ -88,23 +94,16 @@ class ControlBus:
         if not isinstance(patch, dict):
             return
 
-        for k, v in patch.items():
-            self.state[k] = v
+        self.state.update(patch)
 
     # =========================
-    # 📊 ANALYTICS CORE
+    # 📊 BIAS ENGINE
     # =========================
     def get_bias(self):
-
-        return {
-            "create": self.metrics["create"],
-            "run": self.metrics["run"],
-            "success": self.metrics["success"],
-            "fail": self.metrics["fail"],
-        }
+        return dict(self.metrics)
 
     # =========================
-    # 🔁 FEEDBACK LOOP
+    # 🔁 FEEDBACK LOOP (FIXED)
     # =========================
     def feedback(self):
 
@@ -116,16 +115,18 @@ class ControlBus:
         else:
             self.state["energy"] = max(0, self.state["energy"] - 1)
 
-        # 📊 trend
-        if bias["create"] > bias["run"] * 1.5:
+        # 📊 trend detection
+        if bias["create"] > bias["run"] * 2:
             self.state["trend"] = "create_overflow"
-        elif bias["run"] > bias["create"] * 1.5:
+
+        elif bias["run"] > bias["create"] * 2:
             self.state["trend"] = "run_stable"
+
         else:
             self.state["trend"] = "balanced"
 
-        # 🧠 stability
-        total = max(1, len(self.signals))
+        # 🧠 stability FIX
+        total = max(1, bias["success"] + bias["fail"])
         success_rate = bias["success"] / total
 
         self.state["stability"] = round(success_rate, 3)
@@ -139,19 +140,25 @@ class ControlBus:
         }
 
     # =========================
-    # 🚨 ANOMALY DETECTION
+    # 🚨 ANOMALY DETECTION (FIXED)
     # =========================
     def _detect_anomalies(self):
 
-        if self.metrics["create"] > self.metrics["run"] * 3:
+        if self.metrics["create"] > self.metrics["run"] * 2:
             self.flags["overcreate"] = True
+        else:
+            self.flags["overcreate"] = False
 
-        if len(self.signals) > 50:
-            recent = list(self.signals)[-50:]
+        # loop detection (stronger)
+        if len(self.signals) >= 30:
+            recent = list(self.signals)[-30:]
 
-            creates = sum(1 for s in recent if s.get("action") == "create_module")
+            creates = sum(
+                1 for s in recent
+                if s.get("action") == "create_module"
+            )
 
-            if creates > 40:
+            if creates > 20:
                 self.flags["loop_detected"] = True
             else:
                 self.flags["loop_detected"] = False

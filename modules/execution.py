@@ -2,13 +2,22 @@ import os
 import importlib.util
 import random
 
-
 # =========================
 # ⚙ CONFIG
 # =========================
 MODULES_DIR = "modules"
-DELETE_THRESHOLD = 30       # ниже этого score — кандидат на удаление
-MIN_RUNS_TO_DELETE = 3      # минимум попыток перед удалением
+DELETE_THRESHOLD = 30
+MIN_RUNS_TO_DELETE = 3
+
+# 🚨 защита ядра
+PROTECTED_MODULES = {
+    "task_core",
+    "decision",
+    "control_bus",
+    "execution",
+    "control_layer",
+    "system_observer"
+}
 
 
 # =========================
@@ -84,13 +93,18 @@ def run(data):
 
 
 # =========================
-# 🧹 DELETE BAD MODULES
+# 🧹 SMART CLEANUP (FIXED)
 # =========================
 def cleanup_modules(data):
+
     experience = data.get("experience", [])
+    control_flags = data.get("control_flags", {})
+
     stats = {}
 
-    # собираем статистику
+    # =========================
+    # 📊 COLLECT STATS
+    # =========================
     for e in experience:
         if not isinstance(e, dict):
             continue
@@ -103,24 +117,49 @@ def cleanup_modules(data):
 
         stats.setdefault(m, []).append(s)
 
-    # анализируем
+    # =========================
+    # 🚨 GLOBAL BLOCK CHECK
+    # =========================
+    global_block = (
+        control_flags.get("overcreate", False)
+        or control_flags.get("loop_detected", False)
+    )
+
+    # =========================
+    # 🧹 ANALYSIS + DELETE
+    # =========================
     for module, scores in stats.items():
+
+        # 🚨 защита core
+        if module in PROTECTED_MODULES:
+            continue
 
         if len(scores) < MIN_RUNS_TO_DELETE:
             continue
 
         avg = sum(scores) / len(scores)
 
-        if avg >= DELETE_THRESHOLD:
-            continue  # норм модуль
-
-        # ❌ удаляем плохой модуль
         path = os.path.join(MODULES_DIR, module + ".py")
+
+        # =========================
+        # ❌ DELETE RULES
+        # =========================
+
+        should_delete = (
+            avg < DELETE_THRESHOLD
+            and global_block
+        )
+
+        if not should_delete:
+            continue
 
         if os.path.exists(path):
             try:
                 os.remove(path)
-                data["log"].append(f"🗑️ deleted bad module: {module} (avg={round(avg,1)})")
+                data["log"].append(
+                    f"🗑️ deleted module: {module} (avg={round(avg,1)})"
+                )
+
             except Exception as e:
                 data["log"].append(f"❌ delete failed: {module} | {e}")
 
@@ -181,7 +220,7 @@ def execution(data):
         })
 
     # =========================
-    # 🧹 CLEANUP (🔥 ВАЖНО)
+    # 🧹 CLEANUP
     # =========================
     try:
         cleanup_modules(data)
@@ -199,10 +238,9 @@ def execution(data):
     # =========================
     # 📊 SIGNAL
     # =========================
-    if success:
-        data["log"].append("🧠 learning signal: success")
-    else:
-        data["log"].append("🧠 learning signal: failure")
+    data["log"].append(
+        "🧠 learning signal: success" if success else "🧠 learning signal: failure"
+    )
 
     return data
 

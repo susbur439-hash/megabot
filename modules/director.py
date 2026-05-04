@@ -3,7 +3,10 @@ from modules.run import run_task
 from modules.decision import decide
 from modules.evaluation import run as evaluate
 from modules.learning_writer import learn
-from modules.snapshot_learning_core import inject_snapshot_learning  # 🔥 ДОБАВЛЕНО
+from modules.snapshot_learning_core import inject_snapshot_learning  # 🔥 SNAPSHOT
+
+# 🧠 CONTROL BUS
+from modules.control_bus import inject, emit, feedback
 
 
 def run(data):
@@ -18,6 +21,11 @@ def run(data):
 
     try:
         data["log"].append("🎬 DIRECTOR START")
+
+        # =========================
+        # 🧠 CONTROL BUS INJECT (ВХОД СИСТЕМЫ)
+        # =========================
+        data = inject(data)
 
         # =========================
         # 🧠 TASK PREPROCESS
@@ -47,7 +55,16 @@ def run(data):
         )
 
         # =========================
-        # 🧠 SNAPSHOT LEARNING CORE (🔥 НОВЫЙ СЛОЙ)
+        # 📡 CONTROL BUS EVENT (decision)
+        # =========================
+        emit({
+            "action": action,
+            "module": module,
+            "phase": "decision"
+        })
+
+        # =========================
+        # 🧠 SNAPSHOT LEARNING CORE
         # =========================
         try:
             data = inject_snapshot_learning(data)
@@ -67,6 +84,7 @@ def run(data):
                 data["decision"] = "run_module"
 
                 data["log"].append("🧠 ANTI-LOOP → forced run_module")
+
         else:
             data["create_count"] = 0
 
@@ -83,6 +101,16 @@ def run(data):
                     data[k] = v
         else:
             data["result"] = result
+
+        # =========================
+        # 📡 CONTROL BUS EVENT (execution)
+        # =========================
+        emit({
+            "action": action,
+            "module": module,
+            "result": data.get("status", "unknown"),
+            "phase": "execution"
+        })
 
         # =========================
         # 📊 EVALUATION
@@ -115,6 +143,11 @@ def run(data):
                     "module": module,
                     "score": score
                 })
+
+        # =========================
+        # 📊 CONTROL BUS FEEDBACK (конец цикла)
+        # =========================
+        feedback()
 
         # =========================
         # 📊 LOG

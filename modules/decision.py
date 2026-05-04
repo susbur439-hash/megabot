@@ -1,3 +1,6 @@
+from modules.control_bus import inject, emit
+
+
 def decide(data):
     return decision(data)
 
@@ -11,6 +14,11 @@ def decision(data):
     data.setdefault("experience", [])
     data.setdefault("evaluation", {})
     data.setdefault("create_repeats", 0)
+
+    # =========================
+    # 🧠 CONTROL BUS INJECT (ВХОД)
+    # =========================
+    data = inject(data)
 
     score = data.get("evaluation", {}).get("score", 50)
     experience = data.get("experience", [])
@@ -66,38 +74,30 @@ def decision(data):
 
     has_good_module = best_module is not None and best_score >= 45
 
-    # =========================
-    # 🧠 CREATE STREAK
-    # =========================
     create_streak = data.get("create_repeats", 0)
 
     action = None
     module = None
 
     # =========================
-    # 🚨 FIX: SAFE FIRST RULE
+    # 🚨 SAFE DECISION CORE
     # =========================
 
-    # 1. если есть хороший модуль → всегда run
     if has_good_module and score < 90:
         action = "run_module"
         module = best_module
 
-    # 2. анти-спам create (ВАЖНО)
     elif create_streak >= 2:
         action = "run_module"
         module = best_module
 
-    # 3. низкий score → run, а не create
     elif score < 60:
         action = "run_module"
         module = best_module
 
-    # 4. только при хорошем состоянии создаём
     elif score >= 85 and decision_bias > 0:
         action = "create_module"
 
-    # 5. fallback
     else:
         action = "run_module"
         module = best_module
@@ -108,6 +108,16 @@ def decision(data):
     if action == "run_module" and not module:
         action = "create_module"
         module = None
+
+    # =========================
+    # 📡 CONTROL BUS FEEDBACK (DECISION EVENT)
+    # =========================
+    emit({
+        "phase": "decision",
+        "action": action,
+        "module": module,
+        "score": score
+    })
 
     # =========================
     # 📦 OUTPUT

@@ -1,12 +1,61 @@
+import os
+import json
+
 from modules.task_core import extract_task, normalize_task
 from modules.run import run_task
 from modules.decision import decide
 from modules.evaluation import run as evaluate
 from modules.learning_writer import learn
-from modules.snapshot_learning_core import inject_snapshot_learning  # 🔥 SNAPSHOT
+from modules.snapshot_learning_core import inject_snapshot_learning
 
 # 🧠 CONTROL BUS
 from modules.control_bus import inject, emit, feedback
+
+
+MEMORY_FILE = "memory.json"
+
+
+def load_memory_experience():
+    try:
+        if not os.path.exists(MEMORY_FILE):
+            return []
+
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+            memory = json.load(f)
+
+        if not isinstance(memory, list) or not memory:
+            return []
+
+        last = memory[-1]
+
+        return last.get("experience", [])
+
+    except:
+        return []
+
+
+def save_memory_experience(data):
+    try:
+        memory = []
+
+        if os.path.exists(MEMORY_FILE):
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                memory = json.load(f)
+
+        if not isinstance(memory, list):
+            memory = []
+
+        memory.append({
+            "experience": data.get("experience", [])
+        })
+
+        memory = memory[-50:]
+
+        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(memory, f, ensure_ascii=False, indent=2)
+
+    except Exception as e:
+        data.setdefault("log", []).append(f"❌ MEMORY SAVE ERROR: {e}")
 
 
 def run(data):
@@ -23,7 +72,13 @@ def run(data):
         data["log"].append("🎬 DIRECTOR START")
 
         # =========================
-        # 🧠 CONTROL BUS INJECT (ВХОД СИСТЕМЫ)
+        # 💾 LOAD MEMORY (КЛЮЧЕВОЙ ФИКС)
+        # =========================
+        if not data.get("experience"):
+            data["experience"] = load_memory_experience()
+
+        # =========================
+        # 🧠 CONTROL BUS INJECT
         # =========================
         data = inject(data)
 
@@ -43,16 +98,14 @@ def run(data):
         data["task"] = task
 
         # =========================
-        # 🧠 DECISION (core)
+        # 🧠 DECISION
         # =========================
         decide(data)
 
         action = data.get("decision")
         module = data.get("module")
 
-        data["log"].append(
-            f"🧠 DECISION: {action} | module: {module}"
-        )
+        data["log"].append(f"🧠 DECISION: {action} | module: {module}")
 
         # =========================
         # 📡 CONTROL BUS EVENT (decision)
@@ -64,7 +117,7 @@ def run(data):
         })
 
         # =========================
-        # 🧠 SNAPSHOT LEARNING CORE
+        # 🧠 SNAPSHOT LEARNING
         # =========================
         try:
             data = inject_snapshot_learning(data)
@@ -72,7 +125,7 @@ def run(data):
             data["log"].append(f"❌ SNAPSHOT ERROR: {e}")
 
         # =========================
-        # 🧨 ANTI-LOOP PROTECTION
+        # 🧨 ANTI-LOOP
         # =========================
         if action == "create_module":
             data["create_count"] += 1
@@ -84,7 +137,6 @@ def run(data):
                 data["decision"] = "run_module"
 
                 data["log"].append("🧠 ANTI-LOOP → forced run_module")
-
         else:
             data["create_count"] = 0
 
@@ -145,7 +197,12 @@ def run(data):
                 })
 
         # =========================
-        # 📊 CONTROL BUS FEEDBACK (конец цикла)
+        # 💾 SAVE MEMORY (КЛЮЧЕВОЙ ФИКС)
+        # =========================
+        save_memory_experience(data)
+
+        # =========================
+        # 📊 CONTROL BUS FEEDBACK
         # =========================
         feedback()
 

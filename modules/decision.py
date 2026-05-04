@@ -65,7 +65,6 @@ def decision(data):
     for m, scores in module_map.items():
         avg = sum(scores) / len(scores)
 
-        # штраф за малый опыт
         if len(scores) < 2:
             avg *= 0.8
 
@@ -82,24 +81,23 @@ def decision(data):
     module = None
 
     # =========================
-    # 🚨 SAFE DECISION CORE (УЛУЧШЕН)
+    # 🚨 SAFE DECISION CORE (ЖЁСТКИЙ)
     # =========================
 
-    # 1. если есть хороший модуль → всегда используем
+    # 1. если есть хороший модуль → ВСЕГДА run
     if has_good_module:
         action = "run_module"
         module = best_module
 
-    # 2. если есть модули (даже слабые) → используем лучший
+    # 2. если есть любые модули → тоже run
     elif has_modules:
         action = "run_module"
         module = best_module
 
-    # 3. если нет модулей → можно создать (но ограниченно)
-    elif create_streak < 2:
+    # 3. только если вообще ничего нет → create (и то ограничено)
+    elif create_streak < 1:
         action = "create_module"
 
-    # 4. защита от зацикливания
     else:
         action = "run_module"
         module = best_module
@@ -112,15 +110,51 @@ def decision(data):
         module = None
 
     # =========================
-    # 🧹 CLEANUP (НОВОЕ)
+    # 🧹 CLEANUP SIGNAL
     # =========================
     cleanup_list = []
 
     for m, scores in module_map.items():
         avg = sum(scores) / len(scores)
 
-        # слабые модули → удалить
         if avg < 20 and len(scores) >= 2:
             cleanup_list.append(m)
 
-    if
+    if cleanup_list:
+        data["cleanup_modules"] = cleanup_list
+        data["log"].append(f"🧹 cleanup candidates: {cleanup_list}")
+
+    # =========================
+    # 📡 CONTROL BUS FEEDBACK
+    # =========================
+    emit({
+        "phase": "decision",
+        "action": action,
+        "module": module,
+        "score": score,
+        "modules": len(module_map),
+        "best_score": best_score
+    })
+
+    # =========================
+    # 📦 OUTPUT
+    # =========================
+    data["decision"] = action
+    data["module"] = module
+
+    # =========================
+    # 📈 STREAK UPDATE
+    # =========================
+    if action == "create_module":
+        data["create_repeats"] = create_streak + 1
+    else:
+        data["create_repeats"] = 0
+
+    # =========================
+    # 🧾 LOG
+    # =========================
+    data["log"].append(
+        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | modules:{len(module_map)} | bias:{decision_bias:.2f}"
+    )
+
+    return data

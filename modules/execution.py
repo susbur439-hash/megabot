@@ -4,25 +4,33 @@ import random
 
 
 # =========================
+# ⚙ CONFIG
+# =========================
+MODULES_DIR = "modules"
+DELETE_THRESHOLD = 30       # ниже этого score — кандидат на удаление
+MIN_RUNS_TO_DELETE = 3      # минимум попыток перед удалением
+
+
+# =========================
 # 📦 MODULE RUNNER
 # =========================
 def run_python_module(module_path, data):
     try:
         if not os.path.exists(module_path):
-            data.setdefault("log", []).append(f"❌ module not found: {module_path}")
+            data["log"].append(f"❌ module not found: {module_path}")
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
 
         if spec is None or spec.loader is None:
-            data.setdefault("log", []).append(f"❌ invalid module spec: {module_path}")
+            data["log"].append(f"❌ invalid module spec: {module_path}")
             return data, False
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
         if not hasattr(module, "run"):
-            data.setdefault("log", []).append("❌ module has no run()")
+            data["log"].append("❌ module has no run()")
             return data, False
 
         result = module.run(data)
@@ -33,7 +41,7 @@ def run_python_module(module_path, data):
         return data, True
 
     except Exception as e:
-        data.setdefault("log", []).append(f"❌ module error: {e}")
+        data["log"].append(f"❌ module error: {e}")
         return data, False
 
 
@@ -42,10 +50,10 @@ def run_python_module(module_path, data):
 # =========================
 def create_module(data):
     try:
-        os.makedirs("modules", exist_ok=True)
+        os.makedirs(MODULES_DIR, exist_ok=True)
 
         name = f"module_auto_{random.randint(1000, 999999)}"
-        path = os.path.join("modules", name + ".py")
+        path = os.path.join(MODULES_DIR, name + ".py")
 
         code = f"""
 def run(data):
@@ -66,17 +74,59 @@ def run(data):
             f.write(code)
 
         data["module"] = name
-        data.setdefault("log", []).append(f"🧩 created module: {name}")
+        data["log"].append(f"🧩 created module: {name}")
 
         return data, True
 
     except Exception as e:
-        data.setdefault("log", []).append(f"❌ create_module error: {e}")
+        data["log"].append(f"❌ create_module error: {e}")
         return data, False
 
 
 # =========================
-# 🚀 EXECUTION CORE (FIXED)
+# 🧹 DELETE BAD MODULES
+# =========================
+def cleanup_modules(data):
+    experience = data.get("experience", [])
+    stats = {}
+
+    # собираем статистику
+    for e in experience:
+        if not isinstance(e, dict):
+            continue
+
+        m = e.get("module")
+        s = e.get("score")
+
+        if not m or s is None:
+            continue
+
+        stats.setdefault(m, []).append(s)
+
+    # анализируем
+    for module, scores in stats.items():
+
+        if len(scores) < MIN_RUNS_TO_DELETE:
+            continue
+
+        avg = sum(scores) / len(scores)
+
+        if avg >= DELETE_THRESHOLD:
+            continue  # норм модуль
+
+        # ❌ удаляем плохой модуль
+        path = os.path.join(MODULES_DIR, module + ".py")
+
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+                data["log"].append(f"🗑️ deleted bad module: {module} (avg={round(avg,1)})")
+            except Exception as e:
+                data["log"].append(f"❌ delete failed: {module} | {e}")
+
+
+# =========================
+# 🚀 EXECUTION CORE
 # =========================
 def execution(data):
 
@@ -89,7 +139,7 @@ def execution(data):
     success = False
 
     # =========================
-    # 🧩 CREATE MODULE
+    # 🧩 CREATE
     # =========================
     if decision == "create_module":
         data, success = create_module(data)
@@ -101,15 +151,12 @@ def execution(data):
             data["log"].append("❌ failed to create module")
 
     # =========================
-    # 🚀 RUN MODULE
+    # 🚀 RUN
     # =========================
     elif decision == "run_module" and module_used:
 
-        module_used = str(module_used)
-        module_used = module_used.replace(".py", "")
-        module_used = module_used.replace("modules/", "")
-
-        path = os.path.join("modules", module_used + ".py")
+        module_used = str(module_used).replace(".py", "").replace("modules/", "")
+        path = os.path.join(MODULES_DIR, module_used + ".py")
 
         data, success = run_python_module(path, data)
 
@@ -122,7 +169,7 @@ def execution(data):
         data["log"].append("⚠️ execution skipped")
 
     # =========================
-    # 🧠 EXPERIENCE (FIXED)
+    # 🧠 EXPERIENCE
     # =========================
     score = data.get("evaluation", {}).get("score", 50)
 
@@ -134,6 +181,14 @@ def execution(data):
         })
 
     # =========================
+    # 🧹 CLEANUP (🔥 ВАЖНО)
+    # =========================
+    try:
+        cleanup_modules(data)
+    except Exception as e:
+        data["log"].append(f"❌ cleanup error: {e}")
+
+    # =========================
     # 📦 RESULT
     # =========================
     data["execution_result"] = {
@@ -142,12 +197,12 @@ def execution(data):
     }
 
     # =========================
-    # 📊 LEARNING SIGNAL
+    # 📊 SIGNAL
     # =========================
     if success:
-        data.setdefault("log", []).append("🧠 learning signal: success")
+        data["log"].append("🧠 learning signal: success")
     else:
-        data.setdefault("log", []).append("🧠 learning signal: failure")
+        data["log"].append("🧠 learning signal: failure")
 
     return data
 

@@ -24,7 +24,7 @@ def decision(data):
     experience = data.get("experience", [])
 
     # =========================
-    # 🌐 INTERNET + SNAPSHOT BIAS (FIXED)
+    # 🌐 INTERNET + SNAPSHOT BIAS
     # =========================
     internet_weights = data.get("internet_weights", {})
     snapshot_bias = data.get("snapshot_bias", {})
@@ -60,19 +60,21 @@ def decision(data):
     # 🧠 BEST MODULE SEARCH
     # =========================
     best_module = None
-    best_score = 0
+    best_score = -1
 
     for m, scores in module_map.items():
         avg = sum(scores) / len(scores)
 
-        if len(scores) < 3:
-            avg *= 0.85
+        # штраф за малый опыт
+        if len(scores) < 2:
+            avg *= 0.8
 
         if avg > best_score:
             best_score = avg
             best_module = m
 
-    has_good_module = best_module is not None and best_score >= 45
+    has_modules = len(module_map) > 0
+    has_good_module = best_module is not None and best_score >= 40
 
     create_streak = data.get("create_repeats", 0)
 
@@ -80,24 +82,24 @@ def decision(data):
     module = None
 
     # =========================
-    # 🚨 SAFE DECISION CORE
+    # 🚨 SAFE DECISION CORE (УЛУЧШЕН)
     # =========================
 
-    if has_good_module and score < 90:
+    # 1. если есть хороший модуль → всегда используем
+    if has_good_module:
         action = "run_module"
         module = best_module
 
-    elif create_streak >= 2:
+    # 2. если есть модули (даже слабые) → используем лучший
+    elif has_modules:
         action = "run_module"
         module = best_module
 
-    elif score < 60:
-        action = "run_module"
-        module = best_module
-
-    elif score >= 85 and decision_bias > 0:
+    # 3. если нет модулей → можно создать (но ограниченно)
+    elif create_streak < 2:
         action = "create_module"
 
+    # 4. защита от зацикливания
     else:
         action = "run_module"
         module = best_module
@@ -110,34 +112,15 @@ def decision(data):
         module = None
 
     # =========================
-    # 📡 CONTROL BUS FEEDBACK (DECISION EVENT)
+    # 🧹 CLEANUP (НОВОЕ)
     # =========================
-    emit({
-        "phase": "decision",
-        "action": action,
-        "module": module,
-        "score": score
-    })
+    cleanup_list = []
 
-    # =========================
-    # 📦 OUTPUT
-    # =========================
-    data["decision"] = action
-    data["module"] = module
+    for m, scores in module_map.items():
+        avg = sum(scores) / len(scores)
 
-    # =========================
-    # 📈 STREAK UPDATE
-    # =========================
-    if action == "create_module":
-        data["create_repeats"] = create_streak + 1
-    else:
-        data["create_repeats"] = 0
+        # слабые модули → удалить
+        if avg < 20 and len(scores) >= 2:
+            cleanup_list.append(m)
 
-    # =========================
-    # 🧾 LOG
-    # =========================
-    data["log"].append(
-        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | bias:{decision_bias:.2f}"
-    )
-
-    return data
+    if

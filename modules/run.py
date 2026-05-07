@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 from modules.decision import decide
 
 
@@ -14,6 +17,7 @@ def safe_import_execute():
 # 🛡️ DATA TYPE GUARD
 # =========================
 def normalize_data(data):
+
     if not isinstance(data, dict):
         data = {"task": str(data)}
 
@@ -30,6 +34,59 @@ def normalize_data(data):
 
 
 # =========================
+# 🚀 DIRECT PYTHON EXECUTION
+# =========================
+def run_python_file(task, data):
+
+    try:
+        parts = str(task).strip().split()
+
+        if len(parts) != 2:
+            return data
+
+        command, filename = parts
+
+        if command != "python":
+            return data
+
+        if not filename.endswith(".py"):
+            return data
+
+        if not os.path.exists(filename):
+            data["log"].append(f"❌ file not found: {filename}")
+            return data
+
+        data["log"].append(f"🚀 DIRECT START: {filename}")
+
+        result = subprocess.run(
+            ["python", filename],
+            capture_output=True,
+            text=True
+        )
+
+        if result.stdout:
+            data["log"].append(result.stdout)
+
+        if result.stderr:
+            data["log"].append(result.stderr)
+
+        data["status"] = "ok"
+
+        data["log"].append(f"✅ DIRECT END: {filename}")
+
+        return data
+
+    except Exception as e:
+
+        data["status"] = "error"
+        data["error"] = str(e)
+
+        data["log"].append(f"❌ DIRECT EXEC ERROR: {e}")
+
+        return data
+
+
+# =========================
 # 🚀 RUN TASK
 # =========================
 def run_task(data):
@@ -37,6 +94,15 @@ def run_task(data):
     data = normalize_data(data)
 
     print(f"[RUN] Выполнение задачи: {data}")
+
+    task = str(data.get("task", "")).strip()
+
+    # =========================
+    # 🚀 DIRECT BUILDER MODE
+    # =========================
+    if task.startswith("python ") and "megabot_controlled_builder.py" in task:
+
+        return run_python_file(task, data)
 
     # =========================
     # 🧠 DECISION LAYER
@@ -53,36 +119,41 @@ def run_task(data):
     data["log"].append(f"[RUN] decision -> {decision}")
 
     # =========================
-    # ⚙ EXECUTION LAYER (SAFE)
+    # ⚙ EXECUTION LAYER
     # =========================
     execute = safe_import_execute()
 
     if execute is None:
+
         data["status"] = "error"
         data["error"] = "execution module not available"
+
         data["log"].append("❌ execution missing")
+
         return data
 
     try:
         result = execute(data)
 
     except Exception as e:
+
         data["status"] = "error"
         data["error"] = str(e)
+
         data["log"].append(f"[RUN ERROR] {e}")
+
         return data
 
     # =========================
-    # 🧩 SAFE MERGE (CRITICAL FIX)
+    # 🧩 SAFE MERGE
     # =========================
     if isinstance(result, dict):
+
         for k, v in result.items():
 
-            # log merge
             if k == "log" and isinstance(v, list):
                 data["log"].extend(v)
 
-            # strict type safety (fix crash source)
             elif k == "experience":
                 if isinstance(v, list):
                     data["experience"] = v
@@ -91,17 +162,11 @@ def run_task(data):
                 if isinstance(v, dict):
                     data["evaluation"] = v
 
-            elif k == "module":
-                data["module"] = v
-
-            elif k == "status":
-                data["status"] = v
-
             else:
                 data[k] = v
 
     # =========================
-    # 🛡️ FINAL SAFETY CHECK
+    # 🛡️ FINAL SAFETY
     # =========================
     data = normalize_data(data)
 

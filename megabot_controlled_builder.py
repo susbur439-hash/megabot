@@ -1,54 +1,36 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v3 (CORE SAFE ARCH)
 # =========================================================
 
 import os
 import json
-import time
 import traceback
-from pathlib import Path
-
-# =========================================================
-# ⚙ CONFIG
-# =========================================================
 
 ROOT_DIR = "."
 MODULES_DIR = "modules"
 
 MEMORY_FILE = "builder_memory.json"
-REPORT_FILE = "builder_report.json"
 
 MAX_CYCLES = 1
 
-ENABLE_AUTOFIX = True
-ENABLE_FILE_CREATION = True
-ENABLE_TESTS = True
 ENABLE_CLEANUP = True
-
-# 🆕 SAFETY MODE (ВАЖНО)
 ENABLE_SAFE_DELETE = True
 
+MIN_LIVE_CYCLES_BEFORE_DELETE = 2
+
 # =========================================================
-# 🧠 TARGET ARCHITECTURE
+# 🧠 CORE PROTECTION LAYER
 # =========================================================
 
-TARGET_ARCHITECTURE = {
-    "core": [
-        "main.py",
-        "megabot_controlled_builder.py",
-    ],
-
-    "modules": [
-        "task_interpreter.py",
-        "planner.py",
-        "decision.py",
-        "execution.py",
-        "evaluation.py",
-        "memory.py",
-        "learning.py",
-        "control_layer.py",
-    ]
-}
+CORE_MODULE_KEYWORDS = [
+    "control",
+    "core",
+    "brain",
+    "engine",
+    "router",
+    "execution",
+    "director",
+]
 
 # =========================================================
 # 🧠 MEMORY
@@ -56,370 +38,210 @@ TARGET_ARCHITECTURE = {
 
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
-        return {"cycles": 0, "history": [], "fixed": [], "created": [], "deleted": []}
+        return {
+            "cycles": 0,
+            "module_age": {},
+            "deleted": []
+        }
 
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except:
-        return {"cycles": 0, "history": [], "fixed": [], "created": [], "deleted": []}
+        return {
+            "cycles": 0,
+            "module_age": {},
+            "deleted": []
+        }
 
 
-def save_memory(memory):
+def save_memory(m):
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(memory, f, indent=2, ensure_ascii=False)
+        json.dump(m, f, indent=2)
 
 # =========================================================
-# 📋 LOGGER
+# 📋 LOG
 # =========================================================
 
-LOGS = []
-
-def log(message):
-    print(message)
-    LOGS.append(message)
+def log(x):
+    print(x)
 
 # =========================================================
 # 🔍 SCAN
 # =========================================================
 
-def scan_project():
-    project = {"files": [], "modules": [], "missing": []}
+def scan():
+    files = []
+    modules = []
 
-    for root, dirs, files in os.walk(ROOT_DIR):
-        if ".git" in root:
+    for r, d, f in os.walk(ROOT_DIR):
+        if ".git" in r:
             continue
 
-        for file in files:
-            path = os.path.join(root, file)
-            project["files"].append(path)
+        for file in f:
+            path = os.path.join(r, file)
+            files.append(path)
 
-            if root.endswith("modules"):
-                project["modules"].append(file)
+            if r.endswith("modules"):
+                modules.append(file)
 
-    return project
-
-# =========================================================
-# 🧠 ARCHITECTURE ANALYSIS
-# =========================================================
-
-def analyze_architecture(project):
-    missing = []
-
-    for file in TARGET_ARCHITECTURE["core"]:
-        if not os.path.exists(file):
-            missing.append(file)
-
-    for module in TARGET_ARCHITECTURE["modules"]:
-        path = os.path.join(MODULES_DIR, module)
-        if not os.path.exists(path):
-            missing.append(path)
-
-    return missing
+    return files, modules
 
 # =========================================================
-# 🧱 ARCHITECTURE LOCK (NEW)
+# 🧠 CORE CHECK
 # =========================================================
 
-def is_core_module(module_name):
-    return module_name in TARGET_ARCHITECTURE["modules"]
+def is_core(module_name):
+    name = module_name.lower()
+
+    return any(k in name for k in CORE_MODULE_KEYWORDS)
 
 # =========================================================
-# 🧠 SMART USAGE SCORE (NEW)
+# 🧠 DEPENDENCY GRAPH
 # =========================================================
 
-def usage_score(module_name, project):
+def build_dependencies(files, modules):
+    deps = {m: set() for m in modules}
 
-    score = 0
-    name = module_name.replace(".py", "")
-
-    for file in project["files"]:
-
+    for file in files:
         if not file.endswith(".py"):
             continue
 
         try:
             with open(file, "r", encoding="utf-8") as f:
-                content = f.read()
+                c = f.read()
 
-            if name in content:
-                score += 2
+            for m in modules:
+                name = m.replace(".py", "")
 
-            if f"import {name}" in content:
-                score += 3
+                if f"import {name}" in c or f"from {name}" in c:
+                    deps[m].add(file)
 
-            if f"from {name}" in content:
-                score += 3
-
-            if f"{name}.run" in content:
-                score += 4
+                if f"{name}." in c:
+                    deps[m].add(file)
 
         except:
             continue
 
+    return deps
+
+# =========================================================
+# 🧠 MODULE VALUE SCORE (IMPROVED)
+# =========================================================
+
+def module_score(module, deps):
+    score = 0
+
+    if module in deps:
+        score += len(deps[module]) * 3
+
+    if len(deps.get(module, [])) > 0:
+        score += 5
+
     return score
 
 # =========================================================
-# 🗑 FIND UNUSED (UPGRADED)
+# 🛑 SAFE DELETE RULE (STRONG PROTECTION)
 # =========================================================
 
-def find_unused_modules(project):
+def should_delete(module, score, deps, age):
 
-    unused = []
+    # ❌ NEVER DELETE CORE
+    if is_core(module):
+        return False
 
-    for module in project["modules"]:
+    # ❌ still used
+    if score > 0:
+        return False
 
-        full_path = os.path.join(MODULES_DIR, module)
+    # ❌ has dependencies
+    if len(deps.get(module, [])) > 0:
+        return False
 
-        # 🛑 защита ядра
-        if is_core_module(module):
-            continue
+    # ❌ not stable long enough
+    if age < MIN_LIVE_CYCLES_BEFORE_DELETE:
+        return False
 
-        score = usage_score(module, project)
-
-        # 🧠 только реально мёртвые
-        if score == 0:
-            unused.append((full_path, score))
-
-    return unused
+    return True
 
 # =========================================================
-# 🗑 SAFE DELETE
+# 🗑 DELETE SAFE
 # =========================================================
 
-def delete_file(path):
-
+def delete(path):
     if not ENABLE_SAFE_DELETE:
         return False
 
     try:
         if os.path.exists(path):
             os.remove(path)
-            log(f"🗑 DELETED UNUSED: {path}")
+            log(f"🗑 DELETED SAFE: {path}")
             return True
     except Exception as e:
-        log(f"❌ DELETE ERROR: {path} | {e}")
+        log(f"❌ DELETE ERROR: {e}")
 
     return False
 
 # =========================================================
-# 🏗 TEMPLATE
-# =========================================================
-
-def build_module_template(name):
-
-    pure = name.replace(".py", "")
-
-    return f"""# =========================================================
-# 🧠 {pure.upper()}
-# =========================================================
-
-def run(data):
-
-    if not isinstance(data, dict):
-        data = {{}}
-
-    data.setdefault("log", [])
-
-    data["log"].append("⚙️ {pure} running")
-
-    return data
-"""
-
-# =========================================================
-# 🏗 CREATE
-# =========================================================
-
-def create_missing_file(path):
-
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        filename = os.path.basename(path)
-        content = build_module_template(filename)
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-        log(f"🧩 CREATED: {path}")
-        return True
-
-    except Exception as e:
-        log(f"❌ CREATE ERROR: {path} | {e}")
-        return False
-
-# =========================================================
-# 🔧 REPAIR
-# =========================================================
-
-def repair_python_file(path):
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        changed = False
-
-        if "\t" in content:
-            content = content.replace("\t", "    ")
-            changed = True
-
-        if len(content.strip()) == 0:
-            content = build_module_template(os.path.basename(path))
-            changed = True
-
-        if changed:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-
-            log(f"🔧 REPAIRED: {path}")
-            return True
-
-    except Exception as e:
-        log(f"❌ REPAIR ERROR: {path} | {e}")
-
-    return False
-
-# =========================================================
-# 🧪 TEST
-# =========================================================
-
-def test_python_file(path):
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            source = f.read()
-
-        compile(source, path, "exec")
-        return True, None
-
-    except Exception as e:
-        return False, str(e)
-
-# =========================================================
-# 🧠 BUILD CYCLE
+# 🧠 MAIN CYCLE
 # =========================================================
 
 def build_cycle():
 
     memory = load_memory()
 
+    files, modules = scan()
+    deps = build_dependencies(files, modules)
+
     log("\n=================================================")
-    log("🧠 MEGABOT CONTROLLED BUILDER")
+    log("🧠 MEGABOT BUILDER v3 (CORE SAFE)")
     log("=================================================")
 
-    project = scan_project()
-
-    log(f"📦 FILES: {len(project['files'])}")
-    log(f"🧩 MODULES: {len(project['modules'])}")
-
-    missing = analyze_architecture(project)
-
-    if missing:
-        log("\n🚨 MISSING FILES:")
-        for m in missing:
-            log(f" - {m}")
-    else:
-        log("✅ ARCHITECTURE COMPLETE")
-
-    # =====================================================
-    # 🏗 CREATE
-    # =====================================================
-
-    if ENABLE_FILE_CREATION:
-        for path in missing:
-            if create_missing_file(path):
-                memory["created"].append(path)
-
-    # =====================================================
-    # 🔧 REPAIR
-    # =====================================================
-
-    if ENABLE_AUTOFIX:
-        for file in project["files"]:
-            if file.endswith(".py"):
-                if repair_python_file(file):
-                    memory["fixed"].append(file)
-
-    # =====================================================
-    # 🗑 CLEANUP (SAFE)
-    # =====================================================
+    log(f"📦 FILES: {len(files)}")
+    log(f"🧩 MODULES: {len(modules)}")
 
     if ENABLE_CLEANUP:
 
-        unused = find_unused_modules(project)
+        log("\n🗑 CLEANUP CHECK:")
 
-        if unused:
-            log("\n🗑 UNUSED MODULES (SAFE SCORE 0):")
+        for m in modules:
 
-            for path, score in unused:
-                log(f" - {path} | score={score}")
+            path = os.path.join(MODULES_DIR, m)
 
-                if delete_file(path):
+            score = module_score(m, deps)
+            age = memory["module_age"].get(m, 0)
+
+            if should_delete(m, score, deps, age):
+
+                log(f" - DELETE CANDIDATE: {path} | score={score}")
+
+                if delete(path):
                     memory["deleted"].append(path)
 
-    # =====================================================
-    # 🧪 TESTS
-    # =====================================================
-
-    failed = []
-
-    if ENABLE_TESTS:
-
-        log("\n🧪 RUNNING TESTS")
-
-        for file in project["files"]:
-            if file.endswith(".py"):
-                ok, err = test_python_file(file)
-
-                if not ok:
-                    failed.append({"file": file, "error": err})
-                    log(f"❌ FAIL: {file}")
-                else:
-                    log(f"✅ OK: {file}")
-
-    # =====================================================
-    # 📊 MEMORY
-    # =====================================================
+            else:
+                memory["module_age"][m] = age + 1
 
     memory["cycles"] += 1
 
-    memory["history"].append({
-        "time": time.time(),
-        "missing": len(missing),
-        "failed": len(failed),
-        "deleted": len(memory.get("deleted", []))
-    })
-
     save_memory(memory)
 
-    # =====================================================
-    # 📊 FINAL
-    # =====================================================
-
     log("\n=================================================")
-    log("📊 BUILD FINISHED")
+    log("📊 DONE")
     log("=================================================")
 
     log(f"🧠 cycles: {memory['cycles']}")
-    log(f"🧩 created: {len(memory['created'])}")
-    log(f"🔧 fixed: {len(memory['fixed'])}")
-    log(f"🗑 deleted: {len(memory.get('deleted', []))}")
-    log(f"❌ failed: {len(failed)}")
-
-    log("\n✅ DONE")
+    log(f"🗑 deleted: {len(memory['deleted'])}")
 
 # =========================================================
-# ▶️ MAIN
+# ▶️ RUN
 # =========================================================
 
 if __name__ == "__main__":
-
     try:
         for _ in range(MAX_CYCLES):
             build_cycle()
 
     except Exception as e:
-        log("❌ FATAL ERROR")
+        log("❌ FATAL")
         log(str(e))
         log(traceback.format_exc())

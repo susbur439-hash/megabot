@@ -1,23 +1,23 @@
-# megabot_controlled_builder.py
 # =========================================================
 # 🧠 MEGABOT CONTROLLED BUILDER MAX
 # =========================================================
-# Главный автономный строитель Megabot
+# Один главный файл Megabot
 #
-# ✔ Сканирует репозиторий
-# ✔ Строит карту проекта
-# ✔ Проверяет архитектуру
-# ✔ Ищет проблемы
-# ✔ Создает недостающие файлы
-# ✔ Исправляет импорты
-# ✔ Запускает тесты
-# ✔ Делает безопасные изменения
-# ✔ Работает автономно
+# Функции:
+# - сканирование проекта
+# - контроль архитектуры
+# - создание недостающих файлов
+# - repair system
+# - self-test
+# - anti-loop
+# - memory
+# - github-ready
 #
+# Запуск:
+# python megabot_controlled_builder.py
 # =========================================================
 
 import os
-import ast
 import json
 import time
 import traceback
@@ -31,469 +31,430 @@ from pathlib import Path
 ROOT_DIR = "."
 MODULES_DIR = "modules"
 
-STATE_FILE = "builder_state.json"
-ARCH_FILE = "megabot_architecture.json"
+MEMORY_FILE = "builder_memory.json"
+REPORT_FILE = "builder_report.json"
 
-MAX_FILE_SIZE = 1024 * 1024
+MAX_CYCLES = 1
 
-ALLOWED_EXTENSIONS = [
-    ".py",
-    ".json",
-    ".yml",
-    ".yaml",
-    ".md"
-]
-
+ENABLE_AUTOFIX = True
+ENABLE_FILE_CREATION = True
+ENABLE_TESTS = True
 
 # =========================================================
 # 🧠 TARGET ARCHITECTURE
 # =========================================================
 
 TARGET_ARCHITECTURE = {
-    "core_modules": [
-        "director",
-        "decision",
-        "execution",
-        "evaluation",
-        "learning_writer",
-        "task_core",
-        "control_bus",
-    ],
-
-    "required_layers": [
-        "analysis",
-        "planning",
-        "decision",
-        "execution",
-        "evaluation",
-        "learning",
-        "control",
-    ],
-
-    "required_files": [
+    "core": [
         "main.py",
-        "memory.json",
+        "megabot_controlled_builder.py",
+    ],
+
+    "modules": [
+        "task_interpreter.py",
+        "planner.py",
+        "decision.py",
+        "execution.py",
+        "evaluation.py",
+        "memory.py",
+        "learning.py",
+        "control_layer.py",
     ]
 }
 
 
 # =========================================================
-# 💾 STATE
+# 🧠 MEMORY
 # =========================================================
 
-class BuilderState:
+def load_memory():
 
-    def __init__(self):
-
-        self.state = {
+    if not os.path.exists(MEMORY_FILE):
+        return {
             "cycles": 0,
-            "last_scan": 0,
-            "fixed_files": [],
-            "errors": [],
-            "stats": {},
+            "history": [],
+            "fixed": [],
+            "created": []
         }
 
-        self.load()
+    try:
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
 
-    def load(self):
-
-        try:
-
-            if os.path.exists(STATE_FILE):
-
-                with open(STATE_FILE, "r", encoding="utf-8") as f:
-                    self.state = json.load(f)
-
-        except:
-            pass
-
-    def save(self):
-
-        try:
-
-            with open(STATE_FILE, "w", encoding="utf-8") as f:
-                json.dump(
-                    self.state,
-                    f,
-                    indent=2,
-                    ensure_ascii=False
-                )
-
-        except:
-            pass
-
-
-# =========================================================
-# 🔍 REPOSITORY SCANNER
-# =========================================================
-
-class RepositoryScanner:
-
-    def scan(self):
-
-        repo = {
-            "files": [],
-            "python_files": [],
-            "modules": [],
-            "imports": {},
-            "errors": [],
+    except:
+        return {
+            "cycles": 0,
+            "history": [],
+            "fixed": [],
+            "created": []
         }
 
-        for root, dirs, files in os.walk(ROOT_DIR):
 
-            # skip git/cache
-            dirs[:] = [
-                d for d in dirs
-                if d not in [
-                    ".git",
-                    "__pycache__",
-                    ".pytest_cache",
-                    ".mypy_cache"
-                ]
-            ]
+def save_memory(memory):
 
-            for file in files:
-
-                path = os.path.join(root, file)
-
-                ext = Path(path).suffix.lower()
-
-                if ext not in ALLOWED_EXTENSIONS:
-                    continue
-
-                try:
-
-                    if os.path.getsize(path) > MAX_FILE_SIZE:
-                        continue
-
-                except:
-                    continue
-
-                repo["files"].append(path)
-
-                if ext == ".py":
-
-                    repo["python_files"].append(path)
-
-                    name = Path(path).stem
-
-                    repo["modules"].append(name)
-
-                    imports = self.extract_imports(path)
-
-                    repo["imports"][path] = imports
-
-        return repo
-
-    def extract_imports(self, path):
-
-        imports = []
-
-        try:
-
-            with open(path, "r", encoding="utf-8") as f:
-                code = f.read()
-
-            tree = ast.parse(code)
-
-            for node in ast.walk(tree):
-
-                if isinstance(node, ast.Import):
-
-                    for n in node.names:
-                        imports.append(n.name)
-
-                elif isinstance(node, ast.ImportFrom):
-
-                    if node.module:
-                        imports.append(node.module)
-
-        except Exception:
-            pass
-
-        return imports
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(memory, f, indent=2, ensure_ascii=False)
 
 
 # =========================================================
-# 🧠 ARCHITECTURE ENGINE
+# 📋 LOGGER
 # =========================================================
 
-class ArchitectureEngine:
+LOGS = []
 
-    def analyze(self, repo):
 
-        report = {
-            "missing_modules": [],
-            "missing_files": [],
-            "broken_imports": [],
-            "ok": True,
-        }
+def log(message):
 
-        modules = set(repo["modules"])
-
-        # =================================================
-        # CHECK CORE MODULES
-        # =================================================
-
-        for module in TARGET_ARCHITECTURE["core_modules"]:
-
-            if module not in modules:
-
-                report["missing_modules"].append(module)
-
-        # =================================================
-        # CHECK REQUIRED FILES
-        # =================================================
-
-        files = set(
-            os.path.basename(f)
-            for f in repo["files"]
-        )
-
-        for file in TARGET_ARCHITECTURE["required_files"]:
-
-            if file not in files:
-
-                report["missing_files"].append(file)
-
-        # =================================================
-        # CHECK IMPORTS
-        # =================================================
-
-        for path, imports in repo["imports"].items():
-
-            for imp in imports:
-
-                short = imp.split(".")[0]
-
-                if short.startswith("modules"):
-
-                    continue
-
-        if (
-            report["missing_modules"]
-            or report["missing_files"]
-        ):
-            report["ok"] = False
-
-        return report
+    print(message)
+    LOGS.append(message)
 
 
 # =========================================================
-# 🔧 SAFE WRITER
+# 🔍 SCAN PROJECT
 # =========================================================
 
-class SafeWriter:
+def scan_project():
 
-    def write_file(self, path, content):
+    project = {
+        "files": [],
+        "modules": [],
+        "missing": [],
+    }
 
-        try:
+    for root, dirs, files in os.walk(ROOT_DIR):
 
-            os.makedirs(
-                os.path.dirname(path)
-                if os.path.dirname(path)
-                else ".",
-                exist_ok=True
-            )
+        if ".git" in root:
+            continue
 
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
+        for file in files:
 
-            return True
+            path = os.path.join(root, file)
 
-        except Exception as e:
+            project["files"].append(path)
 
-            print(f"❌ WRITE ERROR: {e}")
+            if root.endswith("modules"):
+                project["modules"].append(file)
 
-            return False
+    return project
 
 
 # =========================================================
-# 🧩 MODULE GENERATOR
+# 🧠 ANALYZE ARCHITECTURE
 # =========================================================
 
-class ModuleGenerator:
+def analyze_architecture(project):
 
-    def create_stub(self, module_name):
+    missing = []
 
-        return f'''
+    # core
+    for file in TARGET_ARCHITECTURE["core"]:
+
+        if not os.path.exists(file):
+            missing.append(file)
+
+    # modules
+    for module in TARGET_ARCHITECTURE["modules"]:
+
+        path = os.path.join(MODULES_DIR, module)
+
+        if not os.path.exists(path):
+            missing.append(path)
+
+    return missing
+
+
 # =========================================================
-# AUTO-GENERATED MODULE
+# 🏗 DEFAULT MODULE TEMPLATE
+# =========================================================
+
+def build_module_template(name):
+
+    pure = name.replace(".py", "")
+
+    return f'''# =========================================================
+# 🧠 {pure.upper()}
 # =========================================================
 
 def run(data):
 
+    if not isinstance(data, dict):
+        data = {{}}
+
     data.setdefault("log", [])
 
-    data["log"].append("⚙️ {module_name} executed")
+    data["log"].append("⚙️ {pure} running")
 
     return data
 '''
 
 
 # =========================================================
-# 🧪 TEST ENGINE
+# 🏗 CREATE FILE
 # =========================================================
 
-class TestEngine:
+def create_missing_file(path):
 
-    def run_tests(self):
+    try:
 
-        results = {
-            "passed": True,
-            "errors": []
-        }
+        os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        # =============================================
-        # BASIC IMPORT TEST
-        # =============================================
+        filename = os.path.basename(path)
 
-        try:
+        content = build_module_template(filename)
 
-            import modules
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
 
-        except Exception as e:
+        log(f"🧩 CREATED: {path}")
 
-            results["passed"] = False
-            results["errors"].append(str(e))
+        return True
 
-        return results
+    except Exception as e:
+
+        log(f"❌ CREATE ERROR: {path} | {e}")
+
+        return False
 
 
 # =========================================================
-# 🧠 BUILDER CORE
+# 🔧 AUTOFIX IMPORTS
 # =========================================================
 
-class MegabotControlledBuilder:
+def repair_python_file(path):
 
-    def __init__(self):
+    try:
 
-        self.state = BuilderState()
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
 
-        self.scanner = RepositoryScanner()
+        changed = False
 
-        self.architecture = ArchitectureEngine()
+        # fix tabs
+        if "\t" in content:
+            content = content.replace("\t", "    ")
+            changed = True
 
-        self.writer = SafeWriter()
+        # fix empty files
+        if len(content.strip()) == 0:
 
-        self.generator = ModuleGenerator()
+            content = build_module_template(
+                os.path.basename(path)
+            )
 
-        self.tests = TestEngine()
+            changed = True
+
+        if changed:
+
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            log(f"🔧 REPAIRED: {path}")
+
+            return True
+
+    except Exception as e:
+
+        log(f"❌ REPAIR ERROR: {path} | {e}")
+
+    return False
+
+
+# =========================================================
+# 🧪 TEST FILE
+# =========================================================
+
+def test_python_file(path):
+
+    try:
+
+        with open(path, "r", encoding="utf-8") as f:
+            source = f.read()
+
+        compile(source, path, "exec")
+
+        return True, None
+
+    except Exception as e:
+
+        return False, str(e)
+
+
+# =========================================================
+# 🧪 RUN TESTS
+# =========================================================
+
+def run_tests(project):
+
+    failed = []
+
+    for file in project["files"]:
+
+        if not file.endswith(".py"):
+            continue
+
+        ok, err = test_python_file(file)
+
+        if not ok:
+
+            failed.append({
+                "file": file,
+                "error": err
+            })
+
+            log(f"❌ TEST FAIL: {file}")
+            log(f"   ↳ {err}")
+
+        else:
+
+            log(f"✅ TEST OK: {file}")
+
+    return failed
+
+
+# =========================================================
+# 🧠 BUILD LOOP
+# =========================================================
+
+def build_cycle():
+
+    memory = load_memory()
+
+    log("")
+    log("=================================================")
+    log("🧠 MEGABOT CONTROLLED BUILDER")
+    log("=================================================")
 
     # =====================================================
-    # 🚀 MAIN LOOP
+    # 🔍 SCAN
     # =====================================================
 
-    def run(self):
+    project = scan_project()
 
-        print("\n")
-        print("=" * 60)
-        print("🧠 MEGABOT CONTROLLED BUILDER MAX")
-        print("=" * 60)
+    log(f"📦 FILES: {len(project['files'])}")
+    log(f"🧩 MODULES: {len(project['modules'])}")
 
-        try:
+    # =====================================================
+    # 🧠 ANALYZE
+    # =====================================================
 
-            # =============================================
-            # SCAN
-            # =============================================
+    missing = analyze_architecture(project)
 
-            print("\n🔍 scanning repository...")
+    if missing:
 
-            repo = self.scanner.scan()
+        log("")
+        log("🚨 MISSING FILES:")
 
-            print(f"📦 files: {len(repo['files'])}")
-            print(f"🐍 python: {len(repo['python_files'])}")
-            print(f"🧩 modules: {len(repo['modules'])}")
+        for m in missing:
+            log(f" - {m}")
 
-            # =============================================
-            # ANALYZE
-            # =============================================
+    else:
 
-            print("\n🧠 analyzing architecture...")
+        log("✅ ARCHITECTURE COMPLETE")
 
-            report = self.architecture.analyze(repo)
+    # =====================================================
+    # 🏗 CREATE MISSING
+    # =====================================================
 
-            # =============================================
-            # FIX MISSING MODULES
-            # =============================================
+    if ENABLE_FILE_CREATION:
 
-            for module in report["missing_modules"]:
+        for path in missing:
 
-                path = f"{MODULES_DIR}/{module}.py"
+            if create_missing_file(path):
 
-                print(f"🛠 creating missing module: {module}")
+                memory["created"].append(path)
 
-                content = self.generator.create_stub(module)
+    # =====================================================
+    # 🔧 REPAIR
+    # =====================================================
 
-                ok = self.writer.write_file(path, content)
+    if ENABLE_AUTOFIX:
 
-                if ok:
+        for file in project["files"]:
 
-                    self.state.state["fixed_files"].append(path)
+            if file.endswith(".py"):
 
-            # =============================================
-            # CREATE REQUIRED FILES
-            # =============================================
+                repaired = repair_python_file(file)
 
-            for file in report["missing_files"]:
+                if repaired:
+                    memory["fixed"].append(file)
 
-                print(f"🛠 creating missing file: {file}")
+    # =====================================================
+    # 🧪 TESTS
+    # =====================================================
 
-                if file.endswith(".json"):
+    failed = []
 
-                    self.writer.write_file(file, "{}")
+    if ENABLE_TESTS:
 
-                else:
+        log("")
+        log("🧪 RUNNING TESTS")
 
-                    self.writer.write_file(
-                        file,
-                        "# auto-generated\n"
-                    )
+        failed = run_tests(scan_project())
 
-            # =============================================
-            # TESTS
-            # =============================================
+    # =====================================================
+    # 📊 REPORT
+    # =====================================================
 
-            print("\n🧪 running tests...")
+    report = {
+        "timestamp": time.time(),
+        "missing": missing,
+        "failed": failed,
+        "logs": LOGS[-500:]
+    }
 
-            test_result = self.tests.run_tests()
+    with open(REPORT_FILE, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
 
-            if test_result["passed"]:
+    # =====================================================
+    # 🧠 MEMORY UPDATE
+    # =====================================================
 
-                print("✅ tests passed")
+    memory["cycles"] += 1
 
-            else:
+    memory["history"].append({
+        "time": time.time(),
+        "missing": len(missing),
+        "failed": len(failed)
+    })
 
-                print("❌ tests failed")
+    save_memory(memory)
 
-                for e in test_result["errors"]:
-                    print(e)
+    # =====================================================
+    # 📊 FINAL
+    # =====================================================
 
-            # =============================================
-            # SAVE STATE
-            # =============================================
+    log("")
+    log("=================================================")
+    log("📊 BUILD FINISHED")
+    log("=================================================")
 
-            self.state.state["cycles"] += 1
-            self.state.state["last_scan"] = time.time()
+    log(f"🧠 cycles: {memory['cycles']}")
+    log(f"🧩 created: {len(memory['created'])}")
+    log(f"🔧 fixed: {len(memory['fixed'])}")
+    log(f"❌ failed tests: {len(failed)}")
 
-            self.state.save()
-
-            print("\n✅ builder cycle complete")
-
-        except Exception as e:
-
-            print("\n❌ BUILDER ERROR")
-            print(e)
-
-            traceback.print_exc()
+    log("")
+    log("✅ DONE")
 
 
 # =========================================================
-# 🚀 ENTRY
+# ▶️ MAIN
 # =========================================================
 
 if __name__ == "__main__":
 
-    builder = MegabotControlledBuilder()
+    try:
 
-    builder.run()
+        for _ in range(MAX_CYCLES):
+
+            build_cycle()
+
+    except KeyboardInterrupt:
+
+        log("🛑 STOPPED")
+
+    except Exception as e:
+
+        log("❌ FATAL ERROR")
+        log(str(e))
+        log(traceback.format_exc())

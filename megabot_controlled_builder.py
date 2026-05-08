@@ -23,7 +23,10 @@ MAX_CYCLES = 1
 ENABLE_AUTOFIX = True
 ENABLE_FILE_CREATION = True
 ENABLE_TESTS = True
-ENABLE_CLEANUP = True   # 🆕 NEW
+ENABLE_CLEANUP = True
+
+# 🆕 SAFETY MODE (ВАЖНО)
+ENABLE_SAFE_DELETE = True
 
 # =========================================================
 # 🧠 TARGET ARCHITECTURE
@@ -77,7 +80,7 @@ def log(message):
     LOGS.append(message)
 
 # =========================================================
-# 🔍 SCAN PROJECT
+# 🔍 SCAN
 # =========================================================
 
 def scan_project():
@@ -97,7 +100,7 @@ def scan_project():
     return project
 
 # =========================================================
-# 🧠 ANALYZE ARCHITECTURE
+# 🧠 ARCHITECTURE ANALYSIS
 # =========================================================
 
 def analyze_architecture(project):
@@ -115,14 +118,23 @@ def analyze_architecture(project):
     return missing
 
 # =========================================================
-# 🧠 FIND UNUSED MODULES (NEW)
+# 🧱 ARCHITECTURE LOCK (NEW)
 # =========================================================
 
-def find_unused_modules(project):
+def is_core_module(module_name):
+    return module_name in TARGET_ARCHITECTURE["modules"]
 
-    used = set()
+# =========================================================
+# 🧠 SMART USAGE SCORE (NEW)
+# =========================================================
+
+def usage_score(module_name, project):
+
+    score = 0
+    name = module_name.replace(".py", "")
 
     for file in project["files"]:
+
         if not file.endswith(".py"):
             continue
 
@@ -130,14 +142,28 @@ def find_unused_modules(project):
             with open(file, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            for module in project["modules"]:
-                name = module.replace(".py", "")
+            if name in content:
+                score += 2
 
-                if f"import {name}" in content or f"from {name}" in content:
-                    used.add(module)
+            if f"import {name}" in content:
+                score += 3
+
+            if f"from {name}" in content:
+                score += 3
+
+            if f"{name}.run" in content:
+                score += 4
 
         except:
             continue
+
+    return score
+
+# =========================================================
+# 🗑 FIND UNUSED (UPGRADED)
+# =========================================================
+
+def find_unused_modules(project):
 
     unused = []
 
@@ -145,20 +171,26 @@ def find_unused_modules(project):
 
         full_path = os.path.join(MODULES_DIR, module)
 
-        # не трогаем архитектурные модули
-        if module in TARGET_ARCHITECTURE["modules"]:
+        # 🛑 защита ядра
+        if is_core_module(module):
             continue
 
-        if module not in used:
-            unused.append(full_path)
+        score = usage_score(module, project)
+
+        # 🧠 только реально мёртвые
+        if score == 0:
+            unused.append((full_path, score))
 
     return unused
 
 # =========================================================
-# 🗑 DELETE FILE (NEW)
+# 🗑 SAFE DELETE
 # =========================================================
 
 def delete_file(path):
+
+    if not ENABLE_SAFE_DELETE:
+        return False
 
     try:
         if os.path.exists(path):
@@ -171,13 +203,14 @@ def delete_file(path):
     return False
 
 # =========================================================
-# 🏗 DEFAULT MODULE TEMPLATE
+# 🏗 TEMPLATE
 # =========================================================
 
 def build_module_template(name):
+
     pure = name.replace(".py", "")
 
-    return f'''# =========================================================
+    return f"""# =========================================================
 # 🧠 {pure.upper()}
 # =========================================================
 
@@ -191,13 +224,14 @@ def run(data):
     data["log"].append("⚙️ {pure} running")
 
     return data
-'''
+"""
 
 # =========================================================
-# 🏗 CREATE FILE
+# 🏗 CREATE
 # =========================================================
 
 def create_missing_file(path):
+
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -308,7 +342,7 @@ def build_cycle():
                     memory["fixed"].append(file)
 
     # =====================================================
-    # 🗑 CLEANUP (NEW)
+    # 🗑 CLEANUP (SAFE)
     # =====================================================
 
     if ENABLE_CLEANUP:
@@ -316,12 +350,13 @@ def build_cycle():
         unused = find_unused_modules(project)
 
         if unused:
-            log("\n🗑 UNUSED MODULES:")
+            log("\n🗑 UNUSED MODULES (SAFE SCORE 0):")
 
-            for u in unused:
-                log(f" - {u}")
-                if delete_file(u):
-                    memory["deleted"].append(u)
+            for path, score in unused:
+                log(f" - {path} | score={score}")
+
+                if delete_file(path):
+                    memory["deleted"].append(path)
 
     # =====================================================
     # 🧪 TESTS

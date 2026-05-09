@@ -1,7 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v7
-# 🛡 CORE SAFE + SMART VALIDATION + SAFE AUTOFIX
-# 🔥 STABLE RUNTIME + SAFE IMPORT SYSTEM
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v8
+# 🛡 CORE SAFE + DATA CONTRACT + STABLE RUNTIME
 # =========================================================
 
 import os
@@ -30,38 +29,50 @@ MAX_CYCLES = 1
 
 ENABLE_CLEANUP = True
 ENABLE_QUARANTINE = True
-
 ENABLE_AUTOREPAIR = True
 ENABLE_RUNTIME_TEST = True
 ENABLE_SYNTAX_TEST = True
-
-ENABLE_DEPENDENCY_GRAPH = True
 
 # 🛡 SAFE LIMITS
 MIN_LIVE_CYCLES_BEFORE_QUARANTINE = 5
 MAX_RUNTIME_FAILURES_BEFORE_QUARANTINE = 5
 
 # =========================================================
+# 📦 DATA CONTRACT (MEGABOT CORE STANDARD)
+# =========================================================
+
+MEGABOT_CONTRACT = {
+    "task": str,
+    "input": dict,
+    "log": list,
+    "experience": list,
+    "evaluation": dict,
+    "create_count": int,
+    "control_state": dict,
+    "control_bias": dict,
+    "control_flags": dict
+}
+
+def enforce_contract(data: dict) -> dict:
+    """🛡 гарантирует единый формат данных"""
+    if not isinstance(data, dict):
+        data = {}
+
+    for k, t in MEGABOT_CONTRACT.items():
+        if k not in data:
+            data[k] = t()
+
+    return data
+
+# =========================================================
 # 🧠 CORE PROTECTION
 # =========================================================
 
 CORE_MODULE_KEYWORDS = [
-    "control",
-    "core",
-    "brain",
-    "engine",
-    "router",
-    "execution",
-    "director",
-    "builder",
-    "memory",
-    "planner",
-    "decision",
-    "evaluation",
-    "learning",
-    "task",
-    "observer",
-    "run",
+    "control", "core", "brain", "engine", "router",
+    "execution", "director", "builder", "memory",
+    "planner", "decision", "evaluation", "learning",
+    "task", "observer", "run"
 ]
 
 # =========================================================
@@ -69,8 +80,7 @@ CORE_MODULE_KEYWORDS = [
 # =========================================================
 
 def load_memory():
-
-    default_memory = {
+    default = {
         "cycles": 0,
         "module_age": {},
         "deleted": [],
@@ -81,65 +91,53 @@ def load_memory():
     }
 
     if not os.path.exists(MEMORY_FILE):
-        return default_memory
+        return default
 
     try:
-
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            loaded = json.load(f)
+            data = json.load(f)
 
-        for k, v in default_memory.items():
-            loaded.setdefault(k, v)
+        for k, v in default.items():
+            data.setdefault(k, v)
 
-        return loaded
+        return data
 
     except:
-        return default_memory
+        return default
 
 
 def save_memory(memory):
-
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory, f, indent=2, ensure_ascii=False)
 
 # =========================================================
-# 📋 LOGGER
+# 📋 LOGGING
 # =========================================================
 
 LOGS = []
 
-def log(message):
-
-    print(message)
-    LOGS.append(str(message))
+def log(msg):
+    print(msg)
+    LOGS.append(str(msg))
 
 # =========================================================
-# 🔍 SCAN
+# 🔍 SCAN FIXED
 # =========================================================
 
 def scan():
-
     files = []
     modules = []
 
-    for root, dirs, file_list in os.walk(ROOT_DIR):
+    for root, _, file_list in os.walk(ROOT_DIR):
 
-        if ".git" in root:
-            continue
-
-        if QUARANTINE_DIR in root:
-            continue
-
-        if "__pycache__" in root:
+        if ".git" in root or QUARANTINE_DIR in root or "__pycache__" in root:
             continue
 
         for file in file_list:
-
             path = os.path.join(root, file)
-
             files.append(path)
 
-            if root.endswith("modules") and file.endswith(".py"):
+            if os.path.basename(root) == MODULES_DIR and file.endswith(".py"):
                 modules.append(file)
 
     return files, modules
@@ -148,114 +146,62 @@ def scan():
 # 🧠 CORE CHECK
 # =========================================================
 
-def is_core(module_name):
-
-    lowered = module_name.lower()
-
-    return any(
-        keyword in lowered
-        for keyword in CORE_MODULE_KEYWORDS
-    )
+def is_core(name):
+    return any(k in name.lower() for k in CORE_MODULE_KEYWORDS)
 
 # =========================================================
-# 📖 SAFE FILE READ
+# 📖 FILE READ
 # =========================================================
 
 def read_file(path):
-
     try:
-
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
-
     except:
         return ""
 
 # =========================================================
-# 🧠 DEPENDENCY GRAPH
+# 🧠 DEP GRAPH
 # =========================================================
 
 def build_dependencies(files, modules):
+    deps = {m: set() for m in modules}
 
-    deps = {
-        module: set()
-        for module in modules
-    }
-
-    for file in files:
-
-        if not file.endswith(".py"):
+    for f in files:
+        if not f.endswith(".py"):
             continue
 
-        content = read_file(file)
-
-        if not content:
-            continue
-
-        for module in modules:
-
-            name = module.replace(".py", "")
-
-            try:
-
-                if f"import {name}" in content:
-                    deps[module].add(file)
-
-                if f"from {name}" in content:
-                    deps[module].add(file)
-
-                if f"{name}." in content:
-                    deps[module].add(file)
-
-            except:
-                continue
+        content = read_file(f)
+        for m in modules:
+            name = m.replace(".py", "")
+            if f"import {name}" in content or f"from {name}" in content or f"{name}." in content:
+                deps[m].add(f)
 
     return deps
 
 # =========================================================
-# 🧠 MODULE SCORE
+# 🧠 SCORE
 # =========================================================
 
 def module_score(module, deps):
-
     refs = len(deps.get(module, []))
-
-    score = 0
-
-    score += refs * 5
-
-    if refs > 0:
-        score += 10
-
-    return score
+    return refs * 5 + (10 if refs > 0 else 0)
 
 # =========================================================
-# 🧠 SAFE QUARANTINE RULE
+# 🛡 QUARANTINE RULE
 # =========================================================
 
-def should_quarantine(
-    module,
-    score,
-    deps,
-    age,
-    runtime_fail_count
-):
-
+def should_quarantine(module, score, deps, age, fail_count):
     if is_core(module):
         return False
-
     if score > 0:
         return False
-
     if len(deps.get(module, [])) > 0:
         return False
-
     if age < MIN_LIVE_CYCLES_BEFORE_QUARANTINE:
         return False
-
-    if runtime_fail_count < MAX_RUNTIME_FAILURES_BEFORE_QUARANTINE:
+    if fail_count < MAX_RUNTIME_FAILURES_BEFORE_QUARANTINE:
         return False
-
     return True
 
 # =========================================================
@@ -263,478 +209,231 @@ def should_quarantine(
 # =========================================================
 
 def quarantine_file(path):
-
     try:
-
         os.makedirs(QUARANTINE_DIR, exist_ok=True)
-
-        filename = os.path.basename(path)
-
-        dst = os.path.join(
-            QUARANTINE_DIR,
-            filename
-        )
-
+        dst = os.path.join(QUARANTINE_DIR, os.path.basename(path))
         shutil.move(path, dst)
-
         log(f"📦 QUARANTINED: {path}")
-
         return True
-
     except Exception as e:
-
         log(f"❌ QUARANTINE ERROR: {e}")
-
         return False
 
 # =========================================================
-# 🏗 SAFE TEMPLATE
+# 🏗 TEMPLATE
 # =========================================================
 
-def build_template(module_name):
-
-    pure = module_name.replace(".py", "")
-
-    return f'''# =========================================================
-# 🧠 SAFE AUTO-REPAIRED MODULE: {pure}
-# =========================================================
-
+def build_template(name):
+    pure = name.replace(".py", "")
+    return f"""
 def run(data=None):
-
-    if data is None:
-        data = {{}}
-
-    if not isinstance(data, dict):
-        data = {{
-            "input": str(data)
-        }}
+    data = data or {{}}
+    data = {{k: v for k, v in data.items()}} if isinstance(data, dict) else {{}}
 
     data.setdefault("log", [])
-
-    data["log"].append("⚙️ {pure} executed")
+    data["log"].append("⚙️ {pure}")
 
     return data
-'''
+"""
 
 # =========================================================
-# 🔧 SAFE REPAIR
+# 🔧 REPAIR
 # =========================================================
 
 def repair_module(path, memory):
-
     try:
+        name = os.path.basename(path)
 
-        filename = os.path.basename(path)
-
-        if is_core(filename):
-
-            log(f"🛡 SKIPPED CORE REPAIR: {path}")
+        if is_core(name):
             return False
 
         os.makedirs(BACKUP_DIR, exist_ok=True)
-
-        backup_path = os.path.join(
-            BACKUP_DIR,
-            filename
-        )
-
-        shutil.copy(path, backup_path)
+        shutil.copy(path, os.path.join(BACKUP_DIR, name))
 
         with open(path, "w", encoding="utf-8") as f:
-            f.write(build_template(filename))
+            f.write(build_template(name))
 
         memory["repaired"].append(path)
-
         log(f"🔧 REPAIRED: {path}")
-
         return True
 
     except Exception as e:
-
-        log(f"❌ REPAIR ERROR: {path}")
-        log(str(e))
-
+        log(f"❌ REPAIR ERROR: {e}")
         return False
 
 # =========================================================
-# 🧪 SYNTAX TEST
+# 🧪 SYNTAX
 # =========================================================
 
 def syntax_test(path):
-
     try:
-
-        source = read_file(path)
-
-        compile(source, path, "exec")
-
-        ast.parse(source)
-
+        src = read_file(path)
+        compile(src, path, "exec")
+        ast.parse(src)
         return True, None
-
     except Exception as e:
-
         return False, str(e)
 
 # =========================================================
-# 🧪 SAFE RUNTIME TEST
+# 🧪 RUNTIME SAFE
 # =========================================================
 
 def runtime_test(path):
-
     try:
+        name = os.path.basename(path).replace(".py", "")
 
-        module_name = os.path.basename(path)
-        module_name = module_name.replace(".py", "")
-
-        spec = importlib.util.spec_from_file_location(
-            module_name,
-            path
-        )
-
-        if spec is None:
-            return False, "SPEC LOAD FAILED"
-
-        if spec.loader is None:
-            return False, "LOADER FAILED"
+        spec = importlib.util.spec_from_file_location(name, path)
+        if not spec or not spec.loader:
+            return False, "IMPORT FAIL"
 
         mod = importlib.util.module_from_spec(spec)
 
-        # 🛡 SAFE IMPORT
-        old_modules = dict(sys.modules)
-
-        try:
-
-            spec.loader.exec_module(mod)
-
-        finally:
-
-            sys.modules.clear()
-            sys.modules.update(old_modules)
-
-        # =================================================
-        # NO RUN
-        # =================================================
+        spec.loader.exec_module(mod)
 
         if not hasattr(mod, "run"):
+            return True, "NO RUN"
 
-            return True, "NO RUN FUNCTION"
-
-        # =================================================
-        # SAFE TEST DATA
-        # =================================================
-
-        test_data = {
+        test_data = enforce_contract({
             "task": "builder_test",
             "input": {},
             "log": [],
             "experience": [],
             "evaluation": {},
             "create_count": 0,
-            "control_state": {
-                "mode": "normal",
-                "phase": "init",
-                "trend": "stable",
-                "energy": 100,
-                "cycle": 0,
-                "health": 100,
-                "stability": 1.0
-            },
-            "control_bias": {
-                "success": 0,
-                "fail": 0,
-                "create": 0,
-                "run": 0
-            },
-            "control_flags": {
-                "loop_detected": False,
-                "stagnation": False,
-                "overcreate": False
-            }
-        }
-
-        # =================================================
-        # SAFE EXECUTION
-        # =================================================
+            "control_state": {},
+            "control_bias": {},
+            "control_flags": {}
+        })
 
         result = mod.run(test_data)
 
-        # =================================================
-        # SAFE VALIDATION
-        # =================================================
-
-        if result is None:
-            return True, "RUN RETURNED NONE"
-
         if not isinstance(result, dict):
-            return False, f"INVALID RETURN TYPE: {type(result)}"
+            return False, "INVALID OUTPUT TYPE"
 
         return True, result
 
     except Exception as e:
-
         return False, str(e)
 
 # =========================================================
-# 🧠 VALIDATION
+# 🧪 VALIDATE
 # =========================================================
 
 def validate_modules(modules, memory):
+    s_fail = r_fail = 0
 
-    syntax_failed = 0
-    runtime_failed = 0
+    log("\n🧪 VALIDATING MODULES")
 
-    log("")
-    log("🧪 VALIDATING MODULES")
+    for m in modules:
+        path = os.path.join(MODULES_DIR, m)
 
-    for module in modules:
+        ok, err = syntax_test(path)
+        if not ok:
+            s_fail += 1
+            memory["syntax_failed"][path] = memory["syntax_failed"].get(path, 0) + 1
+            log(f"❌ SYNTAX FAIL: {path} -> {err}")
+            repair_module(path, memory)
+            continue
 
-        path = os.path.join(
-            MODULES_DIR,
-            module
-        )
-
-        # =================================================
-        # SYNTAX
-        # =================================================
-
-        if ENABLE_SYNTAX_TEST:
-
-            ok, err = syntax_test(path)
-
-            if not ok:
-
-                syntax_failed += 1
-
-                memory["syntax_failed"].setdefault(path, 0)
-                memory["syntax_failed"][path] += 1
-
-                log(f"❌ SYNTAX FAIL: {path}")
-                log(f"   ↳ {err}")
-
-                if ENABLE_AUTOREPAIR:
-                    repair_module(path, memory)
-
-                continue
-
-            log(f"✅ SYNTAX OK: {path}")
-
-        # =================================================
-        # RUNTIME
-        # =================================================
+        log(f"✅ SYNTAX OK: {path}")
 
         if ENABLE_RUNTIME_TEST:
-
-            ok_runtime, runtime_result = runtime_test(path)
-
-            if not ok_runtime:
-
-                runtime_failed += 1
-
-                memory["runtime_failed"].setdefault(path, 0)
-                memory["runtime_failed"][path] += 1
-
-                log(f"⚠️ RUNTIME FAIL: {path}")
-                log(f"   ↳ {runtime_result}")
-
+            ok2, res = runtime_test(path)
+            if not ok2:
+                r_fail += 1
+                memory["runtime_failed"][path] = memory["runtime_failed"].get(path, 0) + 1
+                log(f"⚠️ RUNTIME FAIL: {path} -> {res}")
             else:
-
                 log(f"🚀 RUNTIME OK: {path}")
 
-    return syntax_failed, runtime_failed
+    return s_fail, r_fail
 
 # =========================================================
 # 🧠 CLEANUP
 # =========================================================
 
 def cleanup_modules(modules, deps, memory):
+    q = 0
+    log("\n🗑 CLEANUP")
 
-    quarantined = 0
+    for m in modules:
+        path = os.path.join(MODULES_DIR, m)
 
-    log("")
-    log("🗑 CLEANUP CHECK")
+        score = module_score(m, deps)
+        age = memory["module_age"].get(m, 0)
+        fail = memory["runtime_failed"].get(path, 0)
 
-    for module in modules:
-
-        path = os.path.join(
-            MODULES_DIR,
-            module
-        )
-
-        score = module_score(module, deps)
-
-        age = memory["module_age"].get(module, 0)
-
-        runtime_fail_count = memory[
-            "runtime_failed"
-        ].get(path, 0)
-
-        if should_quarantine(
-            module,
-            score,
-            deps,
-            age,
-            runtime_fail_count
-        ):
-
-            log(
-                f"⚠️ UNUSED MODULE: {path}"
-            )
-
-            if ENABLE_QUARANTINE:
-
-                if quarantine_file(path):
-
-                    memory["deleted"].append(path)
-
-                    quarantined += 1
-
+        if should_quarantine(m, score, deps, age, fail):
+            if quarantine_file(path):
+                memory["deleted"].append(path)
+                q += 1
         else:
+            memory["module_age"][m] = age + 1
 
-            memory["module_age"][module] = age + 1
-
-    return quarantined
+    return q
 
 # =========================================================
 # 📊 REPORT
 # =========================================================
 
-def save_report(
-    memory,
-    syntax_failed,
-    runtime_failed,
-    quarantined
-):
-
-    report = {
-        "timestamp": time.time(),
-        "cycles": memory["cycles"],
-        "repaired": len(memory["repaired"]),
-        "runtime_failed": runtime_failed,
-        "syntax_failed": syntax_failed,
-        "quarantined": quarantined,
-        "logs": LOGS[-500:]
-    }
-
+def save_report(mem, s, r, q):
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
-
-        json.dump(
-            report,
-            f,
-            indent=2,
-            ensure_ascii=False
-        )
+        json.dump({
+            "time": time.time(),
+            "cycles": mem["cycles"],
+            "syntax_failed": s,
+            "runtime_failed": r,
+            "quarantined": q,
+            "logs": LOGS[-300:]
+        }, f, indent=2, ensure_ascii=False)
 
 # =========================================================
-# 🧠 MAIN BUILD CYCLE
+# 🧠 MAIN
 # =========================================================
 
 def build_cycle():
 
     memory = load_memory()
-
     files, modules = scan()
+    deps = build_dependencies(files, modules)
 
-    deps = build_dependencies(
-        files,
-        modules
-    )
+    log("\n==============================")
+    log("🧠 MEGABOT BUILDER v8")
+    log("==============================")
 
-    log("")
-    log("=================================================")
-    log("🧠 MEGABOT BUILDER v7")
-    log("=================================================")
+    log(f"FILES: {len(files)} | MODULES: {len(modules)}")
 
-    log(f"📦 FILES: {len(files)}")
-    log(f"🧩 MODULES: {len(modules)}")
+    s, r = validate_modules(modules, memory)
 
-    # =====================================================
-    # 🧪 VALIDATION
-    # =====================================================
-
-    syntax_failed, runtime_failed = validate_modules(
-        modules,
-        memory
-    )
-
-    # =====================================================
-    # 🗑 CLEANUP
-    # =====================================================
-
-    quarantined = 0
-
+    q = 0
     if ENABLE_CLEANUP:
-
-        quarantined = cleanup_modules(
-            modules,
-            deps,
-            memory
-        )
-
-    # =====================================================
-    # 💾 MEMORY
-    # =====================================================
+        q = cleanup_modules(modules, deps, memory)
 
     memory["cycles"] += 1
-
     memory["history"].append({
         "cycle": memory["cycles"],
-        "syntax_failed": syntax_failed,
-        "runtime_failed": runtime_failed,
-        "quarantined": quarantined,
+        "s": s,
+        "r": r,
+        "q": q
     })
 
     save_memory(memory)
+    save_report(memory, s, r, q)
 
-    # =====================================================
-    # 📊 REPORT
-    # =====================================================
-
-    save_report(
-        memory,
-        syntax_failed,
-        runtime_failed,
-        quarantined
-    )
-
-    # =====================================================
-    # 📊 FINAL
-    # =====================================================
-
-    log("")
-    log("=================================================")
-    log("📊 BUILD FINISHED")
-    log("=================================================")
-
-    log(f"🧠 cycles: {memory['cycles']}")
-    log(f"🔧 repaired: {len(memory['repaired'])}")
-    log(f"⚠️ runtime failed: {runtime_failed}")
-    log(f"❌ syntax failed: {syntax_failed}")
-    log(f"📦 quarantined: {quarantined}")
-
-    log("")
-    log("✅ DONE")
+    log("\n==============================")
+    log("📊 DONE")
+    log(f"cycles={memory['cycles']} repaired={len(memory['repaired'])}")
+    log(f"runtime_failed={r} syntax_failed={s} quarantined={q}")
+    log("==============================")
 
 # =========================================================
-# ▶️ RUN
+# ▶ RUN
 # =========================================================
 
 if __name__ == "__main__":
-
     try:
-
         for _ in range(MAX_CYCLES):
-
             build_cycle()
-
-    except KeyboardInterrupt:
-
-        log("🛑 STOPPED")
-
     except Exception as e:
-
-        log("❌ FATAL ERROR")
-
-        log(str(e))
-
+        log(f"FATAL: {e}")
         log(traceback.format_exc())

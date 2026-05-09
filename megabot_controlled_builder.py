@@ -1,6 +1,7 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v6
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v7
 # 🛡 CORE SAFE + SMART VALIDATION + SAFE AUTOFIX
+# 🔥 STABLE RUNTIME + SAFE IMPORT SYSTEM
 # =========================================================
 
 import os
@@ -10,6 +11,7 @@ import shutil
 import importlib.util
 import ast
 import time
+import sys
 
 # =========================================================
 # ⚙ CONFIG
@@ -156,7 +158,7 @@ def is_core(module_name):
     )
 
 # =========================================================
-# 🧠 SAFE FILE READ
+# 📖 SAFE FILE READ
 # =========================================================
 
 def read_file(path):
@@ -239,23 +241,18 @@ def should_quarantine(
     runtime_fail_count
 ):
 
-    # 🛡 NEVER TOUCH CORE
     if is_core(module):
         return False
 
-    # 🛡 USED SOMEWHERE
     if score > 0:
         return False
 
-    # 🛡 HAS REFERENCES
     if len(deps.get(module, [])) > 0:
         return False
 
-    # 🛡 TOO YOUNG
     if age < MIN_LIVE_CYCLES_BEFORE_QUARANTINE:
         return False
 
-    # 🛡 ONLY IF FAILS MANY TIMES
     if runtime_fail_count < MAX_RUNTIME_FAILURES_BEFORE_QUARANTINE:
         return False
 
@@ -329,7 +326,6 @@ def repair_module(path, memory):
 
         filename = os.path.basename(path)
 
-        # 🛡 NEVER REPAIR CORE FILES
         if is_core(filename):
 
             log(f"🛡 SKIPPED CORE REPAIR: {path}")
@@ -381,7 +377,7 @@ def syntax_test(path):
         return False, str(e)
 
 # =========================================================
-# 🧪 RUNTIME TEST
+# 🧪 SAFE RUNTIME TEST
 # =========================================================
 
 def runtime_test(path):
@@ -404,22 +400,76 @@ def runtime_test(path):
 
         mod = importlib.util.module_from_spec(spec)
 
-        spec.loader.exec_module(mod)
+        # 🛡 SAFE IMPORT
+        old_modules = dict(sys.modules)
 
-        if hasattr(mod, "run"):
+        try:
 
-            # 🛡 SAFE TEST DATA
-            test_data = {
-                "log": [],
-                "task": "builder_test",
-                "input": {}
+            spec.loader.exec_module(mod)
+
+        finally:
+
+            sys.modules.clear()
+            sys.modules.update(old_modules)
+
+        # =================================================
+        # NO RUN
+        # =================================================
+
+        if not hasattr(mod, "run"):
+
+            return True, "NO RUN FUNCTION"
+
+        # =================================================
+        # SAFE TEST DATA
+        # =================================================
+
+        test_data = {
+            "task": "builder_test",
+            "input": {},
+            "log": [],
+            "experience": [],
+            "evaluation": {},
+            "create_count": 0,
+            "control_state": {
+                "mode": "normal",
+                "phase": "init",
+                "trend": "stable",
+                "energy": 100,
+                "cycle": 0,
+                "health": 100,
+                "stability": 1.0
+            },
+            "control_bias": {
+                "success": 0,
+                "fail": 0,
+                "create": 0,
+                "run": 0
+            },
+            "control_flags": {
+                "loop_detected": False,
+                "stagnation": False,
+                "overcreate": False
             }
+        }
 
-            result = mod.run(test_data)
+        # =================================================
+        # SAFE EXECUTION
+        # =================================================
 
-            return True, result
+        result = mod.run(test_data)
 
-        return True, "NO RUN FUNCTION"
+        # =================================================
+        # SAFE VALIDATION
+        # =================================================
+
+        if result is None:
+            return True, "RUN RETURNED NONE"
+
+        if not isinstance(result, dict):
+            return False, f"INVALID RETURN TYPE: {type(result)}"
+
+        return True, result
 
     except Exception as e:
 
@@ -448,24 +498,26 @@ def validate_modules(modules, memory):
         # SYNTAX
         # =================================================
 
-        ok, err = syntax_test(path)
+        if ENABLE_SYNTAX_TEST:
 
-        if not ok:
+            ok, err = syntax_test(path)
 
-            syntax_failed += 1
+            if not ok:
 
-            memory["syntax_failed"].setdefault(path, 0)
-            memory["syntax_failed"][path] += 1
+                syntax_failed += 1
 
-            log(f"❌ SYNTAX FAIL: {path}")
-            log(f"   ↳ {err}")
+                memory["syntax_failed"].setdefault(path, 0)
+                memory["syntax_failed"][path] += 1
 
-            if ENABLE_AUTOREPAIR:
-                repair_module(path, memory)
+                log(f"❌ SYNTAX FAIL: {path}")
+                log(f"   ↳ {err}")
 
-            continue
+                if ENABLE_AUTOREPAIR:
+                    repair_module(path, memory)
 
-        log(f"✅ SYNTAX OK: {path}")
+                continue
+
+            log(f"✅ SYNTAX OK: {path}")
 
         # =================================================
         # RUNTIME
@@ -590,7 +642,7 @@ def build_cycle():
 
     log("")
     log("=================================================")
-    log("🧠 MEGABOT BUILDER v6")
+    log("🧠 MEGABOT BUILDER v7")
     log("=================================================")
 
     log(f"📦 FILES: {len(files)}")

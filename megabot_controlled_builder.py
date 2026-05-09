@@ -1,6 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3
-# 🧠 FULL REPOSITORY + CONNECTION BRAIN + ARCH COMPILER
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED
+# 🧠 FULL REPOSITORY + AST CONNECTION BRAIN + WEIGHTED GRAPH
 # =========================================================
 
 import os
@@ -26,9 +26,8 @@ REPORT_FILE = "builder_report.json"
 
 MAX_CYCLES = 1
 
-ENABLE_ARCH_COMPILER = True
 ENABLE_CONNECTION_BRAIN = True
-ENABLE_AUTO_CREATE = True
+ENABLE_ARCH_COMPILER = True
 ENABLE_RUNTIME_TEST = True
 ENABLE_SYNTAX_TEST = True
 
@@ -50,6 +49,7 @@ def load_memory():
     default = {
         "cycles": 0,
         "connections": {},
+        "weights": {},
         "hubs": [],
         "isolated": [],
         "history": []
@@ -84,7 +84,7 @@ def read_file(path):
         return ""
 
 # =========================================================
-# 🔍 SCAN REPOSITORY
+# 🔍 SCAN
 # =========================================================
 
 def scan():
@@ -112,64 +112,82 @@ def scan():
     return files, modules
 
 # =========================================================
-# 🔗 CONNECTION BRAIN (NEW CORE)
+# 🔗 AST CONNECTION BRAIN (FIXED CORE)
+# =========================================================
+
+def extract_imports(code):
+    """AST-based import extractor"""
+
+    imports = set()
+
+    try:
+        tree = ast.parse(code)
+
+        for node in ast.walk(tree):
+
+            # import X
+            if isinstance(node, ast.Import):
+                for n in node.names:
+                    imports.add(n.name.split(".")[0])
+
+            # from X import Y
+            if isinstance(node, ast.ImportFrom):
+                if node.module:
+                    imports.add(node.module.split(".")[0])
+
+    except:
+        pass
+
+    return imports
+
+# =========================================================
+# 🧠 BUILD GRAPH WITH WEIGHTS
 # =========================================================
 
 def build_connection_graph(files, modules):
 
     graph = {m: set() for m in modules}
+    weights = {m: 0 for m in modules}
 
     for file in files:
 
         code = read_file(file)
+        imports = extract_imports(code)
 
         for module in modules:
 
             name = module.replace(".py", "")
 
-            if (
-                f"import {name}" in code
-                or f"from {name}" in code
-                or f"{name}." in code
-            ):
+            if name in imports:
+
                 graph[module].add(name)
+                weights[module] += 1
 
-    return graph
+    return graph, weights
 
 # =========================================================
-# 🧠 ANALYZE CONNECTIONS
+# 🧠 ANALYZE GRAPH (FIXED)
 # =========================================================
 
-def analyze_graph(graph):
+def analyze_graph(graph, weights):
 
     hubs = []
     isolated = []
 
-    for node, edges in graph.items():
+    avg_weight = sum(weights.values()) / max(len(weights), 1)
 
-        if len(edges) >= 3:
+    for node in graph:
+
+        if weights[node] >= avg_weight * 1.5:
             hubs.append(node)
 
-        if len(edges) == 0:
+        if len(graph[node]) == 0:
             isolated.append(node)
 
     return hubs, isolated
 
 # =========================================================
-# 🔗 CONNECTION MANAGER CHECK
-# =========================================================
-
-def check_connections():
-
-    if not os.path.exists(CONNECTION_FILE):
-        log("⚠️ connection_manager NOT FOUND")
-        return False
-
-    log("🔗 connection_manager OK")
-    return True
-
-# =========================================================
-# 🧠 ARCH COMPILER
+# 🧠 ARCHITECTURE
 # =========================================================
 
 def architecture_compiler(files, modules, arch):
@@ -191,12 +209,12 @@ def architecture_compiler(files, modules, arch):
     }
 
 # =========================================================
-# 🧪 VALIDATION (MINIMAL)
+# 🧪 VALIDATION
 # =========================================================
 
 def validate(modules):
 
-    s = r = 0
+    s = 0
 
     for m in modules:
 
@@ -209,10 +227,10 @@ def validate(modules):
         except:
             s += 1
 
-    return s, r
+    return s
 
 # =========================================================
-# 🧠 MAIN CYCLE
+# 🧠 MAIN
 # =========================================================
 
 def build_cycle():
@@ -227,7 +245,7 @@ def build_cycle():
             arch = json.load(f)
 
     log("\n==============================")
-    log("🧠 MEGABOT v8.3 FULL BRAIN")
+    log("🧠 MEGABOT v8.3 FIXED BRAIN")
     log("==============================")
 
     log(f"FILES: {len(files)} | MODULES: {len(modules)}")
@@ -238,10 +256,11 @@ def build_cycle():
 
     if ENABLE_CONNECTION_BRAIN:
 
-        graph = build_connection_graph(files, modules)
-        hubs, isolated = analyze_graph(graph)
+        graph, weights = build_connection_graph(files, modules)
+        hubs, isolated = analyze_graph(graph, weights)
 
         memory["connections"] = {k: list(v) for k, v in graph.items()}
+        memory["weights"] = weights
         memory["hubs"] = hubs
         memory["isolated"] = isolated
 
@@ -250,7 +269,7 @@ def build_cycle():
         log(f"ISOLATED: {isolated}")
 
     # =========================
-    # 🏗 ARCHITECTURE
+    # 🏗 ARCH
     # =========================
 
     result = architecture_compiler(files, modules, arch)
@@ -259,22 +278,16 @@ def build_cycle():
     log(f"COVERAGE: {result.get('coverage', 0)}%")
 
     # =========================
-    # 🔗 CONNECTION CHECK
-    # =========================
-
-    check_connections()
-
-    # =========================
     # 🧪 VALIDATION
     # =========================
 
-    s, r = validate(modules)
+    s = validate(modules)
 
     memory["cycles"] += 1
 
     memory["history"].append({
         "cycle": memory["cycles"],
-        "syntax": s,
+        "syntax_failed": s,
         "hubs": len(memory["hubs"]),
         "isolated": len(memory["isolated"])
     })

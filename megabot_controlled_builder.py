@@ -1,6 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v5
-# 🛡 CORE SAFE + AUTO REPAIR + SMART VALIDATION
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v6
+# 🛡 CORE SAFE + SMART VALIDATION + SAFE AUTOFIX
 # =========================================================
 
 import os
@@ -27,7 +27,6 @@ BACKUP_DIR = "repair_backups"
 MAX_CYCLES = 1
 
 ENABLE_CLEANUP = True
-ENABLE_SAFE_DELETE = False
 ENABLE_QUARANTINE = True
 
 ENABLE_AUTOREPAIR = True
@@ -35,9 +34,10 @@ ENABLE_RUNTIME_TEST = True
 ENABLE_SYNTAX_TEST = True
 
 ENABLE_DEPENDENCY_GRAPH = True
-ENABLE_SMART_ANALYSIS = True
 
-MIN_LIVE_CYCLES_BEFORE_DELETE = 3
+# 🛡 SAFE LIMITS
+MIN_LIVE_CYCLES_BEFORE_QUARANTINE = 5
+MAX_RUNTIME_FAILURES_BEFORE_QUARANTINE = 5
 
 # =========================================================
 # 🧠 CORE PROTECTION
@@ -57,6 +57,9 @@ CORE_MODULE_KEYWORDS = [
     "decision",
     "evaluation",
     "learning",
+    "task",
+    "observer",
+    "run",
 ]
 
 # =========================================================
@@ -70,8 +73,8 @@ def load_memory():
         "module_age": {},
         "deleted": [],
         "repaired": [],
-        "runtime_failed": [],
-        "syntax_failed": [],
+        "runtime_failed": {},
+        "syntax_failed": {},
         "history": []
     }
 
@@ -109,7 +112,7 @@ def log(message):
     LOGS.append(str(message))
 
 # =========================================================
-# 🔍 SCAN PROJECT
+# 🔍 SCAN
 # =========================================================
 
 def scan():
@@ -153,7 +156,7 @@ def is_core(module_name):
     )
 
 # =========================================================
-# 🧠 READ FILE SAFE
+# 🧠 SAFE FILE READ
 # =========================================================
 
 def read_file(path):
@@ -167,7 +170,7 @@ def read_file(path):
         return ""
 
 # =========================================================
-# 🧠 BUILD DEPENDENCY GRAPH
+# 🧠 DEPENDENCY GRAPH
 # =========================================================
 
 def build_dependencies(files, modules):
@@ -225,21 +228,35 @@ def module_score(module, deps):
     return score
 
 # =========================================================
-# 🧠 SAFE DELETE RULE
+# 🧠 SAFE QUARANTINE RULE
 # =========================================================
 
-def should_quarantine(module, score, deps, age):
+def should_quarantine(
+    module,
+    score,
+    deps,
+    age,
+    runtime_fail_count
+):
 
+    # 🛡 NEVER TOUCH CORE
     if is_core(module):
         return False
 
+    # 🛡 USED SOMEWHERE
     if score > 0:
         return False
 
+    # 🛡 HAS REFERENCES
     if len(deps.get(module, [])) > 0:
         return False
 
-    if age < MIN_LIVE_CYCLES_BEFORE_DELETE:
+    # 🛡 TOO YOUNG
+    if age < MIN_LIVE_CYCLES_BEFORE_QUARANTINE:
+        return False
+
+    # 🛡 ONLY IF FAILS MANY TIMES
+    if runtime_fail_count < MAX_RUNTIME_FAILURES_BEFORE_QUARANTINE:
         return False
 
     return True
@@ -274,7 +291,7 @@ def quarantine_file(path):
         return False
 
 # =========================================================
-# 🏗 MODULE TEMPLATE
+# 🏗 SAFE TEMPLATE
 # =========================================================
 
 def build_template(module_name):
@@ -282,7 +299,7 @@ def build_template(module_name):
     pure = module_name.replace(".py", "")
 
     return f'''# =========================================================
-# 🧠 AUTO-REPAIRED MODULE: {pure}
+# 🧠 SAFE AUTO-REPAIRED MODULE: {pure}
 # =========================================================
 
 def run(data=None):
@@ -291,7 +308,9 @@ def run(data=None):
         data = {{}}
 
     if not isinstance(data, dict):
-        data = {{}}
+        data = {{
+            "input": str(data)
+        }}
 
     data.setdefault("log", [])
 
@@ -301,16 +320,22 @@ def run(data=None):
 '''
 
 # =========================================================
-# 🔧 AUTO REPAIR
+# 🔧 SAFE REPAIR
 # =========================================================
 
 def repair_module(path, memory):
 
     try:
 
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-
         filename = os.path.basename(path)
+
+        # 🛡 NEVER REPAIR CORE FILES
+        if is_core(filename):
+
+            log(f"🛡 SKIPPED CORE REPAIR: {path}")
+            return False
+
+        os.makedirs(BACKUP_DIR, exist_ok=True)
 
         backup_path = os.path.join(
             BACKUP_DIR,
@@ -374,16 +399,23 @@ def runtime_test(path):
         if spec is None:
             return False, "SPEC LOAD FAILED"
 
-        mod = importlib.util.module_from_spec(spec)
-
         if spec.loader is None:
             return False, "LOADER FAILED"
+
+        mod = importlib.util.module_from_spec(spec)
 
         spec.loader.exec_module(mod)
 
         if hasattr(mod, "run"):
 
-            result = mod.run({})
+            # 🛡 SAFE TEST DATA
+            test_data = {
+                "log": [],
+                "task": "builder_test",
+                "input": {}
+            }
+
+            result = mod.run(test_data)
 
             return True, result
 
@@ -394,7 +426,7 @@ def runtime_test(path):
         return False, str(e)
 
 # =========================================================
-# 🧠 VALIDATE MODULES
+# 🧠 VALIDATION
 # =========================================================
 
 def validate_modules(modules, memory):
@@ -413,7 +445,7 @@ def validate_modules(modules, memory):
         )
 
         # =================================================
-        # SYNTAX TEST
+        # SYNTAX
         # =================================================
 
         ok, err = syntax_test(path)
@@ -422,7 +454,8 @@ def validate_modules(modules, memory):
 
             syntax_failed += 1
 
-            memory["syntax_failed"].append(path)
+            memory["syntax_failed"].setdefault(path, 0)
+            memory["syntax_failed"][path] += 1
 
             log(f"❌ SYNTAX FAIL: {path}")
             log(f"   ↳ {err}")
@@ -435,7 +468,7 @@ def validate_modules(modules, memory):
         log(f"✅ SYNTAX OK: {path}")
 
         # =================================================
-        # RUNTIME TEST
+        # RUNTIME
         # =================================================
 
         if ENABLE_RUNTIME_TEST:
@@ -446,7 +479,8 @@ def validate_modules(modules, memory):
 
                 runtime_failed += 1
 
-                memory["runtime_failed"].append(path)
+                memory["runtime_failed"].setdefault(path, 0)
+                memory["runtime_failed"][path] += 1
 
                 log(f"⚠️ RUNTIME FAIL: {path}")
                 log(f"   ↳ {runtime_result}")
@@ -458,7 +492,7 @@ def validate_modules(modules, memory):
     return syntax_failed, runtime_failed
 
 # =========================================================
-# 🧠 CLEANUP SYSTEM
+# 🧠 CLEANUP
 # =========================================================
 
 def cleanup_modules(modules, deps, memory):
@@ -479,15 +513,20 @@ def cleanup_modules(modules, deps, memory):
 
         age = memory["module_age"].get(module, 0)
 
+        runtime_fail_count = memory[
+            "runtime_failed"
+        ].get(path, 0)
+
         if should_quarantine(
             module,
             score,
             deps,
-            age
+            age,
+            runtime_fail_count
         ):
 
             log(
-                f"⚠️ UNUSED MODULE: {path} | score={score}"
+                f"⚠️ UNUSED MODULE: {path}"
             )
 
             if ENABLE_QUARANTINE:
@@ -505,22 +544,28 @@ def cleanup_modules(modules, deps, memory):
     return quarantined
 
 # =========================================================
-# 📊 SAVE REPORT
+# 📊 REPORT
 # =========================================================
 
-def save_report(memory):
+def save_report(
+    memory,
+    syntax_failed,
+    runtime_failed,
+    quarantined
+):
 
     report = {
         "timestamp": time.time(),
         "cycles": memory["cycles"],
         "repaired": len(memory["repaired"]),
-        "runtime_failed": len(memory["runtime_failed"]),
-        "syntax_failed": len(memory["syntax_failed"]),
-        "quarantined": len(memory["deleted"]),
+        "runtime_failed": runtime_failed,
+        "syntax_failed": syntax_failed,
+        "quarantined": quarantined,
         "logs": LOGS[-500:]
     }
 
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
+
         json.dump(
             report,
             f,
@@ -538,11 +583,14 @@ def build_cycle():
 
     files, modules = scan()
 
-    deps = build_dependencies(files, modules)
+    deps = build_dependencies(
+        files,
+        modules
+    )
 
     log("")
     log("=================================================")
-    log("🧠 MEGABOT BUILDER v5")
+    log("🧠 MEGABOT BUILDER v6")
     log("=================================================")
 
     log(f"📦 FILES: {len(files)}")
@@ -590,7 +638,12 @@ def build_cycle():
     # 📊 REPORT
     # =====================================================
 
-    save_report(memory)
+    save_report(
+        memory,
+        syntax_failed,
+        runtime_failed,
+        quarantined
+    )
 
     # =====================================================
     # 📊 FINAL

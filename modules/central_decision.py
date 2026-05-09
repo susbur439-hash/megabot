@@ -13,7 +13,6 @@ try:
 except:
     engine_run = None
 
-# (опционально) внешний источник
 try:
     from external_gateway import ExternalGateway
     gateway = ExternalGateway()
@@ -22,13 +21,41 @@ except:
 
 
 # =========================
+# 🛡 SAFE NORMALIZATION (FIX v8 CONTRACT ISSUE)
+# =========================
+def normalize_task(task):
+    """
+    Приводит вход к безопасному формату:
+    - str → string
+    - dict → extracts usable text
+    """
+
+    if isinstance(task, str):
+        return task, task.lower()
+
+    if isinstance(task, dict):
+        raw = str(task)
+
+        # пытаемся вытащить полезное поле
+        if "task" in task:
+            raw = str(task["task"])
+        elif "input" in task:
+            raw = str(task["input"])
+
+        return raw, raw.lower()
+
+    return str(task), str(task).lower()
+
+
+# =========================
 # 🧠 Анализ задачи
 # =========================
-def analyze(task: str) -> dict:
-    t = task.lower()
+def analyze(task) -> dict:
+
+    raw, t = normalize_task(task)
 
     return {
-        "raw": task,
+        "raw": raw,
         "is_system": any(k in t for k in [
             "system", "list", "modules", "router",
             "status", "scan", "repo", "health", "debug", "logs"
@@ -56,21 +83,18 @@ def decide_strategy(analysis: dict) -> str:
 # =========================
 # ⚙️ Выполнение
 # =========================
-def execute(strategy: str, task: str):
+def execute(strategy: str, task):
 
-    print(f"[CentralDecision] strategy={strategy} task='{task}'")
+    print(f"[CentralDecision] strategy={strategy} task={task}")
 
-    # 🌐 внешний источник
-    if strategy == "external":
+    if strategy == "external" and gateway:
         print("[CentralDecision] → External Gateway")
-        return gateway.call("search", task)
+        return gateway.call("search", str(task))
 
-    # ⚙️ engine
     if strategy == "engine" and engine_run:
         print("[CentralDecision] → Engine selected")
         return engine_run(task)
 
-    # 🧠 director
     if director_run:
         print("[CentralDecision] → Director selected")
         return director_run(task)
@@ -82,9 +106,9 @@ def execute(strategy: str, task: str):
 
 
 # =========================
-# 🚀 Главная точка входа
+# 🚀 ENTRY POINT (v8 SAFE)
 # =========================
-def run(task: str):
+def run(task):
 
     analysis = analyze(task)
     strategy = decide_strategy(analysis)

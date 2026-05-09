@@ -1,10 +1,11 @@
 # =========================================================
-# 🧠 MEGABOT ARCHITECTURE BRAIN v1
-# 🔗 Role + Connection Analyzer (for Bolduen / Connection Manager)
+# 🧠 MEGABOT ARCHITECTURE BRAIN v2 (ENHANCED CORE)
+# 🔗 True Dependency Graph + Role System + Core Detection
 # =========================================================
 
 import os
 import ast
+from collections import defaultdict
 
 MODULES_DIR = "modules"
 
@@ -22,7 +23,7 @@ def read_file(path):
 
 
 # =========================================================
-# 🔍 EXTRACT IMPORTS (AST SAFE)
+# 🔍 IMPORT EXTRACTOR (AST + FALLBACK)
 # =========================================================
 
 def extract_imports(code):
@@ -37,24 +38,35 @@ def extract_imports(code):
                 for n in node.names:
                     imports.add(n.name.split(".")[0])
 
-            if isinstance(node, ast.ImportFrom):
+            elif isinstance(node, ast.ImportFrom):
                 if node.module:
                     imports.add(node.module.split(".")[0])
 
     except:
         pass
 
+    # fallback (если AST пропустил)
+    for line in code.splitlines():
+        line = line.strip()
+
+        if line.startswith("import "):
+            imports.add(line.split(" ")[1].split(".")[0])
+
+        if line.startswith("from "):
+            parts = line.split(" ")
+            if len(parts) > 1:
+                imports.add(parts[1].split(".")[0])
+
     return imports
 
 
 # =========================================================
-# 🧠 ROLE DETECTOR
+# 🧠 ROLE SYSTEM (ENHANCED)
 # =========================================================
 
 def detect_role(name, imports):
 
-    # core brain nodes
-    if name in ["director", "central_decision"]:
+    if name in ["director", "central_decision", "engine", "megabot_controlled_builder"]:
         return "brain"
 
     if "execution" in name:
@@ -66,6 +78,9 @@ def detect_role(name, imports):
     if "control" in name or "gate" in name or "bus" in name:
         return "control"
 
+    if "builder" in name:
+        return "builder"
+
     if len(imports) == 0:
         return "isolated"
 
@@ -73,13 +88,22 @@ def detect_role(name, imports):
 
 
 # =========================================================
-# 🔗 BUILD ARCHITECTURE GRAPH
+# 🔗 BUILD DIRECTED GRAPH (REAL DEPENDENCIES)
 # =========================================================
 
 def build_architecture_graph(files):
 
-    graph = {}
-    roles = {}
+    graph = defaultdict(set)
+    reverse_graph = defaultdict(set)
+    weights = defaultdict(lambda: defaultdict(int))
+
+    modules = set()
+
+    # collect module names
+    for path in files:
+        if path.endswith(".py"):
+            name = os.path.basename(path).replace(".py", "")
+            modules.add(name)
 
     for path in files:
 
@@ -91,77 +115,121 @@ def build_architecture_graph(files):
         code = read_file(path)
         imports = extract_imports(code)
 
-        graph[name] = list(imports)
-        roles[name] = detect_role(name, imports)
+        for imp in imports:
 
-    return graph, roles
+            if imp in modules and imp != name:
 
+                # directed edge
+                graph[name].add(imp)
+                reverse_graph[imp].add(name)
 
-# =========================================================
-# 🧠 FIND SYSTEM CORE (BRAIN NODE)
-# =========================================================
+                # weight = frequency of reference
+                weights[name][imp] += 1
 
-def find_brain_node(roles, graph):
-
-    # priority search
-    for node, role in roles.items():
-        if role == "brain":
-            return node
-
-    # fallback: most connected
-    max_links = -1
-    best = None
-
-    for node, edges in graph.items():
-        if len(edges) > max_links:
-            max_links = len(edges)
-            best = node
-
-    return best
+    return graph, reverse_graph, weights
 
 
 # =========================================================
-# 🔗 BUILD CONNECTION WEIGHTS
+# 🧠 CORE BRAIN DETECTION (REAL METRICS)
 # =========================================================
 
-def build_weights(graph):
+def find_brain_node(roles, graph, reverse_graph):
 
-    weights = {}
+    scores = {}
 
-    for node, edges in graph.items():
+    for node in graph.keys():
 
-        weights[node] = {}
+        out_deg = len(graph[node])
+        in_deg = len(reverse_graph[node])
 
-        for e in edges:
-            weights[node][e] = weights[node].get(e, 0) + 1
+        role_bonus = 5 if roles.get(node) == "brain" else 0
 
-    return weights
+        # core score formula
+        score = (in_deg * 2) + out_deg + role_bonus
+
+        scores[node] = score
+
+    if not scores:
+        return None
+
+    return max(scores, key=scores.get)
 
 
 # =========================================================
-# 🧠 MAIN API (USED BY BOLDUEN)
+# 🔗 HUB DETECTION (IMPROVED)
+# =========================================================
+
+def detect_hubs(graph, reverse_graph):
+
+    hubs = []
+
+    for node in graph.keys():
+
+        total_links = len(graph[node]) + len(reverse_graph[node])
+
+        if total_links >= 10:
+            hubs.append(node)
+
+    return hubs
+
+
+# =========================================================
+# 🧠 ISOLATION DETECTION
+# =========================================================
+
+def detect_isolated(graph, reverse_graph):
+
+    isolated = []
+
+    for node in graph.keys():
+
+        if len(graph[node]) == 0 and len(reverse_graph[node]) == 0:
+            isolated.append(node)
+
+    return isolated
+
+
+# =========================================================
+# 📊 GRAPH METRICS
+# =========================================================
+
+def compute_density(graph):
+
+    nodes = len(graph)
+    edges = sum(len(v) for v in graph.values())
+
+    if nodes == 0:
+        return 0
+
+    return round(edges / nodes, 3)
+
+
+# =========================================================
+# 🧠 MAIN API (BOLDUEN CORE INTERFACE)
 # =========================================================
 
 def analyze(files):
 
-    graph, roles = build_architecture_graph(files)
+    graph, reverse_graph, weights = build_architecture_graph(files)
 
-    brain = find_brain_node(roles, graph)
+    roles = {}
+    for node in graph.keys():
+        roles[node] = detect_role(node, graph[node])
 
-    weights = build_weights(graph)
+    brain = find_brain_node(roles, graph, reverse_graph)
 
-    isolated = [n for n, r in roles.items() if r == "isolated"]
+    hubs = detect_hubs(graph, reverse_graph)
+    isolated = detect_isolated(graph, reverse_graph)
 
-    hubs = [
-        n for n, edges in graph.items()
-        if len(edges) >= 5
-    ]
+    density = compute_density(graph)
 
     return {
-        "graph": graph,
+        "graph": {k: list(v) for k, v in graph.items()},
+        "reverse_graph": {k: list(v) for k, v in reverse_graph.items()},
+        "weights": {k: dict(v) for k, v in weights.items()},
         "roles": roles,
         "brain": brain,
-        "weights": weights,
         "hubs": hubs,
-        "isolated": isolated
+        "isolated": isolated,
+        "density": density
     }

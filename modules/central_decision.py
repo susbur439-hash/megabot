@@ -21,30 +21,29 @@ except:
 
 
 # =========================
-# 🛡 SAFE NORMALIZATION (FIX v8 CONTRACT ISSUE)
+# 🧠 SAFE NORMALIZE INPUT
 # =========================
 def normalize_task(task):
     """
-    Приводит вход к безопасному формату:
-    - str → string
-    - dict → extracts usable text
+    Всегда приводим вход к строке
+    чтобы не падал .lower()
     """
 
+    if task is None:
+        return ""
+
     if isinstance(task, str):
-        return task, task.lower()
+        return task
 
     if isinstance(task, dict):
-        raw = str(task)
+        # пробуем извлечь текст
+        return (
+            task.get("task")
+            or task.get("input")
+            or json.dumps(task, ensure_ascii=False)
+        )
 
-        # пытаемся вытащить полезное поле
-        if "task" in task:
-            raw = str(task["task"])
-        elif "input" in task:
-            raw = str(task["input"])
-
-        return raw, raw.lower()
-
-    return str(task), str(task).lower()
+    return str(task)
 
 
 # =========================
@@ -52,10 +51,12 @@ def normalize_task(task):
 # =========================
 def analyze(task) -> dict:
 
-    raw, t = normalize_task(task)
+    task_str = normalize_task(task)
+    t = task_str.lower()
 
     return {
-        "raw": raw,
+        "raw": task,
+        "normalized": task_str,
         "is_system": any(k in t for k in [
             "system", "list", "modules", "router",
             "status", "scan", "repo", "health", "debug", "logs"
@@ -85,11 +86,11 @@ def decide_strategy(analysis: dict) -> str:
 # =========================
 def execute(strategy: str, task):
 
-    print(f"[CentralDecision] strategy={strategy} task={task}")
+    print(f"[CentralDecision] strategy={strategy} task_type={type(task)}")
 
-    if strategy == "external" and gateway:
+    if strategy == "external":
         print("[CentralDecision] → External Gateway")
-        return gateway.call("search", str(task))
+        return gateway.call("search", normalize_task(task))
 
     if strategy == "engine" and engine_run:
         print("[CentralDecision] → Engine selected")
@@ -106,7 +107,7 @@ def execute(strategy: str, task):
 
 
 # =========================
-# 🚀 ENTRY POINT (v8 SAFE)
+# 🚀 ENTRY POINT
 # =========================
 def run(task):
 

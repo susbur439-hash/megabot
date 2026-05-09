@@ -1,12 +1,11 @@
 # =========================================================
 # 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED CORE++
-# 🧠 AST + ARCH BRAIN + REVERSE GRAPH + WEIGHTED SYNC
+# 🧠 AST + ARCH BRAIN + REVERSE GRAPH + WEIGHTED SYNC FIXED
 # =========================================================
 
 import os
 import json
 import traceback
-import importlib.util
 import ast
 
 from modules.architecture_brain import analyze
@@ -53,8 +52,10 @@ def load_memory():
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+
         for k, v in default.items():
             data.setdefault(k, v)
+
         return data
     except:
         return default
@@ -82,12 +83,12 @@ def read_file(path):
 def scan():
     files, modules = [], []
 
-    for root, _, files_list in os.walk(ROOT_DIR):
+    for root, _, file_list in os.walk(ROOT_DIR):
 
         if ".git" in root or "__pycache__" in root:
             continue
 
-        for f in files_list:
+        for f in file_list:
             if not f.endswith(".py"):
                 continue
 
@@ -110,6 +111,7 @@ def extract_imports(code):
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
+
             if isinstance(node, ast.Import):
                 for n in node.names:
                     imports.add(n.name.split(".")[0])
@@ -124,31 +126,37 @@ def extract_imports(code):
     return imports
 
 # =========================================================
-# 🔗 CONNECTION GRAPH + REVERSE GRAPH
+# 🔗 GRAPH BUILDER (FIXED NORMALIZATION)
 # =========================================================
 
 def build_graph(files, modules):
 
-    graph = {m: set() for m in modules}
-    reverse = {m: set() for m in modules}
-    weights = {m: 0 for m in modules}
+    graph = {}
+    reverse = {}
+    weights = {}
 
-    module_names = {m.replace(".py", "") for m in modules}
+    module_names = [m.replace(".py", "") for m in modules]
+
+    for m in module_names:
+        graph[m] = set()
+        reverse[m] = set()
+        weights[m] = 0
 
     for file in files:
 
         code = read_file(file)
         imports = extract_imports(code)
 
-        for m in modules:
-            name = m.replace(".py", "")
+        for mod in module_names:
 
-            if name in imports:
-                graph[m].add(name)
-                weights[m] += 1
+            if mod in imports:
 
-                if name in reverse:
-                    reverse[name].add(m.replace(".py", ""))
+                graph[mod].add(file)
+                weights[mod] += 1
+
+                for imp in imports:
+                    if imp in reverse:
+                        reverse[imp].add(mod)
 
     return graph, reverse, weights
 
@@ -157,6 +165,7 @@ def build_graph(files, modules):
 # =========================================================
 
 def run_arch(files):
+
     result = analyze(files)
 
     return {
@@ -168,7 +177,7 @@ def run_arch(files):
     }
 
 # =========================================================
-# 🧠 IMPROVED HUB DETECTION
+# 🧠 HUB DETECTOR (FIXED SCORE MODEL)
 # =========================================================
 
 def compute_hubs(graph, reverse, weights):
@@ -177,7 +186,11 @@ def compute_hubs(graph, reverse, weights):
 
     for node in graph:
 
-        score = len(graph[node]) + len(reverse.get(node.replace(".py",""), [])) + weights.get(node, 0)
+        score = (
+            len(graph[node]) * 2 +
+            len(reverse[node]) * 3 +
+            weights[node] * 1
+        )
 
         if score >= 3:
             hubs.append(node)
@@ -189,6 +202,7 @@ def compute_hubs(graph, reverse, weights):
 # =========================================================
 
 def validate(modules):
+
     errors = 0
 
     for m in modules:
@@ -203,7 +217,7 @@ def validate(modules):
     return errors
 
 # =========================================================
-# 🧠 MAIN
+# 🧠 MAIN CYCLE
 # =========================================================
 
 def build_cycle():
@@ -232,10 +246,14 @@ def build_cycle():
 
     hubs = compute_hubs(graph, reverse, weights)
 
-    # merge intelligence
+    # =========================
+    # MEMORY SYNC
+    # =========================
+
     memory["connections"] = {k: list(v) for k, v in graph.items()}
     memory["reverse_connections"] = {k: list(v) for k, v in reverse.items()}
     memory["weights"] = weights
+
     memory["roles"] = brain["roles"]
     memory["brain_node"] = brain["brain"]
     memory["hubs"] = hubs
@@ -276,6 +294,7 @@ def build_cycle():
 # =========================================================
 
 if __name__ == "__main__":
+
     try:
         for _ in range(MAX_CYCLES):
             build_cycle()

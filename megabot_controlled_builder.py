@@ -1,14 +1,12 @@
 # =========================================================
 # 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED CORE++
-# 🧠 AST + ARCH BRAIN + REVERSE GRAPH + WEIGHTED SYNC FIXED
+# 🧠 SINGLE GRAPH + ARCH BRAIN SYNC + CLOSED LOOP FIX
 # =========================================================
 
 import os
 import json
 import traceback
 import ast
-
-from modules.architecture_brain import analyze
 
 # =========================================================
 # ⚙ CONFIG
@@ -17,7 +15,6 @@ from modules.architecture_brain import analyze
 ROOT_DIR = "."
 MODULES_DIR = "modules"
 
-ARCH_FILE = "architecture.json"
 MEMORY_FILE = "builder_memory.json"
 
 MAX_CYCLES = 1
@@ -43,6 +40,7 @@ def load_memory():
         "brain_node": None,
         "hubs": [],
         "isolated": [],
+        "actions": [],
         "history": []
     }
 
@@ -52,10 +50,8 @@ def load_memory():
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         for k, v in default.items():
             data.setdefault(k, v)
-
         return data
     except:
         return default
@@ -111,7 +107,6 @@ def extract_imports(code):
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
-
             if isinstance(node, ast.Import):
                 for n in node.names:
                     imports.add(n.name.split(".")[0])
@@ -126,58 +121,36 @@ def extract_imports(code):
     return imports
 
 # =========================================================
-# 🔗 GRAPH BUILDER (FIXED NORMALIZATION)
+# 🔗 SINGLE GRAPH (FIXED CORE)
 # =========================================================
 
 def build_graph(files, modules):
 
-    graph = {}
-    reverse = {}
-    weights = {}
-
     module_names = [m.replace(".py", "") for m in modules]
 
-    for m in module_names:
-        graph[m] = set()
-        reverse[m] = set()
-        weights[m] = 0
+    graph = {m: set() for m in module_names}
+    reverse = {m: set() for m in module_names}
+    weights = {m: 0 for m in module_names}
 
     for file in files:
 
+        name = os.path.basename(file).replace(".py", "")
         code = read_file(file)
         imports = extract_imports(code)
 
-        for mod in module_names:
+        if name not in graph:
+            continue
 
-            if mod in imports:
-
-                graph[mod].add(file)
-                weights[mod] += 1
-
-                for imp in imports:
-                    if imp in reverse:
-                        reverse[imp].add(mod)
+        for imp in imports:
+            if imp in graph:
+                graph[name].add(imp)
+                reverse[imp].add(name)
+                weights[name] += 1
 
     return graph, reverse, weights
 
 # =========================================================
-# 🧠 ARCH BRAIN SYNC
-# =========================================================
-
-def run_arch(files):
-
-    result = analyze(files)
-
-    return {
-        "graph": result["graph"],
-        "roles": result["roles"],
-        "brain": result["brain"],
-        "hubs": result["hubs"],
-        "isolated": result["isolated"]
-    }
-
-# =========================================================
-# 🧠 HUB DETECTOR (FIXED SCORE MODEL)
+# 🧠 HUB DETECTION
 # =========================================================
 
 def compute_hubs(graph, reverse, weights):
@@ -186,16 +159,56 @@ def compute_hubs(graph, reverse, weights):
 
     for node in graph:
 
-        score = (
-            len(graph[node]) * 2 +
-            len(reverse[node]) * 3 +
-            weights[node] * 1
-        )
+        score = len(graph[node]) + len(reverse[node]) + weights[node]
 
-        if score >= 3:
+        if score >= 2:
             hubs.append(node)
 
     return hubs
+
+# =========================================================
+# 🧠 ROLE ENGINE (LOCAL, NOT EXTERNAL)
+# =========================================================
+
+def compute_roles(graph):
+
+    roles = {}
+
+    for node in graph:
+
+        if len(graph[node]) == 0 and len(reverse_connections.get(node, [])) == 0:
+            roles[node] = "isolated"
+        elif len(graph[node]) >= 3:
+            roles[node] = "hub"
+        else:
+            roles[node] = "module"
+
+    return roles
+
+# =========================================================
+# 🧠 DECISION LAYER
+# =========================================================
+
+def decide(graph, reverse, hubs, isolated):
+
+    actions = []
+
+    for n in isolated:
+        actions.append({"type": "connect", "target": n})
+
+    for n in hubs:
+        actions.append({"type": "optimize", "target": n})
+
+    return actions
+
+# =========================================================
+# 🧠 EXECUTION (SAFE ONLY LOGIC)
+# =========================================================
+
+def execute(actions):
+
+    for a in actions:
+        log(f"[ACTION] {a['type']} -> {a['target']}")
 
 # =========================================================
 # 🧪 VALIDATION
@@ -217,7 +230,7 @@ def validate(modules):
     return errors
 
 # =========================================================
-# 🧠 MAIN CYCLE
+# 🧠 MAIN LOOP
 # =========================================================
 
 def build_cycle():
@@ -239,12 +252,28 @@ def build_cycle():
     graph, reverse, weights = build_graph(files, modules)
 
     # =========================
-    # ARCH BRAIN
+    # BRAIN
     # =========================
 
-    brain = run_arch(files)
-
     hubs = compute_hubs(graph, reverse, weights)
+
+    isolated = [
+        n for n in graph
+        if len(graph[n]) == 0 and len(reverse[n]) == 0
+    ]
+
+    roles = {
+        n: ("hub" if n in hubs else "isolated" if n in isolated else "module")
+        for n in graph
+    }
+
+    # =========================
+    # DECISION
+    # =========================
+
+    actions = decide(graph, reverse, hubs, isolated)
+
+    execute(actions)
 
     # =========================
     # MEMORY SYNC
@@ -254,19 +283,14 @@ def build_cycle():
     memory["reverse_connections"] = {k: list(v) for k, v in reverse.items()}
     memory["weights"] = weights
 
-    memory["roles"] = brain["roles"]
-    memory["brain_node"] = brain["brain"]
+    memory["roles"] = roles
     memory["hubs"] = hubs
-    memory["isolated"] = brain["isolated"]
+    memory["isolated"] = isolated
+    memory["actions"] = actions
 
-    log("\n🧠 ARCH BRAIN")
-    log(f"BRAIN NODE: {brain['brain']}")
+    log("\n🧠 BRAIN STATE")
     log(f"HUBS: {len(hubs)}")
-    log(f"ISOLATED: {len(brain['isolated'])}")
-
-    # =========================
-    # VALIDATION
-    # =========================
+    log(f"ISOLATED: {len(isolated)}")
 
     errors = validate(modules)
 
@@ -275,9 +299,9 @@ def build_cycle():
     memory["history"].append({
         "cycle": memory["cycles"],
         "errors": errors,
-        "brain": memory["brain_node"],
         "hubs": len(hubs),
-        "isolated": len(memory["isolated"])
+        "isolated": len(isolated),
+        "actions": len(actions)
     })
 
     save_memory(memory)

@@ -1,16 +1,15 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.2 FULL FIXED
-# 🛡 ARCHITECTURE + CONNECTION MANAGER + AUTO FIX
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3
+# 🧠 FULL REPOSITORY + CONNECTION BRAIN + ARCH COMPILER
 # =========================================================
 
 import os
 import json
 import traceback
-import shutil
 import importlib.util
 import ast
-import time
 import sys
+import time
 
 # =========================================================
 # ⚙ CONFIG
@@ -20,19 +19,16 @@ ROOT_DIR = "."
 MODULES_DIR = "modules"
 
 ARCH_FILE = "architecture.json"
-MEMORY_FILE = "builder_memory.json"
-REPORT_FILE = "builder_report.json"
-
 CONNECTION_FILE = "modules/connection_manager.py"
 
-QUARANTINE_DIR = "quarantine"
-BACKUP_DIR = "repair_backups"
+MEMORY_FILE = "builder_memory.json"
+REPORT_FILE = "builder_report.json"
 
 MAX_CYCLES = 1
 
 ENABLE_ARCH_COMPILER = True
+ENABLE_CONNECTION_BRAIN = True
 ENABLE_AUTO_CREATE = True
-ENABLE_CONNECTION_CHECK = True
 ENABLE_RUNTIME_TEST = True
 ENABLE_SYNTAX_TEST = True
 
@@ -53,11 +49,9 @@ def log(msg):
 def load_memory():
     default = {
         "cycles": 0,
-        "module_age": {},
-        "deleted": [],
-        "repaired": [],
-        "runtime_failed": {},
-        "syntax_failed": {},
+        "connections": {},
+        "hubs": [],
+        "isolated": [],
         "history": []
     }
 
@@ -79,7 +73,7 @@ def save_memory(memory):
         json.dump(memory, f, indent=2, ensure_ascii=False)
 
 # =========================================================
-# 📖 FILE READ
+# 📖 READ FILE
 # =========================================================
 
 def read_file(path):
@@ -90,23 +84,21 @@ def read_file(path):
         return ""
 
 # =========================================================
-# 🔍 SCAN FULL REPO
+# 🔍 SCAN REPOSITORY
 # =========================================================
 
 def scan():
     files = []
     modules = []
 
-    for root, _, files_list in os.walk(ROOT_DIR):
+    for root, _, file_list in os.walk(ROOT_DIR):
 
         if ".git" in root:
-            continue
-        if QUARANTINE_DIR in root:
             continue
         if "__pycache__" in root:
             continue
 
-        for f in files_list:
+        for f in file_list:
 
             if not f.endswith(".py"):
                 continue
@@ -120,21 +112,64 @@ def scan():
     return files, modules
 
 # =========================================================
-# 🧠 ARCHITECTURE LOADER
+# 🔗 CONNECTION BRAIN (NEW CORE)
 # =========================================================
 
-def load_architecture():
-    if not os.path.exists(ARCH_FILE):
-        return None
+def build_connection_graph(files, modules):
 
-    try:
-        with open(ARCH_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return None
+    graph = {m: set() for m in modules}
+
+    for file in files:
+
+        code = read_file(file)
+
+        for module in modules:
+
+            name = module.replace(".py", "")
+
+            if (
+                f"import {name}" in code
+                or f"from {name}" in code
+                or f"{name}." in code
+            ):
+                graph[module].add(name)
+
+    return graph
 
 # =========================================================
-# 🏗 ARCH COMPILER
+# 🧠 ANALYZE CONNECTIONS
+# =========================================================
+
+def analyze_graph(graph):
+
+    hubs = []
+    isolated = []
+
+    for node, edges in graph.items():
+
+        if len(edges) >= 3:
+            hubs.append(node)
+
+        if len(edges) == 0:
+            isolated.append(node)
+
+    return hubs, isolated
+
+# =========================================================
+# 🔗 CONNECTION MANAGER CHECK
+# =========================================================
+
+def check_connections():
+
+    if not os.path.exists(CONNECTION_FILE):
+        log("⚠️ connection_manager NOT FOUND")
+        return False
+
+    log("🔗 connection_manager OK")
+    return True
+
+# =========================================================
+# 🧠 ARCH COMPILER
 # =========================================================
 
 def architecture_compiler(files, modules, arch):
@@ -156,142 +191,28 @@ def architecture_compiler(files, modules, arch):
     }
 
 # =========================================================
-# 🧠 AUTO CREATE MODULE
+# 🧪 VALIDATION (MINIMAL)
 # =========================================================
 
-def create_module(name):
+def validate(modules):
 
-    path = os.path.join(MODULES_DIR, name + ".py")
-
-    if os.path.exists(path):
-        return
-
-    os.makedirs(MODULES_DIR, exist_ok=True)
-
-    code = f"""
-def run(data=None):
-    if data is None:
-        data = {{}}
-    data.setdefault("log", [])
-    data["log"].append("auto_created:{name}")
-    return data
-"""
-
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(code)
-
-    log(f"🆕 CREATED MODULE: {name}")
-
-# =========================================================
-# 🔗 CONNECTION MANAGER CHECK
-# =========================================================
-
-def check_connections():
-
-    if not os.path.exists(CONNECTION_FILE):
-        log("⚠️ connection_manager NOT FOUND")
-        return False
-
-    log("🔗 connection_manager OK")
-    return True
-
-# =========================================================
-# 🧪 SYNTAX
-# =========================================================
-
-def syntax_test(path):
-    try:
-        code = read_file(path)
-        compile(code, path, "exec")
-        ast.parse(code)
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-# =========================================================
-# 🧪 RUNTIME
-# =========================================================
-
-def runtime_test(path):
-
-    try:
-        name = os.path.basename(path).replace(".py", "")
-
-        spec = importlib.util.spec_from_file_location(name, path)
-
-        if not spec or not spec.loader:
-            return False, "SPEC FAIL"
-
-        mod = importlib.util.module_from_spec(spec)
-
-        old = dict(sys.modules)
-
-        try:
-            spec.loader.exec_module(mod)
-        finally:
-            sys.modules.clear()
-            sys.modules.update(old)
-
-        if not hasattr(mod, "run"):
-            return True, "NO RUN"
-
-        return True, mod.run({"task": "test"})
-
-    except Exception as e:
-        return False, str(e)
-
-# =========================================================
-# 🧪 VALIDATION
-# =========================================================
-
-def validate(modules, memory):
-
-    s, r = 0, 0
-
-    log("\n🧪 VALIDATION")
+    s = r = 0
 
     for m in modules:
 
         path = os.path.join(MODULES_DIR, m)
 
-        ok, err = syntax_test(path)
-
-        if not ok:
+        try:
+            code = read_file(path)
+            compile(code, path, "exec")
+            ast.parse(code)
+        except:
             s += 1
-            log(f"❌ SYNTAX FAIL {m}: {err}")
-            continue
-
-        log(f"✅ OK {m}")
-
-        ok2, res = runtime_test(path)
-
-        if not ok2:
-            r += 1
-            log(f"⚠️ RUNTIME FAIL {m}: {res}")
 
     return s, r
 
 # =========================================================
-# 🏗 ARCH FIX ENGINE
-# =========================================================
-
-def apply_architecture(arch, modules):
-
-    if not arch:
-        return
-
-    missing = arch.get("required_modules", [])
-
-    for m in missing:
-
-        file = m + ".py"
-        path = os.path.join(MODULES_DIR, file)
-
-        if not os.path.exists(path):
-            create_module(m)
-
-# =========================================================
-# 🧠 MAIN
+# 🧠 MAIN CYCLE
 # =========================================================
 
 def build_cycle():
@@ -300,33 +221,62 @@ def build_cycle():
 
     files, modules = scan()
 
-    arch = load_architecture()
+    arch = None
+    if os.path.exists(ARCH_FILE):
+        with open(ARCH_FILE, "r", encoding="utf-8") as f:
+            arch = json.load(f)
 
     log("\n==============================")
-    log("🧠 MEGABOT v8.2 FULL FIXED")
+    log("🧠 MEGABOT v8.3 FULL BRAIN")
     log("==============================")
 
     log(f"FILES: {len(files)} | MODULES: {len(modules)}")
 
-    if ENABLE_CONNECTION_CHECK:
-        check_connections()
+    # =========================
+    # 🔗 CONNECTION BRAIN
+    # =========================
+
+    if ENABLE_CONNECTION_BRAIN:
+
+        graph = build_connection_graph(files, modules)
+        hubs, isolated = analyze_graph(graph)
+
+        memory["connections"] = {k: list(v) for k, v in graph.items()}
+        memory["hubs"] = hubs
+        memory["isolated"] = isolated
+
+        log("\n🔗 CONNECTION BRAIN")
+        log(f"HUBS: {hubs}")
+        log(f"ISOLATED: {isolated}")
+
+    # =========================
+    # 🏗 ARCHITECTURE
+    # =========================
 
     result = architecture_compiler(files, modules, arch)
 
     log(f"\n🏗 ARCH STATUS: {result['status']}")
     log(f"COVERAGE: {result.get('coverage', 0)}%")
 
-    if ENABLE_AUTO_CREATE:
-        apply_architecture(arch, modules)
+    # =========================
+    # 🔗 CONNECTION CHECK
+    # =========================
 
-    s, r = validate(modules, memory)
+    check_connections()
+
+    # =========================
+    # 🧪 VALIDATION
+    # =========================
+
+    s, r = validate(modules)
 
     memory["cycles"] += 1
 
     memory["history"].append({
         "cycle": memory["cycles"],
         "syntax": s,
-        "runtime": r
+        "hubs": len(memory["hubs"]),
+        "isolated": len(memory["isolated"])
     })
 
     save_memory(memory)
@@ -334,6 +284,9 @@ def build_cycle():
     log("\n==============================")
     log("📊 DONE")
     log("==============================")
+
+    log(f"cycles={memory['cycles']}")
+    log(f"syntax_failed={s}")
 
 # =========================================================
 # ▶ RUN

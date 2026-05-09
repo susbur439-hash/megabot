@@ -1,6 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED
-# 🧠 FULL REPOSITORY + AST CONNECTION BRAIN + ARCH BRAIN CORE
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED CORE
+# 🧠 AST + ARCH BRAIN SYNC + CONTROLLED GRAPH
 # =========================================================
 
 import os
@@ -11,7 +11,7 @@ import ast
 import sys
 import time
 
-from modules.architecture_brain import analyze  # 🔥 INTEGRATION
+from modules.architecture_brain import analyze
 
 # =========================================================
 # ⚙ CONFIG
@@ -23,15 +23,12 @@ MODULES_DIR = "modules"
 ARCH_FILE = "architecture.json"
 
 MEMORY_FILE = "builder_memory.json"
-REPORT_FILE = "builder_report.json"
 
 MAX_CYCLES = 1
 
 ENABLE_CONNECTION_BRAIN = True
 ENABLE_ARCH_BRAIN = True
 ENABLE_ARCH_COMPILER = True
-ENABLE_RUNTIME_TEST = True
-ENABLE_SYNTAX_TEST = True
 
 # =========================================================
 # 📋 LOGGER
@@ -48,6 +45,7 @@ def log(msg):
 # =========================================================
 
 def load_memory():
+
     default = {
         "cycles": 0,
         "connections": {},
@@ -65,9 +63,12 @@ def load_memory():
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+
         for k, v in default.items():
             data.setdefault(k, v)
+
         return data
+
     except:
         return default
 
@@ -92,6 +93,7 @@ def read_file(path):
 # =========================================================
 
 def scan():
+
     files = []
     modules = []
 
@@ -116,10 +118,11 @@ def scan():
     return files, modules
 
 # =========================================================
-# 🧠 AST CONNECTION BRAIN
+# 🧠 CONNECTION GRAPH (AST)
 # =========================================================
 
 def extract_imports(code):
+
     imports = set()
 
     try:
@@ -140,9 +143,6 @@ def extract_imports(code):
 
     return imports
 
-# =========================================================
-# 🔗 GRAPH BUILDER
-# =========================================================
 
 def build_connection_graph(files, modules):
 
@@ -165,7 +165,7 @@ def build_connection_graph(files, modules):
     return graph, weights
 
 # =========================================================
-# 🧠 ARCH BRAIN INTEGRATION (🔥 MAIN ADDITION)
+# 🧠 ARCH BRAIN SYNC (FIXED CORE)
 # =========================================================
 
 def run_architecture_brain(files):
@@ -208,7 +208,7 @@ def architecture_compiler(files, modules, arch):
 
 def validate(modules):
 
-    s = 0
+    errors = 0
 
     for m in modules:
 
@@ -219,12 +219,12 @@ def validate(modules):
             compile(code, path, "exec")
             ast.parse(code)
         except:
-            s += 1
+            errors += 1
 
-    return s
+    return errors
 
 # =========================================================
-# 🧠 MAIN CYCLE
+# 🧠 MAIN
 # =========================================================
 
 def build_cycle():
@@ -239,7 +239,7 @@ def build_cycle():
             arch = json.load(f)
 
     log("\n==============================")
-    log("🧠 MEGABOT v8.3 FIXED BRAIN")
+    log("🧠 MEGABOT v8.3 FIXED CORE")
     log("==============================")
 
     log(f"FILES: {len(files)} | MODULES: {len(modules)}")
@@ -248,30 +248,26 @@ def build_cycle():
     # 🔗 CONNECTION BRAIN
     # =========================
 
-    if ENABLE_CONNECTION_BRAIN:
+    graph, weights = build_connection_graph(files, modules)
 
-        graph, weights = build_connection_graph(files, modules)
-
-        memory["connections"] = {k: list(v) for k, v in graph.items()}
-        memory["weights"] = weights
+    memory["connections"] = {k: list(v) for k, v in graph.items()}
+    memory["weights"] = weights
 
     # =========================
-    # 🧠 ARCH BRAIN (NEW CORE)
+    # 🧠 ARCH BRAIN (MAIN)
     # =========================
 
-    if ENABLE_ARCH_BRAIN:
+    brain = run_architecture_brain(files)
 
-        brain = run_architecture_brain(files)
+    memory["roles"] = brain["roles"]
+    memory["brain_node"] = brain["brain_node"]
+    memory["hubs"] = brain["hubs"]
+    memory["isolated"] = brain["isolated"]
 
-        memory["roles"] = brain["roles"]
-        memory["brain_node"] = brain["brain_node"]
-        memory["hubs"] = brain["hubs"]
-        memory["isolated"] = brain["isolated"]
-
-        log("\n🧠 ARCHITECTURE BRAIN")
-        log(f"BRAIN NODE: {brain['brain_node']}")
-        log(f"HUBS: {brain['hubs']}")
-        log(f"ISOLATED: {brain['isolated']}")
+    log("\n🧠 ARCHITECTURE BRAIN")
+    log(f"BRAIN NODE: {brain['brain_node']}")
+    log(f"HUBS: {brain['hubs']}")
+    log(f"ISOLATED: {len(brain['isolated'])}")
 
     # =========================
     # 🏗 ARCH COMPILER
@@ -286,14 +282,14 @@ def build_cycle():
     # 🧪 VALIDATION
     # =========================
 
-    s = validate(modules)
+    errors = validate(modules)
 
     memory["cycles"] += 1
 
     memory["history"].append({
         "cycle": memory["cycles"],
-        "syntax_failed": s,
-        "brain_node": memory.get("brain_node"),
+        "errors": errors,
+        "brain": memory["brain_node"],
         "hubs": len(memory["hubs"]),
         "isolated": len(memory["isolated"])
     })
@@ -305,7 +301,7 @@ def build_cycle():
     log("==============================")
 
     log(f"cycles={memory['cycles']}")
-    log(f"syntax_failed={s}")
+    log(f"errors={errors}")
 
 # =========================================================
 # ▶ RUN

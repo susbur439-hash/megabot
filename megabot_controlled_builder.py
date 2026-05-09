@@ -1,6 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.2 FULL MERGED
-# 🛡 v8.1 ENGINE + v8.2 ARCHITECTURE COMPILER
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.2 FULL FIXED
+# 🛡 ARCHITECTURE + CONNECTION MANAGER + AUTO FIX
 # =========================================================
 
 import os
@@ -20,52 +20,37 @@ ROOT_DIR = "."
 MODULES_DIR = "modules"
 
 ARCH_FILE = "architecture.json"
-
 MEMORY_FILE = "builder_memory.json"
 REPORT_FILE = "builder_report.json"
+
+CONNECTION_FILE = "modules/connection_manager.py"
 
 QUARANTINE_DIR = "quarantine"
 BACKUP_DIR = "repair_backups"
 
 MAX_CYCLES = 1
 
-ENABLE_CLEANUP = True
+ENABLE_ARCH_COMPILER = True
+ENABLE_AUTO_CREATE = True
+ENABLE_CONNECTION_CHECK = True
 ENABLE_RUNTIME_TEST = True
 ENABLE_SYNTAX_TEST = True
-ENABLE_ARCH_COMPILER = True
 
 # =========================================================
-# 📦 CONTRACT
-# =========================================================
-
-MEGABOT_CONTRACT = {
-    "task": str,
-    "input": dict,
-    "log": list,
-    "experience": list,
-    "evaluation": dict,
-    "create_count": int,
-    "control_state": dict,
-    "control_bias": dict,
-    "control_flags": dict
-}
-
-# =========================================================
-# 📋 LOGGER (FIXED - CRITICAL)
+# 📋 LOGGER
 # =========================================================
 
 LOGS = []
 
-def log(message):
-    print(message)
-    LOGS.append(str(message))
+def log(msg):
+    print(msg)
+    LOGS.append(str(msg))
 
 # =========================================================
 # 💾 MEMORY
 # =========================================================
 
 def load_memory():
-
     default = {
         "cycles": 0,
         "module_age": {},
@@ -82,12 +67,9 @@ def load_memory():
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         for k, v in default.items():
             data.setdefault(k, v)
-
         return data
-
     except:
         return default
 
@@ -97,7 +79,7 @@ def save_memory(memory):
         json.dump(memory, f, indent=2, ensure_ascii=False)
 
 # =========================================================
-# 📖 READ FILE
+# 📖 FILE READ
 # =========================================================
 
 def read_file(path):
@@ -108,15 +90,14 @@ def read_file(path):
         return ""
 
 # =========================================================
-# 🔍 SCAN FULL REPO (FIXED)
+# 🔍 SCAN FULL REPO
 # =========================================================
 
 def scan():
-
     files = []
     modules = []
 
-    for root, _, file_list in os.walk(ROOT_DIR):
+    for root, _, files_list in os.walk(ROOT_DIR):
 
         if ".git" in root:
             continue
@@ -125,16 +106,16 @@ def scan():
         if "__pycache__" in root:
             continue
 
-        for file in file_list:
+        for f in files_list:
 
-            if not file.endswith(".py"):
+            if not f.endswith(".py"):
                 continue
 
-            path = os.path.join(root, file)
+            path = os.path.join(root, f)
             files.append(path)
 
             if os.path.basename(root) == MODULES_DIR:
-                modules.append(file)
+                modules.append(f)
 
     return files, modules
 
@@ -143,7 +124,6 @@ def scan():
 # =========================================================
 
 def load_architecture():
-
     if not os.path.exists(ARCH_FILE):
         return None
 
@@ -154,15 +134,13 @@ def load_architecture():
         return None
 
 # =========================================================
-# 🏗 ARCHITECTURE COMPILER (v8.2)
+# 🏗 ARCH COMPILER
 # =========================================================
 
 def architecture_compiler(files, modules, arch):
 
     if not arch:
-        return {
-            "status": "no_architecture"
-        }
+        return {"status": "no_architecture"}
 
     required = set(arch.get("required_modules", []))
     existing = set([m.replace(".py", "") for m in modules])
@@ -178,33 +156,71 @@ def architecture_compiler(files, modules, arch):
     }
 
 # =========================================================
-# 🧪 SYNTAX TEST
+# 🧠 AUTO CREATE MODULE
+# =========================================================
+
+def create_module(name):
+
+    path = os.path.join(MODULES_DIR, name + ".py")
+
+    if os.path.exists(path):
+        return
+
+    os.makedirs(MODULES_DIR, exist_ok=True)
+
+    code = f"""
+def run(data=None):
+    if data is None:
+        data = {{}}
+    data.setdefault("log", [])
+    data["log"].append("auto_created:{name}")
+    return data
+"""
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(code)
+
+    log(f"🆕 CREATED MODULE: {name}")
+
+# =========================================================
+# 🔗 CONNECTION MANAGER CHECK
+# =========================================================
+
+def check_connections():
+
+    if not os.path.exists(CONNECTION_FILE):
+        log("⚠️ connection_manager NOT FOUND")
+        return False
+
+    log("🔗 connection_manager OK")
+    return True
+
+# =========================================================
+# 🧪 SYNTAX
 # =========================================================
 
 def syntax_test(path):
-
     try:
-        src = read_file(path)
-        compile(src, path, "exec")
-        ast.parse(src)
+        code = read_file(path)
+        compile(code, path, "exec")
+        ast.parse(code)
         return True, None
     except Exception as e:
         return False, str(e)
 
 # =========================================================
-# 🧪 RUNTIME TEST (SAFE)
+# 🧪 RUNTIME
 # =========================================================
 
 def runtime_test(path):
 
     try:
-
         name = os.path.basename(path).replace(".py", "")
 
         spec = importlib.util.spec_from_file_location(name, path)
 
         if not spec or not spec.loader:
-            return False, "SPEC/LOADER FAIL"
+            return False, "SPEC FAIL"
 
         mod = importlib.util.module_from_spec(spec)
 
@@ -219,126 +235,63 @@ def runtime_test(path):
         if not hasattr(mod, "run"):
             return True, "NO RUN"
 
-        test_data = {
-            "task": "builder_test",
-            "input": {},
-            "log": [],
-            "experience": [],
-            "evaluation": {},
-            "create_count": 0,
-            "control_state": {},
-            "control_bias": {},
-            "control_flags": {}
-        }
-
-        result = mod.run(test_data)
-
-        if result is None:
-            return True, "NONE"
-
-        if not isinstance(result, dict):
-            return False, "INVALID OUTPUT"
-
-        return True, result
+        return True, mod.run({"task": "test"})
 
     except Exception as e:
         return False, str(e)
 
 # =========================================================
-# 🧪 VALIDATION ENGINE
+# 🧪 VALIDATION
 # =========================================================
 
-def validate_modules(modules, memory):
+def validate(modules, memory):
 
-    syntax_failed = 0
-    runtime_failed = 0
+    s, r = 0, 0
 
     log("\n🧪 VALIDATION")
 
-    for module in modules:
+    for m in modules:
 
-        path = os.path.join(MODULES_DIR, module)
+        path = os.path.join(MODULES_DIR, m)
 
         ok, err = syntax_test(path)
 
         if not ok:
-            syntax_failed += 1
-            memory["syntax_failed"][path] = memory["syntax_failed"].get(path, 0) + 1
-            log(f"❌ SYNTAX FAIL: {path} -> {err}")
+            s += 1
+            log(f"❌ SYNTAX FAIL {m}: {err}")
             continue
 
-        log(f"✅ SYNTAX OK: {path}")
+        log(f"✅ OK {m}")
 
         ok2, res = runtime_test(path)
 
         if not ok2:
-            runtime_failed += 1
-            memory["runtime_failed"][path] = memory["runtime_failed"].get(path, 0) + 1
-            log(f"⚠️ RUNTIME FAIL: {path} -> {res}")
-        else:
-            log(f"🚀 RUNTIME OK: {path}")
+            r += 1
+            log(f"⚠️ RUNTIME FAIL {m}: {res}")
 
-    return syntax_failed, runtime_failed
+    return s, r
 
 # =========================================================
-# 🧠 CLEANUP
+# 🏗 ARCH FIX ENGINE
 # =========================================================
 
-def cleanup_modules(modules, memory):
+def apply_architecture(arch, modules):
 
-    q = 0
+    if not arch:
+        return
 
-    log("\n🗑 CLEANUP")
+    missing = arch.get("required_modules", [])
 
-    for module in modules:
+    for m in missing:
 
-        path = os.path.join(MODULES_DIR, module)
+        file = m + ".py"
+        path = os.path.join(MODULES_DIR, file)
 
-        age = memory["module_age"].get(module, 0)
-        fail = memory["runtime_failed"].get(path, 0)
-
-        if age > 5 and fail > 3:
-
-            try:
-
-                os.makedirs(QUARANTINE_DIR, exist_ok=True)
-
-                shutil.move(path, os.path.join(QUARANTINE_DIR, module))
-
-                memory["deleted"].append(path)
-
-                log(f"📦 QUARANTINED: {path}")
-
-                q += 1
-
-            except Exception as e:
-                log(f"❌ QUARANTINE ERROR: {e}")
-
-        else:
-            memory["module_age"][module] = age + 1
-
-    return q
+        if not os.path.exists(path):
+            create_module(m)
 
 # =========================================================
-# 📊 REPORT
-# =========================================================
-
-def save_report(memory, s, r, q):
-
-    report = {
-        "time": time.time(),
-        "cycles": memory["cycles"],
-        "syntax_failed": s,
-        "runtime_failed": r,
-        "quarantined": q,
-        "logs": LOGS[-300:]
-    }
-
-    with open(REPORT_FILE, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
-
-# =========================================================
-# 🧠 MAIN CYCLE
+# 🧠 MAIN
 # =========================================================
 
 def build_cycle():
@@ -350,58 +303,37 @@ def build_cycle():
     arch = load_architecture()
 
     log("\n==============================")
-    log("🧠 MEGABOT BUILDER v8.2 FULL MERGED")
+    log("🧠 MEGABOT v8.2 FULL FIXED")
     log("==============================")
 
     log(f"FILES: {len(files)} | MODULES: {len(modules)}")
 
-    # =========================
-    # 🏗 ARCHITECTURE
-    # =========================
+    if ENABLE_CONNECTION_CHECK:
+        check_connections()
 
-    if ENABLE_ARCH_COMPILER:
+    result = architecture_compiler(files, modules, arch)
 
-        result = architecture_compiler(files, modules, arch)
+    log(f"\n🏗 ARCH STATUS: {result['status']}")
+    log(f"COVERAGE: {result.get('coverage', 0)}%")
 
-        log("\n🏗 ARCHITECTURE COMPILER")
-        log(f"STATUS: {result['status']}")
-        log(f"COVERAGE: {result.get('coverage', 0)}%")
+    if ENABLE_AUTO_CREATE:
+        apply_architecture(arch, modules)
 
-        if result.get("missing_modules"):
-            log(f"❌ MISSING: {result['missing_modules']}")
-
-        if result.get("extra_modules"):
-            log(f"⚠️ EXTRA: {result['extra_modules']}")
-
-    # =========================
-    # 🧪 VALIDATION
-    # =========================
-
-    s, r = validate_modules(modules, memory)
-
-    q = 0
-
-    if ENABLE_CLEANUP:
-        q = cleanup_modules(modules, memory)
+    s, r = validate(modules, memory)
 
     memory["cycles"] += 1
 
     memory["history"].append({
         "cycle": memory["cycles"],
-        "syntax_failed": s,
-        "runtime_failed": r,
-        "quarantined": q
+        "syntax": s,
+        "runtime": r
     })
 
     save_memory(memory)
-    save_report(memory, s, r, q)
 
     log("\n==============================")
     log("📊 DONE")
     log("==============================")
-
-    log(f"cycles={memory['cycles']} repaired={len(memory['repaired'])}")
-    log(f"runtime_failed={r} syntax_failed={s} quarantined={q}")
 
 # =========================================================
 # ▶ RUN

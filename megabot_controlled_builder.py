@@ -1,6 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED CORE
-# 🧠 AST + ARCH BRAIN SYNC + CONTROLLED GRAPH
+# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED CORE++
+# 🧠 AST + ARCH BRAIN + REVERSE GRAPH + WEIGHTED SYNC
 # =========================================================
 
 import os
@@ -8,8 +8,6 @@ import json
 import traceback
 import importlib.util
 import ast
-import sys
-import time
 
 from modules.architecture_brain import analyze
 
@@ -21,34 +19,26 @@ ROOT_DIR = "."
 MODULES_DIR = "modules"
 
 ARCH_FILE = "architecture.json"
-
 MEMORY_FILE = "builder_memory.json"
 
 MAX_CYCLES = 1
 
-ENABLE_CONNECTION_BRAIN = True
-ENABLE_ARCH_BRAIN = True
-ENABLE_ARCH_COMPILER = True
-
 # =========================================================
-# 📋 LOGGER
+# 📋 LOG
 # =========================================================
-
-LOGS = []
 
 def log(msg):
     print(msg)
-    LOGS.append(str(msg))
 
 # =========================================================
 # 💾 MEMORY
 # =========================================================
 
 def load_memory():
-
     default = {
         "cycles": 0,
         "connections": {},
+        "reverse_connections": {},
         "weights": {},
         "roles": {},
         "brain_node": None,
@@ -63,12 +53,9 @@ def load_memory():
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         for k, v in default.items():
             data.setdefault(k, v)
-
         return data
-
     except:
         return default
 
@@ -78,7 +65,7 @@ def save_memory(memory):
         json.dump(memory, f, indent=2, ensure_ascii=False)
 
 # =========================================================
-# 📖 READ FILE
+# 📖 FILE
 # =========================================================
 
 def read_file(path):
@@ -93,19 +80,14 @@ def read_file(path):
 # =========================================================
 
 def scan():
+    files, modules = [], []
 
-    files = []
-    modules = []
+    for root, _, files_list in os.walk(ROOT_DIR):
 
-    for root, _, file_list in os.walk(ROOT_DIR):
-
-        if ".git" in root:
-            continue
-        if "__pycache__" in root:
+        if ".git" in root or "__pycache__" in root:
             continue
 
-        for f in file_list:
-
+        for f in files_list:
             if not f.endswith(".py"):
                 continue
 
@@ -118,23 +100,21 @@ def scan():
     return files, modules
 
 # =========================================================
-# 🧠 CONNECTION GRAPH (AST)
+# 🧠 AST IMPORTS
 # =========================================================
 
 def extract_imports(code):
-
     imports = set()
 
     try:
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
-
             if isinstance(node, ast.Import):
                 for n in node.names:
                     imports.add(n.name.split(".")[0])
 
-            if isinstance(node, ast.ImportFrom):
+            elif isinstance(node, ast.ImportFrom):
                 if node.module:
                     imports.add(node.module.split(".")[0])
 
@@ -143,78 +123,77 @@ def extract_imports(code):
 
     return imports
 
+# =========================================================
+# 🔗 CONNECTION GRAPH + REVERSE GRAPH
+# =========================================================
 
-def build_connection_graph(files, modules):
+def build_graph(files, modules):
 
     graph = {m: set() for m in modules}
+    reverse = {m: set() for m in modules}
     weights = {m: 0 for m in modules}
+
+    module_names = {m.replace(".py", "") for m in modules}
 
     for file in files:
 
         code = read_file(file)
         imports = extract_imports(code)
 
-        for module in modules:
-
-            name = module.replace(".py", "")
+        for m in modules:
+            name = m.replace(".py", "")
 
             if name in imports:
-                graph[module].add(name)
-                weights[module] += 1
+                graph[m].add(name)
+                weights[m] += 1
 
-    return graph, weights
+                if name in reverse:
+                    reverse[name].add(m.replace(".py", ""))
+
+    return graph, reverse, weights
 
 # =========================================================
-# 🧠 ARCH BRAIN SYNC (FIXED CORE)
+# 🧠 ARCH BRAIN SYNC
 # =========================================================
 
-def run_architecture_brain(files):
-
+def run_arch(files):
     result = analyze(files)
 
     return {
         "graph": result["graph"],
         "roles": result["roles"],
-        "brain_node": result["brain"],
+        "brain": result["brain"],
         "hubs": result["hubs"],
         "isolated": result["isolated"]
     }
 
 # =========================================================
-# 🧠 ARCH COMPILER
+# 🧠 IMPROVED HUB DETECTION
 # =========================================================
 
-def architecture_compiler(files, modules, arch):
+def compute_hubs(graph, reverse, weights):
 
-    if not arch:
-        return {"status": "no_architecture"}
+    hubs = []
 
-    required = set(arch.get("required_modules", []))
-    existing = set([m.replace(".py", "") for m in modules])
+    for node in graph:
 
-    missing = required - existing
-    extra = existing - required
+        score = len(graph[node]) + len(reverse.get(node.replace(".py",""), [])) + weights.get(node, 0)
 
-    return {
-        "status": "ok" if not missing else "incomplete",
-        "missing_modules": list(missing),
-        "extra_modules": list(extra),
-        "coverage": round(len(existing & required) / max(len(required), 1) * 100, 2)
-    }
+        if score >= 3:
+            hubs.append(node)
+
+    return hubs
 
 # =========================================================
 # 🧪 VALIDATION
 # =========================================================
 
 def validate(modules):
-
     errors = 0
 
     for m in modules:
-
-        path = os.path.join(MODULES_DIR, m)
-
         try:
+            path = os.path.join(MODULES_DIR, m)
             code = read_file(path)
             compile(code, path, "exec")
             ast.parse(code)
@@ -233,53 +212,42 @@ def build_cycle():
 
     files, modules = scan()
 
-    arch = None
-    if os.path.exists(ARCH_FILE):
-        with open(ARCH_FILE, "r", encoding="utf-8") as f:
-            arch = json.load(f)
-
     log("\n==============================")
-    log("🧠 MEGABOT v8.3 FIXED CORE")
+    log("🧠 MEGABOT v8.3 FIXED CORE++")
     log("==============================")
 
     log(f"FILES: {len(files)} | MODULES: {len(modules)}")
 
     # =========================
-    # 🔗 CONNECTION BRAIN
+    # GRAPH
     # =========================
 
-    graph, weights = build_connection_graph(files, modules)
+    graph, reverse, weights = build_graph(files, modules)
 
+    # =========================
+    # ARCH BRAIN
+    # =========================
+
+    brain = run_arch(files)
+
+    hubs = compute_hubs(graph, reverse, weights)
+
+    # merge intelligence
     memory["connections"] = {k: list(v) for k, v in graph.items()}
+    memory["reverse_connections"] = {k: list(v) for k, v in reverse.items()}
     memory["weights"] = weights
-
-    # =========================
-    # 🧠 ARCH BRAIN (MAIN)
-    # =========================
-
-    brain = run_architecture_brain(files)
-
     memory["roles"] = brain["roles"]
-    memory["brain_node"] = brain["brain_node"]
-    memory["hubs"] = brain["hubs"]
+    memory["brain_node"] = brain["brain"]
+    memory["hubs"] = hubs
     memory["isolated"] = brain["isolated"]
 
-    log("\n🧠 ARCHITECTURE BRAIN")
-    log(f"BRAIN NODE: {brain['brain_node']}")
-    log(f"HUBS: {brain['hubs']}")
+    log("\n🧠 ARCH BRAIN")
+    log(f"BRAIN NODE: {brain['brain']}")
+    log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(brain['isolated'])}")
 
     # =========================
-    # 🏗 ARCH COMPILER
-    # =========================
-
-    result = architecture_compiler(files, modules, arch)
-
-    log(f"\n🏗 ARCH STATUS: {result['status']}")
-    log(f"COVERAGE: {result.get('coverage', 0)}%")
-
-    # =========================
-    # 🧪 VALIDATION
+    # VALIDATION
     # =========================
 
     errors = validate(modules)
@@ -290,7 +258,7 @@ def build_cycle():
         "cycle": memory["cycles"],
         "errors": errors,
         "brain": memory["brain_node"],
-        "hubs": len(memory["hubs"]),
+        "hubs": len(hubs),
         "isolated": len(memory["isolated"])
     })
 
@@ -308,7 +276,6 @@ def build_cycle():
 # =========================================================
 
 if __name__ == "__main__":
-
     try:
         for _ in range(MAX_CYCLES):
             build_cycle()

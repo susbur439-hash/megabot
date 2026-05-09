@@ -1,5 +1,5 @@
 {
-  "version": "10.0_full",
+  "version": "10.1_builder_ready",
 
   "core_loop": [
     "task",
@@ -116,8 +116,38 @@
 
   "evolution": {
     "enabled": true,
-    "allow_structure_changes": true,
+    "allow_structure_changes": false,
     "allow_new_modules": true,
     "allow_refactoring": true
+  },
+
+  "module_interface": {
+    "input_format": ["task", "state", "context"],
+    "output_format": ["result", "log", "status"],
+    "return_type": "dict"
+  },
+
+  "data_flow": {
+    "task": "immutable",
+    "state": "mutable",
+    "context": "shared",
+    "result": "module_output"
+  },
+
+  "priority": {
+    "system_guard": 100,
+    "control_layer": 95,
+    "execution": 80,
+    "decision": 70,
+    "planning": 65,
+    "analysis": 60,
+    "learning": 55
+  },
+
+  "failure_policy": {
+    "retry": true,
+    "max_retries": 3,
+    "fallback": "analysis",
+    "on_crash": "safe_mode"
   }
 }

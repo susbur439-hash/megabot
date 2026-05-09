@@ -21,54 +21,65 @@ except:
 
 
 # =========================
-# 🧠 SAFE NORMALIZE INPUT
+# 🧠 DATA CONTRACT v1 NORMALIZER
 # =========================
 def normalize_task(task):
     """
-    Всегда приводим вход к строке
-    чтобы не падал .lower()
+    ЕДИНЫЙ КОНТРАКТ ДЛЯ ВСЕГО MEGABOT
     """
 
-    if task is None:
-        return ""
-
+    # -------------------------
+    # string input
+    # -------------------------
     if isinstance(task, str):
-        return task
+        text = task
 
-    if isinstance(task, dict):
-        # пробуем извлечь текст
-        return (
+    # -------------------------
+    # dict input
+    # -------------------------
+    elif isinstance(task, dict):
+
+        text = (
             task.get("task")
             or task.get("input")
             or json.dumps(task, ensure_ascii=False)
         )
 
-    return str(task)
-
-
-# =========================
-# 🧠 Анализ задачи
-# =========================
-def analyze(task) -> dict:
-
-    task_str = normalize_task(task)
-    t = task_str.lower()
+    # -------------------------
+    # fallback
+    # -------------------------
+    else:
+        text = str(task)
 
     return {
         "raw": task,
-        "normalized": task_str,
-        "is_system": any(k in t for k in [
+        "text": text,
+        "lower": text.lower(),
+        "original": task
+    }
+
+
+# =========================
+# 🧠 ANALYSIS LAYER
+# =========================
+def analyze(task) -> dict:
+
+    t = normalize_task(task)
+
+    return {
+        **t,
+        "is_system": any(k in t["lower"] for k in [
             "system", "list", "modules", "router",
             "status", "scan", "repo", "health", "debug", "logs"
         ]),
-        "needs_external": any(k in t for k in [
+        "needs_external": any(k in t["lower"] for k in [
             "search", "internet", "learn", "external"
         ])
     }
 
 
 # =========================
-# 🧠 Выбор стратегии
+# 🧠 STRATEGY DECISION
 # =========================
 def decide_strategy(analysis: dict) -> str:
 
@@ -82,23 +93,26 @@ def decide_strategy(analysis: dict) -> str:
 
 
 # =========================
-# ⚙️ Выполнение
+# ⚙️ EXECUTION LAYER
 # =========================
-def execute(strategy: str, task):
+def execute(strategy: str, analysis: dict):
 
-    print(f"[CentralDecision] strategy={strategy} task_type={type(task)}")
+    print(f"[CentralDecision] strategy={strategy}")
 
-    if strategy == "external":
+    # 🌐 external
+    if strategy == "external" and gateway:
         print("[CentralDecision] → External Gateway")
-        return gateway.call("search", normalize_task(task))
+        return gateway.call("search", analysis["text"])
 
+    # ⚙️ engine
     if strategy == "engine" and engine_run:
         print("[CentralDecision] → Engine selected")
-        return engine_run(task)
+        return engine_run(analysis)
 
+    # 🧠 director
     if director_run:
         print("[CentralDecision] → Director selected")
-        return director_run(task)
+        return director_run(analysis)
 
     return {
         "status": "error",
@@ -114,4 +128,4 @@ def run(task):
     analysis = analyze(task)
     strategy = decide_strategy(analysis)
 
-    return execute(strategy, task)
+    return execute(strategy, analysis)

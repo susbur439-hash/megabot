@@ -1,23 +1,42 @@
 import json
 
 # =========================
-# 🧠 Подключение ядер
+# 🧠 SAFE IMPORTS
 # =========================
+director_run = None
+engine_run = None
+gateway = None
+
+# -------------------------
+# Director
+# -------------------------
 try:
     from modules.director import run as director_run
-except:
-    director_run = None
+    print("[CentralDecision] Director loaded")
+except Exception as e:
+    print(f"[CentralDecision] Director load failed: {e}")
 
+# -------------------------
+# Engine
+# -------------------------
 try:
     from modules.engine import run as engine_run
-except:
-    engine_run = None
+    print("[CentralDecision] Engine loaded")
+except Exception as e:
+    print(f"[CentralDecision] Engine load failed: {e}")
 
+# -------------------------
+# External Gateway
+# -------------------------
 try:
     from external_gateway import ExternalGateway
+
     gateway = ExternalGateway()
-except:
-    gateway = None
+
+    print("[CentralDecision] External Gateway loaded")
+
+except Exception as e:
+    print(f"[CentralDecision] External Gateway failed: {e}")
 
 
 # =========================
@@ -29,27 +48,36 @@ def normalize_task(task):
     """
 
     # -------------------------
-    # string input
+    # STRING INPUT
     # -------------------------
     if isinstance(task, str):
-        text = task
+
+        text = task.strip()
 
     # -------------------------
-    # dict input
+    # DICT INPUT
     # -------------------------
     elif isinstance(task, dict):
 
         text = (
             task.get("task")
             or task.get("input")
+            or task.get("text")
             or json.dumps(task, ensure_ascii=False)
         )
 
     # -------------------------
-    # fallback
+    # FALLBACK
     # -------------------------
     else:
+
         text = str(task)
+
+    # -------------------------
+    # SAFETY
+    # -------------------------
+    if not isinstance(text, str):
+        text = str(text)
 
     return {
         "raw": task,
@@ -66,15 +94,40 @@ def analyze(task) -> dict:
 
     t = normalize_task(task)
 
+    system_keywords = [
+        "system",
+        "list",
+        "modules",
+        "router",
+        "status",
+        "scan",
+        "repo",
+        "health",
+        "debug",
+        "logs"
+    ]
+
+    external_keywords = [
+        "search",
+        "internet",
+        "learn",
+        "external",
+        "google",
+        "web"
+    ]
+
     return {
         **t,
-        "is_system": any(k in t["lower"] for k in [
-            "system", "list", "modules", "router",
-            "status", "scan", "repo", "health", "debug", "logs"
-        ]),
-        "needs_external": any(k in t["lower"] for k in [
-            "search", "internet", "learn", "external"
-        ])
+
+        "is_system": any(
+            k in t["lower"]
+            for k in system_keywords
+        ),
+
+        "needs_external": any(
+            k in t["lower"]
+            for k in external_keywords
+        )
     }
 
 
@@ -83,13 +136,20 @@ def analyze(task) -> dict:
 # =========================
 def decide_strategy(analysis: dict) -> str:
 
-    if analysis["needs_external"] and gateway:
+    # 🌐 External
+    if analysis.get("needs_external") and gateway:
         return "external"
 
-    if analysis["is_system"]:
+    # ⚙️ System / Engine
+    if analysis.get("is_system") and engine_run:
         return "engine"
 
-    return "director"
+    # 🧠 Default Director
+    if director_run:
+        return "director"
+
+    # ❌ Nothing available
+    return "none"
 
 
 # =========================
@@ -99,23 +159,90 @@ def execute(strategy: str, analysis: dict):
 
     print(f"[CentralDecision] strategy={strategy}")
 
-    # 🌐 external
-    if strategy == "external" and gateway:
-        print("[CentralDecision] → External Gateway")
-        return gateway.call("search", analysis["text"])
+    # -------------------------
+    # 🌐 EXTERNAL
+    # -------------------------
+    if strategy == "external":
 
-    # ⚙️ engine
-    if strategy == "engine" and engine_run:
-        print("[CentralDecision] → Engine selected")
-        return engine_run(analysis)
+        try:
 
-    # 🧠 director
-    if director_run:
-        print("[CentralDecision] → Director selected")
-        return director_run(analysis)
+            print("[CentralDecision] → External Gateway")
 
+            result = gateway.call(
+                "search",
+                analysis["text"]
+            )
+
+            return {
+                "status": "success",
+                "strategy": strategy,
+                "result": result
+            }
+
+        except Exception as e:
+
+            return {
+                "status": "error",
+                "strategy": strategy,
+                "message": f"External execution failed: {e}"
+            }
+
+    # -------------------------
+    # ⚙️ ENGINE
+    # -------------------------
+    if strategy == "engine":
+
+        try:
+
+            print("[CentralDecision] → Engine selected")
+
+            result = engine_run(analysis)
+
+            return {
+                "status": "success",
+                "strategy": strategy,
+                "result": result
+            }
+
+        except Exception as e:
+
+            return {
+                "status": "error",
+                "strategy": strategy,
+                "message": f"Engine execution failed: {e}"
+            }
+
+    # -------------------------
+    # 🧠 DIRECTOR
+    # -------------------------
+    if strategy == "director":
+
+        try:
+
+            print("[CentralDecision] → Director selected")
+
+            result = director_run(analysis)
+
+            return {
+                "status": "success",
+                "strategy": strategy,
+                "result": result
+            }
+
+        except Exception as e:
+
+            return {
+                "status": "error",
+                "strategy": strategy,
+                "message": f"Director execution failed: {e}"
+            }
+
+    # -------------------------
+    # ❌ FALLBACK
+    # -------------------------
     return {
         "status": "error",
+        "strategy": strategy,
         "message": "No execution layer available"
     }
 
@@ -125,7 +252,34 @@ def execute(strategy: str, analysis: dict):
 # =========================
 def run(task):
 
-    analysis = analyze(task)
-    strategy = decide_strategy(analysis)
+    try:
 
-    return execute(strategy, analysis)
+        analysis = analyze(task)
+
+        print(f"[CentralDecision] task={analysis['text']}")
+
+        strategy = decide_strategy(analysis)
+
+        return execute(strategy, analysis)
+
+    except Exception as e:
+
+        return {
+            "status": "fatal_error",
+            "message": str(e)
+        }
+
+
+# =========================
+# 🧪 LOCAL TEST
+# =========================
+if __name__ == "__main__":
+
+    test_task = {
+        "task": "scan repo status"
+    }
+
+    result = run(test_task)
+
+    print("\n=== RESULT ===")
+    print(json.dumps(result, indent=2, ensure_ascii=False))

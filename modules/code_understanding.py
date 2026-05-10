@@ -39,15 +39,16 @@ def read_file(path):
 # =========================================================
 
 def scan_repo():
+
     files = []
 
     for root, dirs, filenames in os.walk(ROOT_DIR):
 
-        # ignore system dirs
-        if any(x in root for x in IGNORE_DIRS):
-            continue
+        # ignore dirs
+        dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
 
         for f in filenames:
+
             if f.endswith(".py"):
                 files.append(os.path.join(root, f))
 
@@ -70,40 +71,54 @@ def analyze_ast(code):
     }
 
     try:
+
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
 
             # imports
             if isinstance(node, ast.Import):
+
                 for n in node.names:
-                    result["imports"].add(n.name.split(".")[0])
+                    result["imports"].add(
+                        n.name.split(".")[0]
+                    )
 
             elif isinstance(node, ast.ImportFrom):
+
                 if node.module:
-                    result["imports"].add(node.module.split(".")[0])
+                    result["imports"].add(
+                        node.module.split(".")[0]
+                    )
 
             # functions
             elif isinstance(node, ast.FunctionDef):
+
                 result["functions"].append(node.name)
 
                 if node.name == "run":
                     result["has_run"] = True
+
                 if "decide" in node.name:
                     result["has_decide"] = True
+
                 if "execute" in node.name:
                     result["has_execute"] = True
+
                 if node.name == "main":
                     result["has_main"] = True
 
             # classes
             elif isinstance(node, ast.ClassDef):
+
                 result["classes"].append(node.name)
 
-    except:
-        pass
+    except Exception as e:
+
+        result["parse_error"] = str(e)
 
     result["imports"] = list(result["imports"])
+
     return result
 
 # =========================================================
@@ -135,7 +150,6 @@ def classify_role(ast_data, filename):
     if "module_" in name:
         return "generated_module"
 
-    # AST-based fallback
     if ast_data["has_execute"]:
         return "execution_module"
 
@@ -163,7 +177,7 @@ def build_graph(files_data):
     return graph
 
 # =========================================================
-# 🧠 CORE ANALYSIS
+# 🧠 ANALYZE REPOSITORY
 # =========================================================
 
 def analyze_repo():
@@ -177,9 +191,13 @@ def analyze_repo():
     for f in files:
 
         code = read_file(f)
+
         ast_data = analyze_ast(code)
 
-        role = classify_role(ast_data, os.path.basename(f))
+        role = classify_role(
+            ast_data,
+            os.path.basename(f)
+        )
 
         files_data[f] = {
             "ast": ast_data,
@@ -191,7 +209,7 @@ def analyze_repo():
     return files_data, graph
 
 # =========================================================
-# 🧠 SYSTEM SUMMARY
+# 🧠 SUMMARY
 # =========================================================
 
 def build_summary(files_data, graph):
@@ -199,14 +217,21 @@ def build_summary(files_data, graph):
     roles = defaultdict(list)
 
     for f, data in files_data.items():
+
         roles[data["role"]].append(f)
 
     return {
         "total_files": len(files_data),
         "roles": dict(roles),
         "graph_size": len(graph),
-        "brain_candidates": roles.get("decision_orchestrator", []),
-        "execution_candidates": roles.get("execution_core", [])
+        "brain_candidates": roles.get(
+            "decision_orchestrator",
+            []
+        ),
+        "execution_candidates": roles.get(
+            "execution_core",
+            []
+        )
     }
 
 # =========================================================
@@ -215,11 +240,18 @@ def build_summary(files_data, graph):
 
 def save(result):
 
-    try:
-        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-    except:
-        pass
+    with open(
+        MEMORY_FILE,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            result,
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
 
 # =========================================================
 # 🚀 RUN
@@ -229,11 +261,17 @@ def run():
 
     files_data, graph = analyze_repo()
 
-    summary = build_summary(files_data, graph)
+    summary = build_summary(
+        files_data,
+        graph
+    )
 
     result = {
         "files": files_data,
-        "graph": {k: list(v) for k, v in graph.items()},
+        "graph": {
+            k: list(v)
+            for k, v in graph.items()
+        },
         "summary": summary
     }
 
@@ -242,12 +280,26 @@ def run():
     log("==============================")
 
     log(f"FILES: {summary['total_files']}")
-    log(f"ROLES: {list(summary['roles'].keys())}")
+    log(f"GRAPH SIZE: {summary['graph_size']}")
 
-    log(f"BRAIN CANDIDATES: {summary['brain_candidates']}")
-    log(f"EXECUTION CANDIDATES: {summary['execution_candidates']}")
+    log(
+        f"ROLES: "
+        f"{list(summary['roles'].keys())}"
+    )
+
+    log(
+        f"BRAIN CANDIDATES: "
+        f"{summary['brain_candidates']}"
+    )
+
+    log(
+        f"EXECUTION CANDIDATES: "
+        f"{summary['execution_candidates']}"
+    )
 
     save(result)
+
+    log(f"\n💾 SAVED -> {MEMORY_FILE}")
 
     return result
 
@@ -256,6 +308,4 @@ def run():
 # =========================================================
 
 if __name__ == "__main__":
-    run()
-  if __name__ == "__main__":
     run()

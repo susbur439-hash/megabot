@@ -1,5 +1,5 @@
 # =========================================================
-# 🧠 MEGABOT CODE UNDERSTANDING LAYER v1
+# 🧠 MEGABOT CODE UNDERSTANDING LAYER v2
 # 🧠 STRUCTURE + AST + ROLES + GRAPH + SUMMARY
 # =========================================================
 
@@ -13,7 +13,12 @@ from collections import defaultdict
 # =========================================================
 
 ROOT_DIR = "."
-IGNORE_DIRS = {".git", "__pycache__", ".venv"}
+IGNORE_DIRS = {
+    ".git",
+    "__pycache__",
+    ".venv"
+}
+
 MEMORY_FILE = "code_understanding.json"
 
 # =========================================================
@@ -28,9 +33,12 @@ def log(msg):
 # =========================================================
 
 def read_file(path):
+
     try:
+
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
+
     except:
         return ""
 
@@ -45,12 +53,18 @@ def scan_repo():
     for root, dirs, filenames in os.walk(ROOT_DIR):
 
         # ignore dirs
-        dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
+        dirs[:] = [
+            d for d in dirs
+            if d not in IGNORE_DIRS
+        ]
 
         for f in filenames:
 
             if f.endswith(".py"):
-                files.append(os.path.join(root, f))
+
+                files.append(
+                    os.path.join(root, f)
+                )
 
     return files
 
@@ -67,7 +81,8 @@ def analyze_ast(code):
         "has_run": False,
         "has_decide": False,
         "has_execute": False,
-        "has_main": False
+        "has_main": False,
+        "parse_error": None
     }
 
     try:
@@ -76,10 +91,14 @@ def analyze_ast(code):
 
         for node in ast.walk(tree):
 
+            # =========================
             # imports
+            # =========================
+
             if isinstance(node, ast.Import):
 
                 for n in node.names:
+
                     result["imports"].add(
                         n.name.split(".")[0]
                     )
@@ -87,14 +106,20 @@ def analyze_ast(code):
             elif isinstance(node, ast.ImportFrom):
 
                 if node.module:
+
                     result["imports"].add(
                         node.module.split(".")[0]
                     )
 
+            # =========================
             # functions
+            # =========================
+
             elif isinstance(node, ast.FunctionDef):
 
-                result["functions"].append(node.name)
+                result["functions"].append(
+                    node.name
+                )
 
                 if node.name == "run":
                     result["has_run"] = True
@@ -108,16 +133,23 @@ def analyze_ast(code):
                 if node.name == "main":
                     result["has_main"] = True
 
+            # =========================
             # classes
+            # =========================
+
             elif isinstance(node, ast.ClassDef):
 
-                result["classes"].append(node.name)
+                result["classes"].append(
+                    node.name
+                )
 
     except Exception as e:
 
         result["parse_error"] = str(e)
 
-    result["imports"] = list(result["imports"])
+    result["imports"] = list(
+        result["imports"]
+    )
 
     return result
 
@@ -147,8 +179,18 @@ def classify_role(ast_data, filename):
     if "decision" in name:
         return "decision_layer"
 
+    if "learning" in name:
+        return "learning_layer"
+
+    if "memory" in name:
+        return "memory_layer"
+
     if "module_" in name:
         return "generated_module"
+
+    # =========================
+    # AST fallback
+    # =========================
 
     if ast_data["has_execute"]:
         return "execution_module"
@@ -172,12 +214,13 @@ def build_graph(files_data):
     for file, data in files_data.items():
 
         for imp in data["ast"]["imports"]:
+
             graph[file].add(imp)
 
     return graph
 
 # =========================================================
-# 🧠 ANALYZE REPOSITORY
+# 🧠 ANALYZE REPO
 # =========================================================
 
 def analyze_repo():
@@ -200,8 +243,8 @@ def analyze_repo():
         )
 
         files_data[f] = {
-            "ast": ast_data,
-            "role": role
+            "role": role,
+            "ast": ast_data
         }
 
     graph = build_graph(files_data)
@@ -221,17 +264,24 @@ def build_summary(files_data, graph):
         roles[data["role"]].append(f)
 
     return {
+
         "total_files": len(files_data),
+
         "roles": dict(roles),
+
         "graph_size": len(graph),
-        "brain_candidates": roles.get(
-            "decision_orchestrator",
-            []
-        ),
-        "execution_candidates": roles.get(
-            "execution_core",
-            []
-        )
+
+        "brain_candidates":
+            roles.get(
+                "decision_orchestrator",
+                []
+            ),
+
+        "execution_candidates":
+            roles.get(
+                "execution_core",
+                []
+            )
     }
 
 # =========================================================
@@ -239,6 +289,10 @@ def build_summary(files_data, graph):
 # =========================================================
 
 def save(result):
+
+    # =========================
+    # save json
+    # =========================
 
     with open(
         MEMORY_FILE,
@@ -252,6 +306,30 @@ def save(result):
             indent=2,
             ensure_ascii=False
         )
+
+    log(f"💾 SAVED -> {MEMORY_FILE}")
+
+    # =========================
+    # auto github save
+    # =========================
+
+    try:
+
+        os.system(
+            "git add code_understanding.json"
+        )
+
+        os.system(
+            'git commit -m "update code understanding"'
+        )
+
+        os.system("git push")
+
+        log("🚀 GITHUB MEMORY UPDATED")
+
+    except Exception as e:
+
+        log(f"⚠️ Git save failed: {e}")
 
 # =========================================================
 # 🚀 RUN
@@ -267,11 +345,14 @@ def run():
     )
 
     result = {
+
         "files": files_data,
+
         "graph": {
             k: list(v)
             for k, v in graph.items()
         },
+
         "summary": summary
     }
 
@@ -279,8 +360,15 @@ def run():
     log("🧠 CODE UNDERSTANDING COMPLETE")
     log("==============================")
 
-    log(f"FILES: {summary['total_files']}")
-    log(f"GRAPH SIZE: {summary['graph_size']}")
+    log(
+        f"FILES: "
+        f"{summary['total_files']}"
+    )
+
+    log(
+        f"GRAPH SIZE: "
+        f"{summary['graph_size']}"
+    )
 
     log(
         f"ROLES: "
@@ -298,8 +386,6 @@ def run():
     )
 
     save(result)
-
-    log(f"\n💾 SAVED -> {MEMORY_FILE}")
 
     return result
 

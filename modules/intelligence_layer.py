@@ -111,13 +111,34 @@ def query(question: str):
 
 
 # =========================
-# ▶ ENTRY POINT (FIXED)
+# 🔌 ROUTER COMPATIBILITY FIX
+# =========================
+def run(data):
+
+    """
+    Это ОБЯЗАТЕЛЬНО для ModuleRouter.
+    Router вызывает module.run(data)
+    """
+
+    # поддержка разных входов
+    if isinstance(data, dict):
+        question = data.get("question") or data.get("task") or str(data)
+    else:
+        question = str(data)
+
+    return {
+        "status": "ok",
+        "module": "intelligence_layer",
+        "result": query(question)
+    }
+
+
+# =========================
+# ▶ ENTRY POINT
 # =========================
 if __name__ == "__main__":
 
-    # =========================
     # CI / GitHub MODE
-    # =========================
     if len(sys.argv) > 1:
 
         question = " ".join(sys.argv[1:])
@@ -126,9 +147,7 @@ if __name__ == "__main__":
         print("\n📊 RESULT:\n")
         print(result)
 
-    # =========================
-    # LOCAL MODE
-    # =========================
+    # LOCAL MODE (без падений в CI)
     else:
 
         print("🧠 Megabot Intelligence Layer (local mode)")
@@ -145,5 +164,4 @@ if __name__ == "__main__":
                 print(query(q))
 
             except EOFError:
-                print("\n⚠️ No interactive input available")
                 break

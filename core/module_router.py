@@ -17,6 +17,7 @@ class ModuleRouter:
     def __init__(self):
 
         self.modules = {}
+        self.failed_modules = {}
 
         self.load_modules()
 
@@ -31,16 +32,10 @@ class ModuleRouter:
         print("[Router] Loading modules...")
 
         if not os.path.exists(modules_path):
-
             print("[Router] ERROR: modules folder not found")
-
             return
 
         for file in os.listdir(modules_path):
-
-            # -------------------------------------------------
-            # ONLY PY FILES
-            # -------------------------------------------------
 
             if not file.endswith(".py"):
                 continue
@@ -54,75 +49,46 @@ class ModuleRouter:
 
                 module_path = f"modules.{module_name}"
 
-                # -------------------------------------------------
-                # IMPORT
-                # -------------------------------------------------
-
                 module = importlib.import_module(module_path)
-
-                # reload-safe
                 importlib.reload(module)
 
-                # -------------------------------------------------
-                # RUN CHECK
-                # -------------------------------------------------
+                # =========================
+                # CONTRACT CHECK (ВАЖНО)
+                # =========================
+                if not hasattr(module, "run"):
 
-                if hasattr(module, "run"):
+                    self.failed_modules[module_name] = "NO_RUN_FUNCTION"
 
-                    self.modules[module_name] = module
+                    print(f"[Router] ⚠ skipped (no run): {module_name}")
+                    continue
 
-                    # =============================================
-                    # 🧠 REGISTRY SYNC
-                    # =============================================
+                self.modules[module_name] = module
 
-                    if register_module:
+                if register_module:
 
-                        try:
+                    try:
+                        register_module(module_name, module)
 
-                            register_module(
-                                module_name,
-                                module
-                            )
+                    except Exception as e:
+                        print(f"[Registry] register failed: {e}")
 
-                        except Exception as e:
-
-                            print(
-                                f"[Registry] "
-                                f"register failed: {e}"
-                            )
-
-                    print(
-                        f"[Router] ✅ loaded: "
-                        f"{module_name}"
-                    )
-
-                else:
-
-                    print(
-                        f"[Router] ⚠ skipped: "
-                        f"{module_name}"
-                    )
+                print(f"[Router] ✅ loaded: {module_name}")
 
             except Exception as e:
 
-                print(
-                    f"[Router] ❌ error "
-                    f"{module_name}: {e}"
-                )
+                self.failed_modules[module_name] = str(e)
 
+                print(f"[Router] ❌ error {module_name}: {e}")
                 traceback.print_exc()
 
-        print(
-            f"[Router] Total modules loaded: "
-            f"{len(self.modules)}"
-        )
+        print(f"[Router] Total modules loaded: {len(self.modules)}")
+        print(f"[Router] Failed modules: {len(self.failed_modules)}")
 
     # =====================================================
     # 📋 LIST
     # =====================================================
 
     def list_modules(self):
-
         return list(self.modules.keys())
 
     # =====================================================
@@ -132,12 +98,14 @@ class ModuleRouter:
     def reload_modules(self):
 
         self.modules = {}
+        self.failed_modules = {}
 
         self.load_modules()
 
         return {
             "status": "reloaded",
-            "modules": self.list_modules()
+            "modules": self.list_modules(),
+            "failed": self.failed_modules
         }
 
     # =====================================================
@@ -147,35 +115,26 @@ class ModuleRouter:
     def route(self, command):
 
         if not isinstance(command, dict):
-
-            return self._error(
-                "Command must be dict"
-            )
+            return self._error("Command must be dict")
 
         module_name = command.get("module")
-
         data = command.get("data", {})
 
         if not module_name:
-
-            return self._error(
-                "No module specified"
-            )
+            return self._error("No module specified")
 
         if module_name not in self.modules:
-
-            return self._error(
-                f"Module not found: {module_name}"
-            )
+            return {
+                "status": "error",
+                "message": f"Module not found: {module_name}",
+                "hint": "Check modules folder or module name"
+            }
 
         try:
 
             module = self.modules[module_name]
 
-            print(
-                f"[Router] EXECUTE -> "
-                f"{module_name}"
-            )
+            print(f"[Router] EXECUTE -> {module_name}")
 
             result = module.run(data)
 

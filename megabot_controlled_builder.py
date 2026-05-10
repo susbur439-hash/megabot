@@ -1,6 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT CONTROLLED BUILDER MAX v8.3 FIXED CORE++
-# 🧠 SINGLE GRAPH + ARCH BRAIN SYNC + CLOSED LOOP FIX
+# 🧠 MEGABOT RUNTIME GRAPH BUILDER v9
+# 🧠 REAL EXECUTION FLOW ANALYZER
 # =========================================================
 
 import os
@@ -20,6 +20,25 @@ MEMORY_FILE = "builder_memory.json"
 MAX_CYCLES = 1
 
 # =========================================================
+# 🎯 RUNTIME CALL PATTERNS
+# =========================================================
+
+RUNTIME_PATTERNS = [
+    "run",
+    "execute",
+    "director_run",
+    "engine_run",
+    "gateway.call",
+    "route",
+    "dispatch",
+    "forward",
+    "process",
+    "handle",
+    "decide",
+    "analyze"
+]
+
+# =========================================================
 # 📋 LOG
 # =========================================================
 
@@ -31,12 +50,12 @@ def log(msg):
 # =========================================================
 
 def load_memory():
+
     default = {
         "cycles": 0,
-        "connections": {},
-        "reverse_connections": {},
+        "runtime_graph": {},
+        "reverse_graph": {},
         "weights": {},
-        "roles": {},
         "brain_node": None,
         "hubs": [],
         "isolated": [],
@@ -48,16 +67,21 @@ def load_memory():
         return default
 
     try:
+
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+
         for k, v in default.items():
             data.setdefault(k, v)
+
         return data
+
     except:
         return default
 
 
 def save_memory(memory):
+
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory, f, indent=2, ensure_ascii=False)
 
@@ -66,9 +90,12 @@ def save_memory(memory):
 # =========================================================
 
 def read_file(path):
+
     try:
+
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
+
     except:
         return ""
 
@@ -77,80 +104,166 @@ def read_file(path):
 # =========================================================
 
 def scan():
-    files, modules = [], []
+
+    files = []
+    modules = []
 
     for root, _, file_list in os.walk(ROOT_DIR):
 
-        if ".git" in root or "__pycache__" in root:
+        if ".git" in root:
+            continue
+
+        if "__pycache__" in root:
             continue
 
         for f in file_list:
+
             if not f.endswith(".py"):
                 continue
 
             path = os.path.join(root, f)
+
             files.append(path)
 
             if os.path.basename(root) == MODULES_DIR:
-                modules.append(f)
+                modules.append(f.replace(".py", ""))
 
     return files, modules
 
 # =========================================================
-# 🧠 AST IMPORTS
+# 🧠 AST CALL EXTRACTOR
 # =========================================================
 
-def extract_imports(code):
-    imports = set()
+def extract_runtime_calls(code):
+
+    calls = []
 
     try:
+
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for n in node.names:
-                    imports.add(n.name.split(".")[0])
 
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    imports.add(node.module.split(".")[0])
+            if isinstance(node, ast.Call):
+
+                # -------------------------
+                # simple call
+                # -------------------------
+                if isinstance(node.func, ast.Name):
+
+                    calls.append(node.func.id)
+
+                # -------------------------
+                # attribute call
+                # -------------------------
+                elif isinstance(node.func, ast.Attribute):
+
+                    parts = []
+
+                    current = node.func
+
+                    while isinstance(current, ast.Attribute):
+
+                        parts.append(current.attr)
+                        current = current.value
+
+                    if isinstance(current, ast.Name):
+                        parts.append(current.id)
+
+                    parts.reverse()
+
+                    calls.append(".".join(parts))
 
     except:
         pass
 
-    return imports
+    return calls
 
 # =========================================================
-# 🔗 SINGLE GRAPH (FIXED CORE)
+# 🔗 BUILD RUNTIME GRAPH
 # =========================================================
 
-def build_graph(files, modules):
+def build_runtime_graph(files, modules):
 
-    module_names = [m.replace(".py", "") for m in modules]
+    graph = {}
+    reverse = {}
+    weights = {}
 
-    graph = {m: set() for m in module_names}
-    reverse = {m: set() for m in module_names}
-    weights = {m: 0 for m in module_names}
+    for m in modules:
+
+        graph[m] = set()
+        reverse[m] = set()
+        weights[m] = 0
 
     for file in files:
 
-        name = os.path.basename(file).replace(".py", "")
-        code = read_file(file)
-        imports = extract_imports(code)
+        current_module = os.path.basename(file).replace(".py", "")
 
-        if name not in graph:
+        if current_module not in graph:
             continue
 
-        for imp in imports:
-            if imp in graph:
-                graph[name].add(imp)
-                reverse[imp].add(name)
-                weights[name] += 1
+        code = read_file(file)
+
+        calls = extract_runtime_calls(code)
+
+        # -------------------------
+        # runtime module linking
+        # -------------------------
+        for call in calls:
+
+            for target in modules:
+
+                # -------------------------
+                # runtime call hit
+                # -------------------------
+                if (
+                    target in call
+                    or call in RUNTIME_PATTERNS
+                ):
+
+                    if target != current_module:
+
+                        graph[current_module].add(target)
+
+                        reverse[target].add(current_module)
+
+                        weights[current_module] += 1
 
     return graph, reverse, weights
 
 # =========================================================
-# 🧠 HUB DETECTION
+# 🧠 FIND BRAIN NODE
+# =========================================================
+
+def find_brain(graph, reverse):
+
+    best = None
+    best_score = -1
+
+    for node in graph:
+
+        score = (
+            len(graph[node]) * 2 +
+            len(reverse[node]) * 3
+        )
+
+        if "director" in node:
+            score += 10
+
+        if "central" in node:
+            score += 8
+
+        if "control" in node:
+            score += 5
+
+        if score > best_score:
+            best_score = score
+            best = node
+
+    return best
+
+# =========================================================
+# 🧠 HUB DETECTOR
 # =========================================================
 
 def compute_hubs(graph, reverse, weights):
@@ -159,78 +272,86 @@ def compute_hubs(graph, reverse, weights):
 
     for node in graph:
 
-        score = len(graph[node]) + len(reverse[node]) + weights[node]
+        score = (
+            len(graph[node]) * 2 +
+            len(reverse[node]) * 2 +
+            weights[node]
+        )
 
-        if score >= 2:
+        if score >= 5:
             hubs.append(node)
 
     return hubs
 
 # =========================================================
-# 🧠 ROLE ENGINE (LOCAL, NOT EXTERNAL)
+# 🧠 ISOLATED DETECTOR
 # =========================================================
 
-def compute_roles(graph):
+def compute_isolated(graph, reverse):
 
-    roles = {}
+    isolated = []
 
     for node in graph:
 
-        if len(graph[node]) == 0 and len(reverse_connections.get(node, [])) == 0:
-            roles[node] = "isolated"
-        elif len(graph[node]) >= 3:
-            roles[node] = "hub"
-        else:
-            roles[node] = "module"
+        if (
+            len(graph[node]) == 0 and
+            len(reverse[node]) == 0
+        ):
+            isolated.append(node)
 
-    return roles
+    return isolated
 
 # =========================================================
 # 🧠 DECISION LAYER
 # =========================================================
 
-def decide(graph, reverse, hubs, isolated):
+def decide(hubs, isolated):
 
     actions = []
 
-    for n in isolated:
-        actions.append({"type": "connect", "target": n})
+    for node in isolated:
 
-    for n in hubs:
-        actions.append({"type": "optimize", "target": n})
+        actions.append({
+            "type": "connect",
+            "target": node,
+            "reason": "runtime isolation"
+        })
+
+    for node in hubs:
+
+        actions.append({
+            "type": "optimize",
+            "target": node,
+            "reason": "high runtime traffic"
+        })
 
     return actions
-
-# =========================================================
-# 🧠 EXECUTION (SAFE ONLY LOGIC)
-# =========================================================
-
-def execute(actions):
-
-    for a in actions:
-        log(f"[ACTION] {a['type']} -> {a['target']}")
 
 # =========================================================
 # 🧪 VALIDATION
 # =========================================================
 
-def validate(modules):
+def validate(files):
 
     errors = 0
 
-    for m in modules:
+    for file in files:
+
         try:
-            path = os.path.join(MODULES_DIR, m)
-            code = read_file(path)
-            compile(code, path, "exec")
+
+            code = read_file(file)
+
+            compile(code, file, "exec")
+
             ast.parse(code)
+
         except:
             errors += 1
 
     return errors
 
 # =========================================================
-# 🧠 MAIN LOOP
+# 🧠 MAIN CYCLE
 # =========================================================
 
 def build_cycle():
@@ -240,71 +361,105 @@ def build_cycle():
     files, modules = scan()
 
     log("\n==============================")
-    log("🧠 MEGABOT v8.3 FIXED CORE++")
+    log("🧠 MEGABOT RUNTIME BUILDER v9")
     log("==============================")
 
-    log(f"FILES: {len(files)} | MODULES: {len(modules)}")
+    log(f"FILES: {len(files)}")
+    log(f"MODULES: {len(modules)}")
 
-    # =========================
-    # GRAPH
-    # =========================
+    # =====================================================
+    # 🔗 RUNTIME GRAPH
+    # =====================================================
 
-    graph, reverse, weights = build_graph(files, modules)
+    graph, reverse, weights = build_runtime_graph(
+        files,
+        modules
+    )
 
-    # =========================
-    # BRAIN
-    # =========================
+    # =====================================================
+    # 🧠 ANALYSIS
+    # =====================================================
 
-    hubs = compute_hubs(graph, reverse, weights)
+    brain = find_brain(graph, reverse)
 
-    isolated = [
-        n for n in graph
-        if len(graph[n]) == 0 and len(reverse[n]) == 0
-    ]
+    hubs = compute_hubs(
+        graph,
+        reverse,
+        weights
+    )
 
-    roles = {
-        n: ("hub" if n in hubs else "isolated" if n in isolated else "module")
-        for n in graph
+    isolated = compute_isolated(
+        graph,
+        reverse
+    )
+
+    actions = decide(
+        hubs,
+        isolated
+    )
+
+    # =====================================================
+    # 💾 MEMORY
+    # =====================================================
+
+    memory["runtime_graph"] = {
+        k: list(v)
+        for k, v in graph.items()
     }
 
-    # =========================
-    # DECISION
-    # =========================
+    memory["reverse_graph"] = {
+        k: list(v)
+        for k, v in reverse.items()
+    }
 
-    actions = decide(graph, reverse, hubs, isolated)
-
-    execute(actions)
-
-    # =========================
-    # MEMORY SYNC
-    # =========================
-
-    memory["connections"] = {k: list(v) for k, v in graph.items()}
-    memory["reverse_connections"] = {k: list(v) for k, v in reverse.items()}
     memory["weights"] = weights
 
-    memory["roles"] = roles
+    memory["brain_node"] = brain
     memory["hubs"] = hubs
     memory["isolated"] = isolated
     memory["actions"] = actions
 
+    # =====================================================
+    # 📋 LOGGING
+    # =====================================================
+
     log("\n🧠 BRAIN STATE")
+    log(f"BRAIN NODE: {brain}")
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
 
-    errors = validate(modules)
+    log("\n⚙ ACTIONS")
+
+    for action in actions[:25]:
+
+        log(
+            f"[ACTION] "
+            f"{action['type']} -> "
+            f"{action['target']}"
+        )
+
+    # =====================================================
+    # 🧪 VALIDATION
+    # =====================================================
+
+    errors = validate(files)
 
     memory["cycles"] += 1
 
     memory["history"].append({
         "cycle": memory["cycles"],
-        "errors": errors,
+        "brain": brain,
         "hubs": len(hubs),
         "isolated": len(isolated),
-        "actions": len(actions)
+        "actions": len(actions),
+        "errors": errors
     })
 
     save_memory(memory)
+
+    # =====================================================
+    # 📊 DONE
+    # =====================================================
 
     log("\n==============================")
     log("📊 DONE")
@@ -320,9 +475,12 @@ def build_cycle():
 if __name__ == "__main__":
 
     try:
+
         for _ in range(MAX_CYCLES):
             build_cycle()
 
     except Exception as e:
+
         log(f"FATAL: {e}")
+
         log(traceback.format_exc())

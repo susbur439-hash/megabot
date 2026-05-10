@@ -5,6 +5,7 @@
 
 import json
 import os
+import sys
 
 MEMORY_FILE = "code_understanding.json"
 
@@ -30,7 +31,6 @@ def load_memory():
 def find_by_role(memory, role):
 
     result = []
-
     files = memory.get("files", {})
 
     for f, data in files.items():
@@ -41,7 +41,7 @@ def find_by_role(memory, role):
 
 
 # =========================
-# 🧠 FIND MODULES BY KEYWORD
+# 🧠 SEARCH FILES
 # =========================
 def search_files(memory, keyword):
 
@@ -49,7 +49,6 @@ def search_files(memory, keyword):
     files = memory.get("files", {})
 
     for f, data in files.items():
-
         if keyword.lower() in f.lower():
             result.append(f)
 
@@ -57,7 +56,7 @@ def search_files(memory, keyword):
 
 
 # =========================
-# 🧠 MAIN INTELLIGENCE ENGINE
+# 🧠 MAIN ENGINE
 # =========================
 def query(question: str):
 
@@ -68,80 +67,83 @@ def query(question: str):
 
     q = question.lower()
 
-    # =========================
-    # 🧠 WHO IS BRAIN?
-    # =========================
+    # brain
     if "brain" in q or "director" in q:
-
         return {
             "answer": "Main brain candidates",
             "files": find_by_role(memory, "decision_orchestrator")
         }
 
-    # =========================
-    # ⚙ EXECUTION CORE
-    # =========================
+    # execution
     if "execution" in q or "engine" in q:
-
         return {
             "answer": "Execution core modules",
             "files": find_by_role(memory, "execution_core")
         }
 
-    # =========================
-    # 🧭 CONTROL LAYER
-    # =========================
+    # control
     if "control" in q:
-
         return {
             "answer": "Control layer modules",
             "files": find_by_role(memory, "control_layer")
         }
 
-    # =========================
-    # 🔍 SEARCH MODE
-    # =========================
+    # search
     if "module" in q or "file" in q:
-
         return {
             "answer": "Search result",
             "files": search_files(memory, q)
         }
 
-    # =========================
-    # 📊 SYSTEM OVERVIEW
-    # =========================
+    # summary
     if "summary" in q or "system" in q:
-
         return memory.get("summary", {})
 
-    # =========================
-    # ❓ DEFAULT
-    # =========================
     return {
         "answer": "I don't understand query yet",
         "hint": [
-            "try: brain",
-            "try: execution",
-            "try: control",
-            "try: system summary"
+            "brain",
+            "execution",
+            "control",
+            "system summary"
         ]
     }
 
 
 # =========================
-# ▶ ENTRY (TEST MODE)
+# ▶ ENTRY POINT (FIXED)
 # =========================
 if __name__ == "__main__":
 
-    while True:
+    # =========================
+    # CI / GitHub MODE
+    # =========================
+    if len(sys.argv) > 1:
 
-        q = input("\n🧠 Ask Megabot > ")
-
-        if q in ["exit", "quit"]:
-            break
-
-        result = query(q)
+        question = " ".join(sys.argv[1:])
+        result = query(question)
 
         print("\n📊 RESULT:\n")
         print(result)
+
+    # =========================
+    # LOCAL MODE
+    # =========================
+    else:
+
+        print("🧠 Megabot Intelligence Layer (local mode)")
+        print("Type 'exit' to quit")
+
+        while True:
+
+            try:
+                q = input("\n🧠 Ask Megabot > ")
+
+                if q.lower() in ["exit", "quit"]:
+                    break
+
+                print(query(q))
+
+            except EOFError:
+                print("\n⚠️ No interactive input available")
+                break

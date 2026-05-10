@@ -1,6 +1,7 @@
 import os
 import json
 from core.module_router import ModuleRouter
+from modules.brain_controller import decide
 
 
 if __name__ == "__main__":
@@ -29,36 +30,20 @@ if __name__ == "__main__":
 
         cleaned = task.strip()
 
-        # ---------------------------------
-        # python some_script.py
-        # ---------------------------------
         if cleaned.startswith("python "):
 
-            script_path = cleaned.replace(
-                "python ",
-                "",
-                1
-            ).strip()
+            script_path = cleaned.replace("python ", "", 1).strip()
 
             if os.path.exists(script_path):
-
                 print(f"🚀 Direct run: {script_path}")
-
                 os.system(f"python {script_path}")
-
                 exit(0)
 
-        # ---------------------------------
-        # direct some_script.py
-        # ---------------------------------
         elif cleaned.endswith(".py"):
 
             if os.path.exists(cleaned):
-
                 print(f"🚀 Direct run: {cleaned}")
-
                 os.system(f"python {cleaned}")
-
                 exit(0)
 
     # =========================
@@ -67,52 +52,15 @@ if __name__ == "__main__":
     router = ModuleRouter()
 
     # =========================
-    # 🧠 SAFE TASK STRING
+    # 🧠 BRAIN LAYER (НОВОЕ)
     # =========================
-    task_str = str(task).lower()
+    decision = decide(str(task))
 
-    # =========================
-    # 🧠 ROUTING LOGIC
-    # =========================
-
-    if "list" in task_str:
-
-        command = {
-            "module": "system",
-            "action": "list"
-        }
-
-    elif any(
-        x in task_str
-        for x in [
-            "scan",
-            "analyze",
-            "system",
-            "status"
-        ]
-    ):
-
-        command = {
-            "module": "analysis",
-            "data": {
-                "task": task
-            }
-        }
-
-    else:
-
-        command = {
-            "module": "director",
-            "data": {
-                "task": task
-            }
-        }
-
-    print("[Main] Command:", command)
+    print("[Brain Decision]:", decision)
 
     # =========================
     # 🚀 EXECUTION
     # =========================
-    result = router.route(command)
+    result = router.route(decision)
 
     print("✅ RESULT:", result)

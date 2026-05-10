@@ -1,6 +1,6 @@
 # =========================================================
-# 🧠 MEGABOT RUNTIME GRAPH BUILDER v9
-# 🧠 REAL EXECUTION FLOW ANALYZER
+# 🧠 MEGABOT RUNTIME GRAPH BUILDER v10
+# 🧠 STABLE CORE ARCHITECTURE ANALYZER
 # =========================================================
 
 import os
@@ -20,23 +20,36 @@ MEMORY_FILE = "builder_memory.json"
 MAX_CYCLES = 1
 
 # =========================================================
-# 🎯 RUNTIME CALL PATTERNS
+# 🧠 CORE MODULES ONLY
 # =========================================================
 
-RUNTIME_PATTERNS = [
-    "run",
-    "execute",
-    "director_run",
-    "engine_run",
-    "gateway.call",
-    "route",
-    "dispatch",
-    "forward",
-    "process",
-    "handle",
-    "decide",
-    "analyze"
-]
+CORE_MODULES = {
+    "director",
+    "central_decision",
+    "execution",
+    "engine",
+    "observer",
+    "control_panel",
+    "learning",
+    "evaluation",
+    "planner",
+    "memory",
+    "decision",
+    "task_interpreter",
+    "analysis",
+    "router",
+    "module_router",
+    "control_bus"
+}
+
+# =========================================================
+# 🎯 SAFE RUNTIME PATTERNS
+# =========================================================
+
+RUNTIME_PATTERNS = {
+    "director_run": "director",
+    "engine_run": "engine"
+}
 
 # =========================================================
 # 📋 LOG
@@ -125,8 +138,13 @@ def scan():
 
             files.append(path)
 
+            # only core architecture modules
             if os.path.basename(root) == MODULES_DIR:
-                modules.append(f.replace(".py", ""))
+
+                name = f.replace(".py", "")
+
+                if name in CORE_MODULES:
+                    modules.append(name)
 
     return files, modules
 
@@ -206,22 +224,39 @@ def build_runtime_graph(files, modules):
 
         calls = extract_runtime_calls(code)
 
-        # -------------------------
-        # runtime module linking
-        # -------------------------
+        # =================================================
+        # runtime linking
+        # =================================================
+
         for call in calls:
 
+            # ---------------------------------------------
+            # exact module call
+            # ---------------------------------------------
             for target in modules:
 
-                # -------------------------
-                # runtime call hit
-                # -------------------------
-                if (
-                    target in call
-                    or call in RUNTIME_PATTERNS
-                ):
+                linked = False
 
-                    if target != current_module:
+                # direct match
+                if target == call:
+                    linked = True
+
+                # attribute match
+                elif call.endswith("." + target):
+                    linked = True
+
+                # runtime alias
+                elif call in RUNTIME_PATTERNS:
+
+                    if RUNTIME_PATTERNS[call] == target:
+                        linked = True
+
+                if linked:
+
+                    if (
+                        target != current_module
+                        and target not in graph[current_module]
+                    ):
 
                         graph[current_module].add(target)
 
@@ -247,14 +282,18 @@ def find_brain(graph, reverse):
             len(reverse[node]) * 3
         )
 
-        if "director" in node:
+        # architecture priorities
+        if node == "director":
+            score += 15
+
+        elif node == "central_decision":
+            score += 12
+
+        elif node == "control_panel":
             score += 10
 
-        if "central" in node:
+        elif node == "engine":
             score += 8
-
-        if "control" in node:
-            score += 5
 
         if score > best_score:
             best_score = score
@@ -278,7 +317,7 @@ def compute_hubs(graph, reverse, weights):
             weights[node]
         )
 
-        if score >= 5:
+        if score >= 6:
             hubs.append(node)
 
     return hubs
@@ -314,7 +353,7 @@ def decide(hubs, isolated):
         actions.append({
             "type": "connect",
             "target": node,
-            "reason": "runtime isolation"
+            "reason": "core isolation"
         })
 
     for node in hubs:
@@ -361,11 +400,11 @@ def build_cycle():
     files, modules = scan()
 
     log("\n==============================")
-    log("🧠 MEGABOT RUNTIME BUILDER v9")
+    log("🧠 MEGABOT RUNTIME BUILDER v10")
     log("==============================")
 
     log(f"FILES: {len(files)}")
-    log(f"MODULES: {len(modules)}")
+    log(f"CORE MODULES: {len(modules)}")
 
     # =====================================================
     # 🔗 RUNTIME GRAPH

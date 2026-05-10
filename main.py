@@ -21,7 +21,7 @@ if __name__ == "__main__":
     print("🎯 TASK:", task)
 
     # =========================
-    # 🔥 DIRECT EXECUTION (КЛЮЧЕВОЕ!)
+    # 🔥 DIRECT EXECUTION (.py FILE)
     # =========================
     if isinstance(task, str) and task.endswith(".py") and os.path.exists(task):
         print(f"🚀 Direct run: {task}")
@@ -33,24 +33,35 @@ if __name__ == "__main__":
     # =========================
     router = ModuleRouter()
 
-    # =========================
-    # 🧠 SAFE TASK STRING
-    # =========================
-    task_str = task if isinstance(task, str) else str(task)
+    task_str = str(task).lower()
 
     # =========================
-    # 🧠 SIMPLE COMMAND BUILD
+    # 🧠 ROUTING LOGIC (ВАЖНОЕ ИЗМЕНЕНИЕ)
     # =========================
-    if "list" in task_str.lower():
+
+    if "code_understanding" in task_str:
+        command = {
+            "module": "code_understanding",
+            "data": {}
+        }
+
+    elif "list" in task_str:
         command = {
             "module": "system",
             "action": "list"
         }
+
+    elif any(x in task_str for x in ["scan", "analyze", "system", "status"]):
+        command = {
+            "module": "analysis",
+            "data": {"task": task}
+        }
+
     else:
         command = {
             "module": "director",
             "data": {
-                "task": task_str
+                "task": task
             }
         }
 

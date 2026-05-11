@@ -63,9 +63,15 @@ INTENTS = {
 # 🧠 DETECT INTENT
 # =========================================================
 
-def detect_intent(task: str):
+def detect_intent(task):
 
-    task_lower = task.lower()
+    # нормализация входа
+    if isinstance(task, dict):
+        task_text = task.get("task", "")
+    else:
+        task_text = str(task)
+
+    task_lower = task_text.lower()
 
     scores = {}
 
@@ -74,7 +80,6 @@ def detect_intent(task: str):
         score = 0
 
         for word in keywords:
-
             if word in task_lower:
                 score += 1
 
@@ -92,14 +97,20 @@ def detect_intent(task: str):
 # 🧠 DECISION ENGINE
 # =========================================================
 
-def decide(task: str):
+def decide(task):
+
+    # нормализация входа
+    if isinstance(task, dict):
+        task_text = task.get("task", "")
+    else:
+        task_text = str(task)
 
     memory = load_memory()
 
     summary = memory.get("summary", {})
     roles = summary.get("roles", {})
 
-    intent = detect_intent(task)
+    intent = detect_intent(task_text)
 
     # =====================================================
     # ⚙ EXECUTION
@@ -110,7 +121,7 @@ def decide(task: str):
         return {
             "module": "director",
             "data": {
-                "task": task,
+                "task": task_text,
                 "preferred": roles.get("execution_core", [])
             }
         }
@@ -124,7 +135,7 @@ def decide(task: str):
         return {
             "module": "analysis",
             "data": {
-                "task": task
+                "task": task_text
             }
         }
 
@@ -137,10 +148,8 @@ def decide(task: str):
         return {
             "module": "intelligence_layer",
             "data": {
-                "question": task,
-                "brain_candidates": roles.get(
-                    "decision_orchestrator", []
-                )
+                "question": task_text,
+                "brain_candidates": roles.get("decision_orchestrator", [])
             }
         }
 
@@ -151,7 +160,7 @@ def decide(task: str):
     return {
         "module": "task_interpreter",
         "data": {
-            "task": task,
+            "task": task_text,
             "requires_analysis": True
         }
     }

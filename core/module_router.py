@@ -53,22 +53,21 @@ class ModuleRouter:
                 importlib.reload(module)
 
                 # =========================
-                # CONTRACT CHECK (ВАЖНО)
+                # CONTRACT CHECK (OS MODE)
                 # =========================
-                if not hasattr(module, "run"):
+                if not hasattr(module, "run") or not callable(module.run):
 
-                    self.failed_modules[module_name] = "NO_RUN_FUNCTION"
+                    self.failed_modules[module_name] = "INVALID_RUN_CONTRACT"
 
-                    print(f"[Router] ⚠ skipped (no run): {module_name}")
+                    print(f"[Router] ⚠ skipped: {module_name}")
                     continue
 
                 self.modules[module_name] = module
 
+                # registry sync
                 if register_module:
-
                     try:
                         register_module(module_name, module)
-
                     except Exception as e:
                         print(f"[Registry] register failed: {e}")
 
@@ -109,25 +108,64 @@ class ModuleRouter:
         }
 
     # =====================================================
-    # 🎯 ROUTE
+    # 🧠 OS MODE NORMALIZER (КЛЮЧЕВОЕ ДОБАВЛЕНИЕ)
+    # =====================================================
+
+    def normalize(self, command):
+
+        """
+        Приводит ВСЕ команды к единому формату
+        OS MODE: Brain не имеет права ломать контракт
+        """
+
+        if isinstance(command, str):
+
+            return {
+                "module": "director",
+                "data": {"task": command}
+            }
+
+        if not isinstance(command, dict):
+
+            return {
+                "module": "director",
+                "data": {"task": str(command)}
+            }
+
+        # защита от brain мусора
+        if "module" not in command:
+
+            return {
+                "module": "director",
+                "data": command
+            }
+
+        if "data" not in command:
+
+            command["data"] = {}
+
+        return command
+
+    # =====================================================
+    # 🎯 ROUTE (OS MODE CORE)
     # =====================================================
 
     def route(self, command):
 
-        if not isinstance(command, dict):
-            return self._error("Command must be dict")
+        # 🔒 normalize FIRST
+        command = self.normalize(command)
 
         module_name = command.get("module")
         data = command.get("data", {})
 
-        if not module_name:
-            return self._error("No module specified")
-
         if module_name not in self.modules:
+
+            print(f"[Router] ❌ unknown module: {module_name}")
+
             return {
                 "status": "error",
                 "message": f"Module not found: {module_name}",
-                "hint": "Check modules folder or module name"
+                "fallback": "director"
             }
 
         try:

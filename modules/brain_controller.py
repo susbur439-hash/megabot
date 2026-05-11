@@ -5,19 +5,87 @@ MEMORY_FILE = "code_understanding.json"
 
 
 # =========================================================
-# 📥 LOAD SYSTEM MEMORY
+# 📥 LOAD MEMORY
 # =========================================================
 
 def load_memory():
 
     if not os.path.exists(MEMORY_FILE):
-        return None
+        return {}
 
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
+
     except Exception as e:
         return {"error": str(e)}
+
+
+# =========================================================
+# 🧠 INTENT CLASSIFIER
+# =========================================================
+
+INTENTS = {
+
+    "execution": [
+        "run",
+        "execute",
+        "launch",
+        "start",
+        "build",
+        "repair",
+        "fix",
+        "deploy",
+        "create"
+    ],
+
+    "analysis": [
+        "analyze",
+        "scan",
+        "inspect",
+        "check",
+        "review",
+        "diagnose"
+    ],
+
+    "intelligence": [
+        "brain",
+        "system",
+        "strategy",
+        "architecture",
+        "reason",
+        "think"
+    ]
+}
+
+
+# =========================================================
+# 🧠 DETECT INTENT
+# =========================================================
+
+def detect_intent(task: str):
+
+    task_lower = task.lower()
+
+    scores = {}
+
+    for intent, keywords in INTENTS.items():
+
+        score = 0
+
+        for word in keywords:
+
+            if word in task_lower:
+                score += 1
+
+        scores[intent] = score
+
+    best_intent = max(scores, key=scores.get)
+
+    if scores[best_intent] == 0:
+        return "unknown"
+
+    return best_intent
 
 
 # =========================================================
@@ -28,54 +96,30 @@ def decide(task: str):
 
     memory = load_memory()
 
-    if not memory:
-        return {
-            "module": "director",
-            "data": {"task": task}
-        }
-
     summary = memory.get("summary", {})
     roles = summary.get("roles", {})
 
-    task_lower = task.lower()
+    intent = detect_intent(task)
 
     # =====================================================
-    # 🧠 INTELLIGENCE QUERY
+    # ⚙ EXECUTION
     # =====================================================
 
-    if "brain" in task_lower or "system" in task_lower:
-
-        brain = roles.get("decision_orchestrator", [])
-
-        return {
-            "module": "intelligence_layer",
-            "data": {
-                "question": task,
-                "brain_candidates": brain
-            }
-        }
-
-    # =====================================================
-    # ⚙ EXECUTION REQUEST
-    # =====================================================
-
-    if "run" in task_lower or "execute" in task_lower:
-
-        execs = roles.get("execution_core", [])
+    if intent == "execution":
 
         return {
             "module": "director",
             "data": {
                 "task": task,
-                "preferred": execs
+                "preferred": roles.get("execution_core", [])
             }
         }
 
     # =====================================================
-    # 🔍 ANALYSIS REQUEST
+    # 🔍 ANALYSIS
     # =====================================================
 
-    if "analyze" in task_lower or "scan" in task_lower:
+    if intent == "analysis":
 
         return {
             "module": "analysis",
@@ -85,19 +129,36 @@ def decide(task: str):
         }
 
     # =====================================================
-    # 🧭 DEFAULT ROUTE
+    # 🧠 INTELLIGENCE
+    # =====================================================
+
+    if intent == "intelligence":
+
+        return {
+            "module": "intelligence_layer",
+            "data": {
+                "question": task,
+                "brain_candidates": roles.get(
+                    "decision_orchestrator", []
+                )
+            }
+        }
+
+    # =====================================================
+    # ❓ UNKNOWN TASK
     # =====================================================
 
     return {
-        "module": "director",
+        "module": "task_interpreter",
         "data": {
-            "task": task
+            "task": task,
+            "requires_analysis": True
         }
     }
 
 
 # =========================================================
-# 🚀 ENTRY POINT (TEST)
+# 🚀 TEST LOOP
 # =========================================================
 
 if __name__ == "__main__":
@@ -109,7 +170,7 @@ if __name__ == "__main__":
         if task in ["exit", "quit"]:
             break
 
-        decision = decide(task)
+        result = decide(task)
 
         print("\n🧠 DECISION:")
-        print(decision)
+        print(json.dumps(result, indent=2))

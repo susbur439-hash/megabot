@@ -1,22 +1,27 @@
 import os
 import json
+
 from core.module_router import ModuleRouter
 from modules.brain_controller import decide
 
 
 # =========================================================
-# 🧼 NORMALIZER (СТАБИЛИЗАЦИЯ ВХОДА)
+# 🧼 NORMALIZER
 # =========================================================
 def normalize(task):
 
+    # already dict
     if isinstance(task, dict):
         return task
 
+    # string input
     if isinstance(task, str):
 
         text = task.strip()
 
+        # try parse json
         try:
+
             parsed = json.loads(text)
 
             if isinstance(parsed, str):
@@ -28,87 +33,70 @@ def normalize(task):
         except:
             pass
 
+        # clean text task
         return {
-            "module": "analysis",
-            "data": {
-                "task": text
-            }
+            "task": text
         }
 
+    # fallback
     return {
-        "module": "analysis",
-        "data": {"task": str(task)}
+        "task": str(task)
     }
 
 
 # =========================================================
-# 🚀 ENTRY POINT
+# 🚀 ENTRY
 # =========================================================
 if __name__ == "__main__":
 
-    # =========================
-    # 📥 TASK
-    # =========================
-    task = os.environ.get("TASK_JSON", "развивай себя")
+    # =====================================================
+    # 📥 INPUT
+    # =====================================================
+    raw_task = os.environ.get(
+        "TASK_JSON",
+        "развивай себя"
+    )
 
-    task = normalize(task)
+    task = normalize(raw_task)
 
     print("🚀 MEGABOT START")
-    print("🎯 TASK:", task)
+    print("🎯 NORMALIZED TASK:", task)
 
-    # =========================
-    # 🔥 DIRECT EXECUTION
-    # =========================
-    if isinstance(task, dict):
-
-        cleaned = str(task.get("data", {}).get("task", "")).strip()
-
-        if cleaned.startswith("python "):
-
-            script_path = cleaned.replace("python ", "", 1).strip()
-
-            if os.path.exists(script_path):
-                print(f"🚀 Direct run: {script_path}")
-                os.system(f"python {script_path}")
-                exit(0)
-
-        elif cleaned.endswith(".py"):
-
-            if os.path.exists(cleaned):
-                print(f"🚀 Direct run: {cleaned}")
-                os.system(f"python {cleaned}")
-                exit(0)
-
-    # =========================
+    # =====================================================
     # 🔌 ROUTER
-    # =========================
+    # =====================================================
     router = ModuleRouter()
 
-    # =========================
-    # 🧠 BRAIN DECISION
-    # =========================
-    decision = decide(str(task.get("data", {}).get("task", "")))
+    # =====================================================
+    # 🧠 BRAIN
+    # =====================================================
+    decision = decide(task)
 
     print("[Brain Decision]:", decision)
 
-    # =========================
-    # 🧠 SAFETY LAYER (ЖЁСТКАЯ ЗАЩИТА)
-    # =========================
+    # =====================================================
+    # 🛡 SAFETY LAYER
+    # =====================================================
     module = decision.get("module")
 
     if module not in router.modules:
 
-        print(f"[WARN] Brain selected unknown module: {module}")
-        print("[FALLBACK] switching to director")
+        print(
+            f"[WARN] Unknown module: {module}"
+        )
+
+        print(
+            "[FALLBACK] -> director"
+        )
 
         decision = {
             "module": "director",
-            "data": task.get("data", {})
+            "data": task
         }
 
-    # =========================
+    # =====================================================
     # 🚀 EXECUTION
-    # =========================
+    # =====================================================
     result = router.route(decision)
 
     print("✅ RESULT:", result)

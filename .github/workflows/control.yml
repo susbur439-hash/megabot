@@ -12,6 +12,9 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write   # 🔥 ВАЖНО: разрешение на push
+
     steps:
       - name: 📥 Клонирование репозитория
         uses: actions/checkout@v4
@@ -45,14 +48,32 @@ jobs:
         run: pip install -r requirements.txt || true
 
       # =========================
-      # 🤖 ЗАПУСК МЕГАБОТА (FIXED)
+      # 🤖 ЗАПУСК МЕГАБОТА
       # =========================
       - name: 🤖 Запуск Megabot
         env:
-          TASK_JSON: '${{ github.event.inputs.task }}'
+          TASK_JSON: ${{ github.event.inputs.task }}
         run: |
           echo "📨 TASK_JSON = $TASK_JSON"
           python main.py
+
+      # =========================
+      # 🧠 СОХРАНЕНИЕ BRAIN MAP (🔥 FIX)
+      # =========================
+      - name: 🧠 Commit brain map
+        run: |
+          if [ -f brain_map.json ]; then
+            git config --global user.name "megabot"
+            git config --global user.email "megabot@users.noreply.github.com"
+
+            git add brain_map.json
+
+            git commit -m "🧠 update brain map" || echo "No changes"
+
+            git push
+          else
+            echo "No brain_map.json found"
+          fi
 
       # =========================
       # 👁 OBLIVION
@@ -102,3 +123,4 @@ jobs:
             memory.json
             full_system_snapshot.txt
             modules/
+            brain_map.json   # 🔥 добавили сюда

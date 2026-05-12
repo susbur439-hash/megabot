@@ -8,6 +8,7 @@ from modules.brain_controller import decide
 # =========================================================
 # 🧼 NORMALIZER
 # =========================================================
+
 def normalize(task):
 
     # already dict
@@ -30,7 +31,7 @@ def normalize(task):
             if isinstance(parsed, dict):
                 return parsed
 
-        except:
+        except Exception:
             pass
 
         # clean text task
@@ -45,13 +46,51 @@ def normalize(task):
 
 
 # =========================================================
+# 🧠 SPECIAL TASKS
+# =========================================================
+
+def run_brain_map():
+
+    import brain_map
+
+    print("\n🧠 BUILDING BRAIN MAP...\n")
+
+    brain = brain_map.build_brain_map()
+
+    brain_map.print_report(brain)
+
+    with open(
+        "brain_map.json",
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            brain,
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
+
+    print("\n💾 Saved: brain_map.json")
+
+    return {
+        "status": "success",
+        "brain_map_created": True,
+        "files": brain["stats"]["total_files"]
+    }
+
+
+# =========================================================
 # 🚀 ENTRY
 # =========================================================
+
 if __name__ == "__main__":
 
     # =====================================================
     # 📥 INPUT
     # =====================================================
+
     raw_task = os.environ.get(
         "TASK_JSON",
         "развивай себя"
@@ -63,13 +102,35 @@ if __name__ == "__main__":
     print("🎯 NORMALIZED TASK:", task)
 
     # =====================================================
+    # 🧠 SPECIAL ROUTES
+    # =====================================================
+
+    task_text = str(
+        task.get("task", "")
+    ).lower()
+
+    if (
+        "brain map" in task_text
+        or "build graph" in task_text
+        or "scan repository" in task_text
+    ):
+
+        result = run_brain_map()
+
+        print("\n✅ RESULT:", result)
+
+        exit()
+
+    # =====================================================
     # 🔌 ROUTER
     # =====================================================
+
     router = ModuleRouter()
 
     # =====================================================
     # 🧠 BRAIN
     # =====================================================
+
     decision = decide(task)
 
     print("[Brain Decision]:", decision)
@@ -77,6 +138,7 @@ if __name__ == "__main__":
     # =====================================================
     # 🛡 SAFETY LAYER
     # =====================================================
+
     module = decision.get("module")
 
     if module not in router.modules:
@@ -97,6 +159,7 @@ if __name__ == "__main__":
     # =====================================================
     # 🚀 EXECUTION
     # =====================================================
+
     result = router.route(decision)
 
     print("✅ RESULT:", result)

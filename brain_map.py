@@ -5,8 +5,12 @@ from collections import defaultdict
 
 ROOT = "."
 
+IGNORE_DIRS = {
+    ".git", "__pycache__", ".venv", "venv", "node_modules"
+}
+
 # =========================
-# 📦 КЛАССИФИКАЦИЯ СИСТЕМЫ
+# 📦 КЛАССИФИКАЦИЯ СЛОЁВ
 # =========================
 def classify(path: str):
     if "core" in path:
@@ -23,14 +27,21 @@ def classify(path: str):
 
 
 # =========================
-# 📂 СКАН ВСЕХ ФАЙЛОВ (НЕ ТОЛЬКО .PY)
+# 📂 СКАН РЕПОЗИТОРИЯ (ПОЛНЫЙ + ФИЛЬТРЫ)
 # =========================
 def scan_files():
     files = []
-    for root, _, fs in os.walk(ROOT):
+
+    for root, dirs, fs in os.walk(ROOT):
+
+        # 🚫 игнор системных папок
+        dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
+
         for f in fs:
             full_path = os.path.join(root, f)
-            files.append(full_path.replace("\\", "/"))
+            rel = full_path.replace("\\", "/")
+            files.append(rel)
+
     return files
 
 
@@ -57,7 +68,7 @@ def detect_type(path: str):
 
 
 # =========================
-# 🔗 ИМПОРТЫ (ТОЛЬКО PY)
+# 🔗 IMPORTS (PY ONLY)
 # =========================
 def extract_imports(file_path):
     if not file_path.endswith(".py"):
@@ -85,6 +96,25 @@ def extract_imports(file_path):
 
 
 # =========================
+# 🧠 ПОПЫТКА ПОНИМАНИЯ ФАЙЛА
+# =========================
+def guess_purpose(path: str):
+    name = os.path.basename(path).lower()
+
+    if "test" in name:
+        return "TEST"
+    if "control" in name:
+        return "CONTROL"
+    if "run" in name or "main" in name:
+        return "ENTRYPOINT"
+    if "config" in name:
+        return "CONFIG"
+    if "util" in name or "helper" in name:
+        return "UTILITY"
+    return "UNKNOWN"
+
+
+# =========================
 # 🧠 ПОСТРОЕНИЕ КАРТЫ МОЗГА
 # =========================
 def build_brain_map():
@@ -96,55 +126,59 @@ def build_brain_map():
         },
         "layers": defaultdict(list),
         "file_types": defaultdict(list),
+        "purpose": defaultdict(list),
         "imports": {},
-        "edges": [],
+        "file_to_file_edges": [],
         "orphans": [],
-        "repository": defaultdict(list)
     }
 
-    used_modules = set()
+    # file -> module mapping (для связей)
+    file_module_map = {}
 
+    # =========================
+    # 1. базовая индексация
+    # =========================
     for f in files:
-        rel = f.replace("\\", "/")
+        rel = f
 
         layer = classify(rel)
         ftype = detect_type(rel)
+        purpose = guess_purpose(rel)
 
         brain["layers"][layer].append(rel)
         brain["file_types"][ftype].append(rel)
-
-        brain["repository"][ftype].append(rel)
+        brain["purpose"][purpose].append(rel)
 
         imports = extract_imports(f)
         brain["imports"][rel] = imports
 
-        for imp in imports:
-            used_modules.add(imp.split(".")[0])
+        # module name approximation
+        file_module_map[rel] = rel.replace("/", ".").replace(".py", "")
 
     # =========================
-    # 🔗 BUILD EDGES (IMPORT GRAPH)
+    # 2. file → file edges (ВАЖНО)
     # =========================
+    module_to_file = {v: k for k, v in file_module_map.items()}
+
     for file, imports in brain["imports"].items():
         for imp in imports:
-            brain["edges"].append({
-                "from": file,
-                "to": imp
-            })
+            if imp in module_to_file:
+                brain["file_to_file_edges"].append({
+                    "from": file,
+                    "to": module_to_file[imp]
+                })
 
     # =========================
-    # 🧩 ORPHAN DETECTION (УМНАЯ ВЕРСИЯ)
+    # 3. ORPHANS (реальная логика)
     # =========================
-    all_used = set()
+    used_files = set()
 
-    for imports in brain["imports"].values():
-        for imp in imports:
-            all_used.add(imp.split(".")[0])
+    for edge in brain["file_to_file_edges"]:
+        used_files.add(edge["to"])
 
     for f in files:
-        name = os.path.basename(f).replace(".py", "")
-        if name not in str(all_used):
-            if f.endswith(".py"):
-                brain["orphans"].append(f)
+        if f.endswith(".py") and f not in used_files:
+            brain["orphans"].append(f)
 
     return brain
 
@@ -153,22 +187,26 @@ def build_brain_map():
 # 📊 ОТЧЁТ
 # =========================
 def print_report(brain):
-    print("\n🧠 MEGABOT BRAIN MAP v2")
+    print("\n🧠 MEGABOT BRAIN MAP v3")
     print("=" * 45)
 
     print("\n📦 FILES:", brain["stats"]["total_files"])
 
     print("\n🧩 LAYERS:")
-    for layer, items in brain["layers"].items():
-        print(f"  {layer}: {len(items)}")
+    for k, v in brain["layers"].items():
+        print(f"  {k}: {len(v)}")
 
     print("\n📁 FILE TYPES:")
-    for t, items in brain["file_types"].items():
-        print(f"  {t}: {len(items)}")
+    for k, v in brain["file_types"].items():
+        print(f"  {k}: {len(v)}")
+
+    print("\n🎯 PURPOSE:")
+    for k, v in brain["purpose"].items():
+        print(f"  {k}: {len(v)}")
 
     print("\n⚠ ORPHANS:", len(brain["orphans"]))
 
-    print("\n🔗 EDGES:", len(brain["edges"]))
+    print("\n🔗 FILE EDGES:", len(brain["file_to_file_edges"]))
 
     print("\n🔍 SAMPLE IMPORTS:")
     sample = list(brain["imports"].items())[:5]

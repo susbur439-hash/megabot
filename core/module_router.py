@@ -1,3 +1,5 @@
+# core/module_router.py
+
 import importlib
 import os
 import traceback
@@ -10,7 +12,7 @@ from core.system_state import system_state
 
 try:
     from modules.system_registry import register_module
-except:
+except Exception:
     register_module = None
 
 
@@ -54,6 +56,9 @@ class ModuleRouter:
                 module = importlib.import_module(module_path)
                 importlib.reload(module)
 
+                # =========================
+                # 🛡 CONTRACT CHECK
+                # =========================
                 if not hasattr(module, "run") or not callable(module.run):
 
                     self.failed_modules[module_name] = "INVALID_RUN_CONTRACT"
@@ -63,6 +68,9 @@ class ModuleRouter:
 
                 self.modules[module_name] = module
 
+                # =========================
+                # 🧠 REGISTRY SYNC
+                # =========================
                 if register_module:
                     try:
                         register_module(module_name, module)
@@ -82,7 +90,7 @@ class ModuleRouter:
         print(f"[Router] Failed modules: {len(self.failed_modules)}")
 
     # =====================================================
-    # 📋 LIST
+    # 📋 LIST MODULES
     # =====================================================
 
     def list_modules(self):
@@ -113,12 +121,13 @@ class ModuleRouter:
 
         """
         Поддержка:
-        - старого формата (dict command)
-        - нового формата (state)
+        - нового state режима
+        - старого dict режима
+        - string режима
         """
 
         # =========================
-        # 🧠 NEW ARCH: STATE MODE
+        # 🧠 STATE MODE
         # =========================
         if isinstance(command, dict) and "task" in command:
 
@@ -128,27 +137,31 @@ class ModuleRouter:
             }
 
         # =========================
-        # STRING INPUT
+        # 📝 STRING MODE
         # =========================
         if isinstance(command, str):
 
             return {
                 "module": "director",
-                "data": {"task": command}
+                "data": {
+                    "task": command
+                }
             }
 
         # =========================
-        # FALLBACK
+        # ❌ INVALID INPUT
         # =========================
         if not isinstance(command, dict):
 
             return {
                 "module": "director",
-                "data": {"task": str(command)}
+                "data": {
+                    "task": str(command)
+                }
             }
 
         # =========================
-        # CLASSIC FORMAT
+        # 🧠 AUTO DIRECTOR
         # =========================
         if "module" not in command:
 
@@ -157,8 +170,10 @@ class ModuleRouter:
                 "data": command
             }
 
+        # =========================
+        # 📦 ENSURE DATA
+        # =========================
         if "data" not in command:
-
             command["data"] = {}
 
         return command
@@ -169,20 +184,35 @@ class ModuleRouter:
 
     def route(self, command):
 
-        # 🔒 normalize FIRST
+        # =========================
+        # 🧠 NORMALIZE
+        # =========================
         command = self.normalize(command)
 
         module_name = command.get("module")
         data = command.get("data", {})
 
         # =========================
-        # 🧠 INJECT SYSTEM STATE
+        # 🧠 LOAD SYSTEM STATE
         # =========================
         try:
-            data["system_state"] = system_state.get()
-        except:
-            pass
 
+            state = system_state.load()
+
+            # inject current task/data
+            system_state.inject(data)
+
+            state = system_state.get()
+
+            data["system_state"] = state
+
+        except Exception as e:
+
+            print(f"[Router] state inject error: {e}")
+
+        # =========================
+        # ❌ UNKNOWN MODULE
+        # =========================
         if module_name not in self.modules:
 
             print(f"[Router] ❌ unknown module: {module_name}")
@@ -193,6 +223,9 @@ class ModuleRouter:
                 "fallback": "director"
             }
 
+        # =========================
+        # 🚀 EXECUTION
+        # =========================
         try:
 
             module = self.modules[module_name]
@@ -200,6 +233,22 @@ class ModuleRouter:
             print(f"[Router] EXECUTE -> {module_name}")
 
             result = module.run(data)
+
+            # =========================
+            # 🧠 UPDATE STATE
+            # =========================
+            try:
+
+                state = system_state.get()
+
+                state["last_module"] = module_name
+                state["last_result"] = result
+
+                system_state.update("last_module", module_name)
+                system_state.update("last_result", result)
+
+            except Exception as e:
+                print(f"[Router] state update error: {e}")
 
             return {
                 "status": "success",
@@ -216,7 +265,7 @@ class ModuleRouter:
             }
 
     # =====================================================
-    # ❌ ERROR
+    # ❌ ERROR HELPER
     # =====================================================
 
     def _error(self, message):

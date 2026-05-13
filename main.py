@@ -1,7 +1,7 @@
 import os
 import json
 
-from core.module_router import ModuleRouter
+from core.module_router_v2 import ModuleRouterV2
 from modules.brain_controller import decide
 
 
@@ -11,16 +11,25 @@ from modules.brain_controller import decide
 
 def normalize(task):
 
-    # already dict
+    # =========================
+    # 📦 ALREADY DICT
+    # =========================
+
     if isinstance(task, dict):
         return task
 
-    # string input
+    # =========================
+    # 📝 STRING INPUT
+    # =========================
+
     if isinstance(task, str):
 
         text = task.strip()
 
-        # try parse json
+        # =====================
+        # 🔍 TRY JSON
+        # =====================
+
         try:
 
             parsed = json.loads(text)
@@ -34,19 +43,25 @@ def normalize(task):
         except Exception:
             pass
 
-        # clean text task
+        # =====================
+        # 🧠 CLEAN TASK
+        # =====================
+
         return {
             "task": text
         }
 
-    # fallback
+    # =========================
+    # ❌ FALLBACK
+    # =========================
+
     return {
         "task": str(task)
     }
 
 
 # =========================================================
-# 🧠 SPECIAL TASKS
+# 🧠 BRAIN MAP
 # =========================================================
 
 def run_brain_map():
@@ -82,6 +97,33 @@ def run_brain_map():
 
 
 # =========================================================
+# 🧠 ARCHITECTURE MAP
+# =========================================================
+
+def show_architecture(router):
+
+    print("\n🧠 SYSTEM ARCHITECTURE")
+    print("=" * 50)
+
+    roles = router.roles
+
+    for role, modules in roles.items():
+
+        print(f"\n[{role}] ({len(modules)})")
+
+        for m in modules[:10]:
+            print(f"  - {m}")
+
+    print("\n🔁 FLOW:")
+    print(" → ".join(router.get_flow()))
+
+    return {
+        "roles": dict(roles),
+        "flow": router.get_flow()
+    }
+
+
+# =========================================================
 # 🚀 ENTRY
 # =========================================================
 
@@ -102,12 +144,16 @@ if __name__ == "__main__":
     print("🎯 NORMALIZED TASK:", task)
 
     # =====================================================
-    # 🧠 SPECIAL ROUTES
+    # 🧠 TASK TEXT
     # =====================================================
 
     task_text = str(
         task.get("task", "")
     ).lower()
+
+    # =====================================================
+    # 🧠 SPECIAL: BRAIN MAP
+    # =====================================================
 
     if (
         "brain map" in task_text
@@ -122,10 +168,25 @@ if __name__ == "__main__":
         exit()
 
     # =====================================================
-    # 🔌 ROUTER
+    # 🔌 ROUTER V2
     # =====================================================
 
-    router = ModuleRouter()
+    router = ModuleRouterV2()
+
+    # =====================================================
+    # 🧠 SPECIAL: ARCHITECTURE
+    # =====================================================
+
+    if (
+        "architecture" in task_text
+        or "system roles" in task_text
+        or "router v2" in task_text
+        or "test router v2" in task_text
+    ):
+
+        result = show_architecture(router)
+
+        print("\n✅ ARCHITECTURE READY")
 
     # =====================================================
     # 🧠 BRAIN
@@ -136,7 +197,7 @@ if __name__ == "__main__":
     print("[Brain Decision]:", decision)
 
     # =====================================================
-    # 🛡 SAFETY LAYER
+    # 🛡 SAFETY
     # =====================================================
 
     module = decision.get("module")
@@ -163,3 +224,5 @@ if __name__ == "__main__":
     result = router.route(decision)
 
     print("✅ RESULT:", result)
+
+    print("\n🏁 MEGABOT END")

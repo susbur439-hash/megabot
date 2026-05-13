@@ -2,6 +2,8 @@ import os
 import importlib.util
 import random
 
+from core.system_state import system_state
+
 # =========================
 # ⚙ CONFIG
 # =========================
@@ -9,7 +11,6 @@ MODULES_DIR = "modules"
 DELETE_THRESHOLD = 30
 MIN_RUNS_TO_DELETE = 3
 
-# 🚨 защита ядра
 PROTECTED_MODULES = {
     "task_core",
     "decision",
@@ -18,7 +19,6 @@ PROTECTED_MODULES = {
     "control_layer",
     "system_observer"
 }
-
 
 # =========================
 # 📦 MODULE RUNNER
@@ -69,7 +69,7 @@ def run(data):
     data.setdefault("log", []).append("⚙️ {name} running")
 
     goal = data.setdefault("goal", {{}})
-    goal["progress"] = goal.get("progress", 0) + 10
+    goal["progress"] += 10 if "progress" in goal else 10
 
     data.setdefault("value", 0)
     data["value"] += 1
@@ -93,7 +93,7 @@ def run(data):
 
 
 # =========================
-# 🧹 SMART CLEANUP (FIXED)
+# 🧹 CLEANUP
 # =========================
 def cleanup_modules(data):
 
@@ -102,9 +102,6 @@ def cleanup_modules(data):
 
     stats = {}
 
-    # =========================
-    # 📊 COLLECT STATS
-    # =========================
     for e in experience:
         if not isinstance(e, dict):
             continue
@@ -112,25 +109,16 @@ def cleanup_modules(data):
         m = e.get("module")
         s = e.get("score")
 
-        if not m or s is None:
-            continue
+        if m and s is not None:
+            stats.setdefault(m, []).append(s)
 
-        stats.setdefault(m, []).append(s)
-
-    # =========================
-    # 🚨 GLOBAL BLOCK CHECK
-    # =========================
     global_block = (
         control_flags.get("overcreate", False)
         or control_flags.get("loop_detected", False)
     )
 
-    # =========================
-    # 🧹 ANALYSIS + DELETE
-    # =========================
     for module, scores in stats.items():
 
-        # 🚨 защита core
         if module in PROTECTED_MODULES:
             continue
 
@@ -141,37 +129,32 @@ def cleanup_modules(data):
 
         path = os.path.join(MODULES_DIR, module + ".py")
 
-        # =========================
-        # ❌ DELETE RULES
-        # =========================
+        should_delete = avg < DELETE_THRESHOLD and global_block
 
-        should_delete = (
-            avg < DELETE_THRESHOLD
-            and global_block
-        )
-
-        if not should_delete:
-            continue
-
-        if os.path.exists(path):
+        if should_delete and os.path.exists(path):
             try:
                 os.remove(path)
                 data["log"].append(
                     f"🗑️ deleted module: {module} (avg={round(avg,1)})"
                 )
-
             except Exception as e:
                 data["log"].append(f"❌ delete failed: {module} | {e}")
 
 
 # =========================
-# 🚀 EXECUTION CORE
+# 🚀 EXECUTION CORE (STATE-DRIVEN)
 # =========================
 def execution(data):
 
     data.setdefault("log", [])
     data.setdefault("experience", [])
     data.setdefault("execution_result", {})
+
+    # =========================
+    # 🧠 SYSTEM STATE (LOAD)
+    # =========================
+    state = system_state.load()
+    state = system_state.inject(data, state)
 
     decision = data.get("decision")
     module_used = data.get("module")
@@ -184,11 +167,6 @@ def execution(data):
         data, success = create_module(data)
         module_used = data.get("module")
 
-        if success:
-            data["log"].append(f"🧠 new module created: {module_used}")
-        else:
-            data["log"].append("❌ failed to create module")
-
     # =========================
     # 🚀 RUN
     # =========================
@@ -198,11 +176,6 @@ def execution(data):
         path = os.path.join(MODULES_DIR, module_used + ".py")
 
         data, success = run_python_module(path, data)
-
-        if success:
-            data["log"].append(f"🚀 executed: {module_used}")
-        else:
-            data["log"].append(f"❌ failed execution: {module_used}")
 
     else:
         data["log"].append("⚠️ execution skipped")
@@ -220,6 +193,15 @@ def execution(data):
         })
 
     # =========================
+    # 🧠 UPDATE STATE (КЛЮЧЕВОЕ)
+    # =========================
+    state["last_module"] = module_used
+    state["last_success"] = success
+    state["cycle"] = state.get("cycle", 0) + 1
+
+    system_state.save(state)
+
+    # =========================
     # 🧹 CLEANUP
     # =========================
     try:
@@ -235,9 +217,6 @@ def execution(data):
         "success": success
     }
 
-    # =========================
-    # 📊 SIGNAL
-    # =========================
     data["log"].append(
         "🧠 learning signal: success" if success else "🧠 learning signal: failure"
     )
@@ -245,6 +224,5 @@ def execution(data):
     return data
 
 
-# alias
 def execute(data):
     return execution(data)

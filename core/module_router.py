@@ -1,14 +1,9 @@
-# core/module_router.py
-
 import importlib
 import os
 import traceback
+from collections import defaultdict
 
 from core.system_state import system_state
-
-# =========================================================
-# 🧠 SYSTEM REGISTRY
-# =========================================================
 
 try:
     from modules.system_registry import register_module
@@ -16,239 +11,161 @@ except Exception:
     register_module = None
 
 
-class ModuleRouter:
+# =========================================================
+# ⚙️ LOG LEVELS
+# =========================================================
+LOG_LEVEL = os.getenv("ROUTER_LOG", "INFO")  # DEBUG | INFO | ERROR | SILENT
+
+def log(msg, level="INFO"):
+    if LOG_LEVEL == "SILENT":
+        return
+    if LOG_LEVEL == "ERROR" and level != "ERROR":
+        return
+    if LOG_LEVEL == "INFO" and level == "DEBUG":
+        return
+    print(msg)
+
+
+# =========================================================
+# 🧠 ROLE MAP
+# =========================================================
+
+ROLE_MAP = {
+    "ENTRYPOINT": ["main", "app", "start", "bot_start"],
+    "CONTROL": ["control", "router", "panel", "gateway"],
+    "DECISION": ["decision", "brain", "controller"],
+    "EXECUTION": ["execution", "executor", "action", "run"],
+    "ANALYSIS": ["analysis", "analyzer", "scan"],
+    "MEMORY": ["memory", "snapshot", "storage"],
+    "LEARNING": ["learn", "learning", "adaptive"]
+}
+
+
+class ModuleRouterV2:
 
     def __init__(self):
-
         self.modules = {}
-        self.failed_modules = {}
+        self.roles = defaultdict(list)
+        self.failed = {}
 
         self.load_modules()
+        self.build_architecture_map()
 
     # =====================================================
-    # 🔌 LOAD MODULES
+    # 📦 LOAD MODULES (quiet)
     # =====================================================
-
     def load_modules(self):
 
-        modules_path = "modules"
+        path = "modules"
+        log("[RouterV2] Loading modules...", "INFO")
 
-        print("[Router] Loading modules...")
-
-        if not os.path.exists(modules_path):
-            print("[Router] ERROR: modules folder not found")
+        if not os.path.exists(path):
+            log("[RouterV2] modules folder not found", "ERROR")
             return
 
-        for file in os.listdir(modules_path):
+        for file in os.listdir(path):
 
-            if not file.endswith(".py"):
+            if not file.endswith(".py") or file.startswith("__"):
                 continue
 
-            if file.startswith("__"):
-                continue
-
-            module_name = file[:-3]
+            name = file[:-3]
 
             try:
-
-                module_path = f"modules.{module_name}"
-
-                module = importlib.import_module(module_path)
+                module = importlib.import_module(f"modules.{name}")
                 importlib.reload(module)
 
-                # =========================
-                # 🛡 CONTRACT CHECK
-                # =========================
-                if not hasattr(module, "run") or not callable(module.run):
-
-                    self.failed_modules[module_name] = "INVALID_RUN_CONTRACT"
-
-                    print(f"[Router] ⚠ skipped: {module_name}")
+                if not hasattr(module, "run"):
+                    self.failed[name] = "NO_RUN"
                     continue
 
-                self.modules[module_name] = module
+                self.modules[name] = module
 
-                # =========================
-                # 🧠 REGISTRY SYNC
-                # =========================
                 if register_module:
-                    try:
-                        register_module(module_name, module)
-                    except Exception as e:
-                        print(f"[Registry] register failed: {e}")
+                    register_module(name, module)
 
-                print(f"[Router] ✅ loaded: {module_name}")
+                log(f"[RouterV2] loaded: {name}", "INFO")
 
             except Exception as e:
-
-                self.failed_modules[module_name] = str(e)
-
-                print(f"[Router] ❌ error {module_name}: {e}")
-                traceback.print_exc()
-
-        print(f"[Router] Total modules loaded: {len(self.modules)}")
-        print(f"[Router] Failed modules: {len(self.failed_modules)}")
+                self.failed[name] = str(e)
+                log(f"[RouterV2] error {name}: {e}", "ERROR")
 
     # =====================================================
-    # 📋 LIST MODULES
+    # 🧠 ROLE DETECTION
     # =====================================================
+    def detect_role(self, name: str):
+        lower = name.lower()
 
-    def list_modules(self):
-        return list(self.modules.keys())
+        for role, keys in ROLE_MAP.items():
+            for k in keys:
+                if k in lower:
+                    return role
 
-    # =====================================================
-    # 🔄 RELOAD
-    # =====================================================
+        return "UNKNOWN"
 
-    def reload_modules(self):
+    def build_architecture_map(self):
 
-        self.modules = {}
-        self.failed_modules = {}
+        for name in self.modules:
+            role = self.detect_role(name)
+            self.roles[role].append(name)
 
-        self.load_modules()
-
-        return {
-            "status": "reloaded",
-            "modules": self.list_modules(),
-            "failed": self.failed_modules
-        }
+        log(f"[RouterV2] roles built: {len(self.roles)}", "INFO")
 
     # =====================================================
-    # 🧠 NORMALIZER (STATE-AWARE)
+    # 🔁 FLOW
     # =====================================================
-
-    def normalize(self, command):
-
-        """
-        Поддержка:
-        - нового state режима
-        - старого dict режима
-        - string режима
-        """
-
-        # =========================
-        # 🧠 STATE MODE
-        # =========================
-        if isinstance(command, dict) and "task" in command:
-
-            return {
-                "module": "director",
-                "data": command
-            }
-
-        # =========================
-        # 📝 STRING MODE
-        # =========================
-        if isinstance(command, str):
-
-            return {
-                "module": "director",
-                "data": {
-                    "task": command
-                }
-            }
-
-        # =========================
-        # ❌ INVALID INPUT
-        # =========================
-        if not isinstance(command, dict):
-
-            return {
-                "module": "director",
-                "data": {
-                    "task": str(command)
-                }
-            }
-
-        # =========================
-        # 🧠 AUTO DIRECTOR
-        # =========================
-        if "module" not in command:
-
-            return {
-                "module": "director",
-                "data": command
-            }
-
-        # =========================
-        # 📦 ENSURE DATA
-        # =========================
-        if "data" not in command:
-            command["data"] = {}
-
-        return command
+    def get_flow(self):
+        return [
+            "CONTROL",
+            "ENTRYPOINT",
+            "ANALYSIS",
+            "DECISION",
+            "EXECUTION",
+            "MEMORY"
+        ]
 
     # =====================================================
-    # 🎯 ROUTE (STATE CORE READY)
+    # 🎯 ROUTE (CLEAN OUTPUT)
     # =====================================================
-
     def route(self, command):
 
-        # =========================
-        # 🧠 NORMALIZE
-        # =========================
         command = self.normalize(command)
 
-        module_name = command.get("module")
+        module_name = command.get("module", "director")
         data = command.get("data", {})
 
-        # =========================
-        # 🧠 LOAD SYSTEM STATE
-        # =========================
+        # =====================
+        # STATE
+        # =====================
         try:
-
             state = system_state.load()
-
-            # inject current task/data
             system_state.inject(data)
-
             state = system_state.get()
-
             data["system_state"] = state
+        except:
+            state = {}
 
-        except Exception as e:
-
-            print(f"[Router] state inject error: {e}")
-
-        # =========================
-        # ❌ UNKNOWN MODULE
-        # =========================
+        # =====================
+        # FALLBACK
+        # =====================
         if module_name not in self.modules:
+            log(f"[RouterV2] fallback -> director", "ERROR")
+            module_name = "director"
 
-            print(f"[Router] ❌ unknown module: {module_name}")
+        module = self.modules[module_name]
 
-            return {
-                "status": "error",
-                "message": f"Module not found: {module_name}",
-                "fallback": "director"
-            }
-
-        # =========================
-        # 🚀 EXECUTION
-        # =========================
+        # =====================
+        # EXECUTION
+        # =====================
         try:
+            result = module.run({
+                **data,
+                "system_state": state,
+                "roles": dict(self.roles),
+                "flow": self.get_flow()
+            })
 
-            module = self.modules[module_name]
-
-            print(f"[Router] EXECUTE -> {module_name}")
-
-            result = module.run(data)
-
-            # =========================
-            # 🧠 UPDATE STATE
-            # =========================
-            try:
-
-                state = system_state.get()
-
-                state["last_module"] = module_name
-                state["last_result"] = result
-
-                system_state.update("last_module", module_name)
-                system_state.update("last_result", result)
-
-            except Exception as e:
-                print(f"[Router] state update error: {e}")
+            # only summary log (IMPORTANT FIX)
+            log(f"[RouterV2] ✔ {module_name} done", "INFO")
 
             return {
                 "status": "success",
@@ -257,20 +174,33 @@ class ModuleRouter:
             }
 
         except Exception as e:
+            log(f"[RouterV2] crash in {module_name}: {e}", "ERROR")
 
             return {
                 "status": "error",
+                "module": module_name,
                 "message": str(e),
                 "trace": traceback.format_exc()
             }
 
     # =====================================================
-    # ❌ ERROR HELPER
+    # 🧼 NORMALIZE (UNCHANGED)
     # =====================================================
+    def normalize(self, command):
 
-    def _error(self, message):
+        if isinstance(command, dict) and "task" in command:
+            return {"module": "director", "data": command}
 
-        return {
-            "status": "error",
-            "message": message
-        }
+        if isinstance(command, str):
+            return {"module": "director", "data": {"task": command}}
+
+        if not isinstance(command, dict):
+            return {"module": "director", "data": {"task": str(command)}}
+
+        if "module" not in command:
+            return {"module": "director", "data": command}
+
+        if "data" not in command:
+            command["data"] = {}
+
+        return command

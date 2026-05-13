@@ -23,26 +23,28 @@ PROTECTED_MODULES = {
 # =========================
 # 📦 MODULE RUNNER
 # =========================
-def run_python_module(module_path, data):
+def run_python_module(module_path, data, state):
+
     try:
         if not os.path.exists(module_path):
-            data["log"].append(f"❌ module not found: {module_path}")
+            data.setdefault("log", []).append(f"❌ module not found: {module_path}")
             return data, False
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
 
         if spec is None or spec.loader is None:
-            data["log"].append(f"❌ invalid module spec: {module_path}")
+            data.setdefault("log", []).append(f"❌ invalid module spec: {module_path}")
             return data, False
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
         if not hasattr(module, "run"):
-            data["log"].append("❌ module has no run()")
+            data.setdefault("log", []).append("❌ module has no run()")
             return data, False
 
-        result = module.run(data)
+        # state-aware execution (optional future use)
+        result = module.run(data, state)
 
         if isinstance(result, dict):
             data = result
@@ -50,7 +52,7 @@ def run_python_module(module_path, data):
         return data, True
 
     except Exception as e:
-        data["log"].append(f"❌ module error: {e}")
+        data.setdefault("log", []).append(f"❌ module error: {e}")
         return data, False
 
 
@@ -58,6 +60,7 @@ def run_python_module(module_path, data):
 # 🧩 CREATE MODULE
 # =========================
 def create_module(data):
+
     try:
         os.makedirs(MODULES_DIR, exist_ok=True)
 
@@ -65,11 +68,11 @@ def create_module(data):
         path = os.path.join(MODULES_DIR, name + ".py")
 
         code = f"""
-def run(data):
+def run(data, state=None):
     data.setdefault("log", []).append("⚙️ {name} running")
 
     goal = data.setdefault("goal", {{}})
-    goal["progress"] += 10 if "progress" in goal else 10
+    goal["progress"] = goal.get("progress", 0) + 10
 
     data.setdefault("value", 0)
     data["value"] += 1
@@ -83,12 +86,12 @@ def run(data):
             f.write(code)
 
         data["module"] = name
-        data["log"].append(f"🧩 created module: {name}")
+        data.setdefault("log", []).append(f"🧩 created module: {name}")
 
         return data, True
 
     except Exception as e:
-        data["log"].append(f"❌ create_module error: {e}")
+        data.setdefault("log", []).append(f"❌ create_module error: {e}")
         return data, False
 
 
@@ -129,20 +132,18 @@ def cleanup_modules(data):
 
         path = os.path.join(MODULES_DIR, module + ".py")
 
-        should_delete = avg < DELETE_THRESHOLD and global_block
-
-        if should_delete and os.path.exists(path):
+        if avg < DELETE_THRESHOLD and global_block and os.path.exists(path):
             try:
                 os.remove(path)
-                data["log"].append(
+                data.setdefault("log", []).append(
                     f"🗑️ deleted module: {module} (avg={round(avg,1)})"
                 )
             except Exception as e:
-                data["log"].append(f"❌ delete failed: {module} | {e}")
+                data.setdefault("log", []).append(f"❌ delete failed: {module} | {e}")
 
 
 # =========================
-# 🚀 EXECUTION CORE (STATE-DRIVEN)
+# 🚀 EXECUTION CORE (STATE-DRIVEN FIXED)
 # =========================
 def execution(data):
 
@@ -151,10 +152,10 @@ def execution(data):
     data.setdefault("execution_result", {})
 
     # =========================
-    # 🧠 SYSTEM STATE (LOAD)
+    # 🧠 STATE FLOW (FIXED)
     # =========================
     state = system_state.load()
-    state = system_state.inject(data, state)
+    state = system_state.inject(data)
 
     decision = data.get("decision")
     module_used = data.get("module")
@@ -175,10 +176,10 @@ def execution(data):
         module_used = str(module_used).replace(".py", "").replace("modules/", "")
         path = os.path.join(MODULES_DIR, module_used + ".py")
 
-        data, success = run_python_module(path, data)
+        data, success = run_python_module(path, data, state)
 
     else:
-        data["log"].append("⚠️ execution skipped")
+        data.setdefault("log", []).append("⚠️ execution skipped")
 
     # =========================
     # 🧠 EXPERIENCE
@@ -193,13 +194,13 @@ def execution(data):
         })
 
     # =========================
-    # 🧠 UPDATE STATE (КЛЮЧЕВОЕ)
+    # 🧠 UPDATE STATE (FIXED)
     # =========================
     state["last_module"] = module_used
     state["last_success"] = success
     state["cycle"] = state.get("cycle", 0) + 1
 
-    system_state.save(state)
+    system_state.state = state
 
     # =========================
     # 🧹 CLEANUP
@@ -207,7 +208,7 @@ def execution(data):
     try:
         cleanup_modules(data)
     except Exception as e:
-        data["log"].append(f"❌ cleanup error: {e}")
+        data.setdefault("log", []).append(f"❌ cleanup error: {e}")
 
     # =========================
     # 📦 RESULT
@@ -217,7 +218,7 @@ def execution(data):
         "success": success
     }
 
-    data["log"].append(
+    data.setdefault("log", []).append(
         "🧠 learning signal: success" if success else "🧠 learning signal: failure"
     )
 

@@ -1,6 +1,6 @@
 {
   "stats": {
-    "total_files": 789
+    "total_files": 791
   },
   "layers": {
     "OTHER": [
@@ -795,7 +795,9 @@
       "./megabot_core/observer.py",
       "./core/module_router.py",
       "./core/central_brain.py",
+      "./core/central_brain_v2.py",
       "./core/engine.py",
+      "./core/system_state.py",
       "./modules/memory_core.py",
       "./modules/snapshot_learning_core.py",
       "./modules/task_core.py"
@@ -928,11 +930,25 @@
       "importlib",
       "os",
       "traceback",
+      "core.system_state",
       "modules.system_registry"
     ],
-    "./core/central_brain.py": [],
+    "./core/central_brain.py": [
+      "json",
+      "os"
+    ],
+    "./core/central_brain_v2.py": [
+      "json",
+      "os",
+      "collections"
+    ],
     "./core/engine.py": [
-      "core.module_router"
+      "core.module_router",
+      "core.system_state"
+    ],
+    "./core/system_state.py": [
+      "json",
+      "os"
     ],
     "./megabot/modules/director.py": [
       "modules.task_core",
@@ -1174,7 +1190,8 @@
     "./modules/module_42.py": [],
     "./modules/brain_controller.py": [
       "json",
-      "os"
+      "os",
+      "core.system_state"
     ],
     "./modules/module_452.py": [],
     "./modules/module_342.py": [],
@@ -1357,7 +1374,8 @@
     "./modules/execution.py": [
       "os",
       "importlib.util",
-      "random"
+      "random",
+      "core.system_state"
     ],
     "./modules/module_288.py": [],
     "./modules/module_555.py": [],
@@ -1703,7 +1721,8 @@
     "./modules/system_observer.py": [
       "os",
       "re",
-      "json"
+      "json",
+      "core.system_state"
     ],
     "./modules/module_250.py": [],
     "./modules/module_237.py": [],

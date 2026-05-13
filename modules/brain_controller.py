@@ -1,6 +1,8 @@
 import json
 import os
 
+from core.system_state import system_state
+
 MEMORY_FILE = "code_understanding.json"
 
 
@@ -28,33 +30,18 @@ def load_memory():
 INTENTS = {
 
     "execution": [
-        "run",
-        "execute",
-        "launch",
-        "start",
-        "build",
-        "repair",
-        "fix",
-        "deploy",
-        "create"
+        "run", "execute", "launch", "start",
+        "build", "repair", "fix", "deploy", "create"
     ],
 
     "analysis": [
-        "analyze",
-        "scan",
-        "inspect",
-        "check",
-        "review",
-        "diagnose"
+        "analyze", "scan", "inspect", "check",
+        "review", "diagnose"
     ],
 
     "intelligence": [
-        "brain",
-        "system",
-        "strategy",
-        "architecture",
-        "reason",
-        "think"
+        "brain", "system", "strategy",
+        "architecture", "reason", "think"
     ]
 }
 
@@ -63,13 +50,7 @@ INTENTS = {
 # 🧠 DETECT INTENT
 # =========================================================
 
-def detect_intent(task):
-
-    # нормализация входа
-    if isinstance(task, dict):
-        task_text = task.get("task", "")
-    else:
-        task_text = str(task)
+def detect_intent(task_text):
 
     task_lower = task_text.lower()
 
@@ -94,12 +75,18 @@ def detect_intent(task):
 
 
 # =========================================================
-# 🧠 DECISION ENGINE
+# 🧠 DECISION ENGINE (STATE-BASED)
 # =========================================================
 
 def decide(task):
 
-    # нормализация входа
+    # =========================
+    # 🧠 SYSTEM STATE INTEGRATION
+    # =========================
+    state = system_state.inject(task)
+    state = system_state.load()
+
+    # нормализация
     if isinstance(task, dict):
         task_text = task.get("task", "")
     else:
@@ -112,6 +99,10 @@ def decide(task):
 
     intent = detect_intent(task_text)
 
+    # сохраняем в state
+    state["intent"] = intent
+    state["task_text"] = task_text
+
     # =====================================================
     # ⚙ EXECUTION
     # =====================================================
@@ -122,7 +113,8 @@ def decide(task):
             "module": "director",
             "data": {
                 "task": task_text,
-                "preferred": roles.get("execution_core", [])
+                "preferred": roles.get("execution_core", []),
+                "system_state": state
             }
         }
 
@@ -135,7 +127,8 @@ def decide(task):
         return {
             "module": "analysis",
             "data": {
-                "task": task_text
+                "task": task_text,
+                "system_state": state
             }
         }
 
@@ -149,7 +142,8 @@ def decide(task):
             "module": "intelligence_layer",
             "data": {
                 "question": task_text,
-                "brain_candidates": roles.get("decision_orchestrator", [])
+                "brain_candidates": roles.get("decision_orchestrator", []),
+                "system_state": state
             }
         }
 
@@ -161,7 +155,8 @@ def decide(task):
         "module": "task_interpreter",
         "data": {
             "task": task_text,
-            "requires_analysis": True
+            "requires_analysis": True,
+            "system_state": state
         }
     }
 
@@ -182,4 +177,4 @@ if __name__ == "__main__":
         result = decide(task)
 
         print("\n🧠 DECISION:")
-        print(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2, ensure_ascii=False))

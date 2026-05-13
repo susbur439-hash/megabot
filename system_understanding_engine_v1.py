@@ -5,67 +5,59 @@ from collections import defaultdict
 ROOT = "."
 
 # =========================
-# 🧠 РОЛИ СИСТЕМЫ
+# 🧠 РОЛИ
 # =========================
 ROLE_KEYWORDS = {
     "ENTRYPOINT": ["main", "run", "start", "app", "bot_start"],
     "CONTROL": ["control", "panel", "gateway", "router", "bus"],
-    "DECISION_ENGINE": ["decision", "brain", "controller"],
-    "EXECUTOR": ["execution", "executor", "run", "action"],
-    "ANALYZER": ["analysis", "analyzer", "inspect", "scan"],
-    "MEMORY": ["memory", "storage", "snapshot"],
-    "LEARNING": ["learn", "learning", "adaptive"]
+    "DECISION": ["decision", "brain", "controller"],
+    "EXECUTION": ["execution", "executor", "action"],
+    "ANALYSIS": ["analysis", "analyzer", "scan", "inspect"],
+    "MEMORY": ["memory", "snapshot", "storage"],
+    "LEARNING": ["learn", "learning", "adaptive"],
+    "CORE": ["core", "engine"]
 }
 
-
 # =========================
-# 📂 СКАН ВСЕХ ФАЙЛОВ
+# 📂 SCAN FILES
 # =========================
 def scan_files():
-    all_files = []
-    for root, _, files in os.walk(ROOT):
-        for f in files:
-            all_files.append(os.path.join(root, f).replace("\\", "/"))
-    return all_files
-
+    files = []
+    for root, _, fs in os.walk(ROOT):
+        for f in fs:
+            files.append(os.path.join(root, f).replace("\\", "/"))
+    return files
 
 # =========================
-# 🧩 ОПРЕДЕЛЕНИЕ РОЛИ
+# 🧩 ROLE DETECTION
 # =========================
 def detect_role(path: str):
     lower = path.lower()
 
-    for role, keywords in ROLE_KEYWORDS.items():
-        for kw in keywords:
+    for role, kws in ROLE_KEYWORDS.items():
+        for kw in kws:
             if kw in lower:
                 return role
 
     return "UNKNOWN"
 
-
 # =========================
-# 📁 ТИП ФАЙЛА
+# 📁 FILE TYPE
 # =========================
 def detect_type(path: str):
     ext = os.path.splitext(path)[1]
-
-    mapping = {
+    return {
         ".py": "python",
         ".json": "json",
         ".md": "docs",
         ".txt": "text",
         ".yml": "workflow",
         ".yaml": "workflow",
-        ".sh": "script",
-        ".cfg": "config",
-        ".ini": "config"
-    }
-
-    return mapping.get(ext, "other")
-
+        ".sh": "script"
+    }.get(ext, "other")
 
 # =========================
-# 🔗 ИМПОРТЫ
+# 🔗 IMPORTS
 # =========================
 def extract_imports(file_path):
     if not file_path.endswith(".py"):
@@ -76,99 +68,119 @@ def extract_imports(file_path):
             tree = ast.parse(f.read(), filename=file_path)
 
         imports = []
-
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                for n in node.names:
-                    imports.append(n.name)
-
+                imports.extend([n.name for n in node.names])
             elif isinstance(node, ast.ImportFrom):
                 if node.module:
                     imports.append(node.module)
 
         return imports
-
     except:
         return []
 
+# =========================
+# 🎯 PURPOSE DETECTION
+# =========================
+def detect_purpose(path: str):
+    name = os.path.basename(path).lower()
+
+    if "main" in name or "run" in name:
+        return "ENTRYPOINT"
+    if "control" in name or "panel" in name:
+        return "CONTROL"
+    if "engine" in name:
+        return "ENGINE"
+    if "test" in name:
+        return "TEST"
+    return "UTIL"
 
 # =========================
-# 🧠 FLOW ВЫПОЛНЕНИЯ (ПРОСТАЯ МОДЕЛЬ)
+# 🧠 BUILD MODEL
 # =========================
-def build_flow_map():
-    return [
-        "CONTROL",
-        "ENTRYPOINT",
-        "ANALYZER",
-        "DECISION_ENGINE",
-        "EXECUTOR",
-        "MEMORY"
-    ]
-
-
-# =========================
-# 🧠 ENGINE
-# =========================
-def build_system_model():
+def build_model():
     files = scan_files()
 
     model = {
-        "stats": {
-            "total_files": len(files)
-        },
+        "stats": {"total_files": len(files)},
         "roles": defaultdict(list),
         "types": defaultdict(list),
+        "purposes": defaultdict(list),
         "imports": {},
-        "flow": build_flow_map(),
-        "unknown_files": []
+        "edges": [],
+        "unknown": []
     }
 
     for f in files:
         role = detect_role(f)
         ftype = detect_type(f)
+        purpose = detect_purpose(f)
         imports = extract_imports(f)
 
         model["roles"][role].append(f)
         model["types"][ftype].append(f)
+        model["purposes"][purpose].append(f)
         model["imports"][f] = imports
 
         if role == "UNKNOWN" and f.endswith(".py"):
-            model["unknown_files"].append(f)
+            model["unknown"].append(f)
+
+    # =========================
+    # 🔗 BUILD EDGES
+    # =========================
+    for file, imports in model["imports"].items():
+        for imp in imports:
+            model["edges"].append({"from": file, "to": imp})
 
     return model
 
+# =========================
+# 📊 SCORE ENGINE
+# =========================
+def architecture_score(model):
+    total = model["stats"]["total_files"]
+    unknown = len(model["unknown"])
+
+    if total == 0:
+        return 0
+
+    known_ratio = (total - unknown) / total
+    return round(known_ratio * 100, 2)
 
 # =========================
-# 📊 ОТЧЁТ
+# 📊 REPORT
 # =========================
 def print_report(model):
-    print("\n🧠 MEGABOT SYSTEM UNDERSTANDING ENGINE v1")
-    print("=" * 55)
+    print("\n🧠 MEGABOT SYSTEM UNDERSTANDING ENGINE v2 (MAX)")
+    print("=" * 60)
 
-    print("\n📦 TOTAL FILES:", model["stats"]["total_files"])
+    print("\n📦 FILES:", model["stats"]["total_files"])
 
     print("\n🧩 ROLES:")
-    for role, items in model["roles"].items():
-        print(f"  {role}: {len(items)}")
+    for k, v in model["roles"].items():
+        print(f"  {k}: {len(v)}")
 
     print("\n📁 TYPES:")
-    for t, items in model["types"].items():
-        print(f"  {t}: {len(items)}")
+    for k, v in model["types"].items():
+        print(f"  {k}: {len(v)}")
 
-    print("\n🔁 FLOW:")
-    print("  → ".join(model["flow"]))
+    print("\n🎯 PURPOSES:")
+    for k, v in model["purposes"].items():
+        print(f"  {k}: {len(v)}")
 
-    print("\n⚠ UNKNOWN FILES:", len(model["unknown_files"]))
-
-    print("\n🔍 SAMPLE IMPORTS:")
-    sample = list(model["imports"].items())[:5]
-    for k, v in sample:
-        print(f"  {k} → {v[:3]}")
-
+    print("\n🔗 EDGES:", len(model["edges"]))
+    print("⚠ UNKNOWN:", len(model["unknown"]))
+    print("📊 ARCH SCORE:", architecture_score(model), "%")
 
 # =========================
 # 🚀 RUN
 # =========================
 if __name__ == "__main__":
-    model = build_system_model()
+    model = build_model()
     print_report(model)
+
+    with open("system_model_v2.json", "w", encoding="utf-8") as f:
+        import json
+        json.dump(model, f, indent=2, ensure_ascii=False)
+
+    print("\n💾 Saved: system_model_v2.json")

@@ -2,6 +2,8 @@ import importlib
 import os
 import traceback
 
+from core.system_state import system_state
+
 # =========================================================
 # 🧠 SYSTEM REGISTRY
 # =========================================================
@@ -52,9 +54,6 @@ class ModuleRouter:
                 module = importlib.import_module(module_path)
                 importlib.reload(module)
 
-                # =========================
-                # CONTRACT CHECK (OS MODE)
-                # =========================
                 if not hasattr(module, "run") or not callable(module.run):
 
                     self.failed_modules[module_name] = "INVALID_RUN_CONTRACT"
@@ -64,7 +63,6 @@ class ModuleRouter:
 
                 self.modules[module_name] = module
 
-                # registry sync
                 if register_module:
                     try:
                         register_module(module_name, module)
@@ -108,16 +106,30 @@ class ModuleRouter:
         }
 
     # =====================================================
-    # 🧠 OS MODE NORMALIZER (КЛЮЧЕВОЕ ДОБАВЛЕНИЕ)
+    # 🧠 NORMALIZER (STATE-AWARE)
     # =====================================================
 
     def normalize(self, command):
 
         """
-        Приводит ВСЕ команды к единому формату
-        OS MODE: Brain не имеет права ломать контракт
+        Поддержка:
+        - старого формата (dict command)
+        - нового формата (state)
         """
 
+        # =========================
+        # 🧠 NEW ARCH: STATE MODE
+        # =========================
+        if isinstance(command, dict) and "task" in command:
+
+            return {
+                "module": "director",
+                "data": command
+            }
+
+        # =========================
+        # STRING INPUT
+        # =========================
         if isinstance(command, str):
 
             return {
@@ -125,6 +137,9 @@ class ModuleRouter:
                 "data": {"task": command}
             }
 
+        # =========================
+        # FALLBACK
+        # =========================
         if not isinstance(command, dict):
 
             return {
@@ -132,7 +147,9 @@ class ModuleRouter:
                 "data": {"task": str(command)}
             }
 
-        # защита от brain мусора
+        # =========================
+        # CLASSIC FORMAT
+        # =========================
         if "module" not in command:
 
             return {
@@ -147,7 +164,7 @@ class ModuleRouter:
         return command
 
     # =====================================================
-    # 🎯 ROUTE (OS MODE CORE)
+    # 🎯 ROUTE (STATE CORE READY)
     # =====================================================
 
     def route(self, command):
@@ -157,6 +174,14 @@ class ModuleRouter:
 
         module_name = command.get("module")
         data = command.get("data", {})
+
+        # =========================
+        # 🧠 INJECT SYSTEM STATE
+        # =========================
+        try:
+            data["system_state"] = system_state.get()
+        except:
+            pass
 
         if module_name not in self.modules:
 

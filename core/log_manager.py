@@ -2,82 +2,109 @@ import json
 import traceback
 
 # =========================
-# ⚙️ GLOBAL MODE
+# ⚙️ LOG MODES
 # =========================
 
-LOG_MODE = "CLEAN"
-# CLEAN | DEBUG | SILENT
+CLEAN = "CLEAN"
+DEBUG = "DEBUG"
+SILENT = "SILENT"
 
-
-# =========================
-# 🧠 UTIL: SHORTENER
-# =========================
-
-def short(obj, max_keys=5):
-
-    if isinstance(obj, dict):
-        return {
-            k: short(v)
-            for i, (k, v) in enumerate(obj.items())
-            if i < max_keys
-        }
-
-    if isinstance(obj, list):
-        return obj[:5]
-
-    return obj
-
-
-# =========================
-# 🧠 CORE LOGGER
-# =========================
 
 class LogManager:
 
+    def __init__(self):
+        self.mode = CLEAN
+
+    # =========================
+    # ⚙️ MODE CONTROL
+    # =========================
+
     def set_mode(self, mode: str):
-        global LOG_MODE
-        LOG_MODE = mode
+        self.mode = mode
+
+    # =========================
+    # 🧠 SHORTENER (SAFE)
+    # =========================
+
+    def short(self, obj, depth=2, max_items=5):
+
+        if depth <= 0:
+            return "..."
+
+        if isinstance(obj, dict):
+            return {
+                k: self.short(v, depth - 1, max_items)
+                for i, (k, v) in enumerate(obj.items())
+                if i < max_items
+            }
+
+        if isinstance(obj, list):
+            return obj[:max_items]
+
+        return obj
+
+    # =========================
+    # 🧠 BASE LOG
+    # =========================
 
     def log(self, *args):
 
-        if LOG_MODE == "SILENT":
+        if self.mode == SILENT:
             return
 
         print(*args)
 
-    # =====================
+    # =========================
     # 🧠 DECISION LOG
-    # =====================
+    # =========================
 
     def decision(self, decision: dict):
 
-        if LOG_MODE == "SILENT":
+        if self.mode == SILENT:
             return
 
-        if LOG_MODE == "DEBUG":
-            print("[DECISION FULL]:")
+        if self.mode == DEBUG:
+            print("[DECISION FULL]")
             print(json.dumps(decision, indent=2, ensure_ascii=False))
             return
 
-        print("[DECISION]:", {
+        print("[DECISION]", {
             "module": decision.get("module"),
             "keys": list(decision.keys())[:3]
         })
 
-    # =====================
-    # 🧠 STATE LOG
-    # =====================
+    # =========================
+    # 🧠 STATE LOG (SAFE)
+    # =========================
 
     def state(self, state: dict):
 
-        if LOG_MODE != "DEBUG":
+        if self.mode != DEBUG:
             return
 
-        print("[STATE]:")
+        print("[STATE]")
         try:
-            print(json.dumps(short(state), indent=2, ensure_ascii=False))
+            print(json.dumps(self.short(state), indent=2, ensure_ascii=False))
         except:
             print(traceback.format_exc())
+
+    # =========================
+    # 🧠 SYSTEM STATE SUMMARY
+    # =========================
+
+    def system_state(self, state: dict):
+
+        if self.mode == SILENT:
+            return
+
+        summary = {
+            "cycle": state.get("cycle"),
+            "mode": state.get("mode"),
+            "progress": state.get("goal", {}).get("progress"),
+            "module": state.get("last_module")
+        }
+
+        print("[STATE SUMMARY]", summary)
 
 
 # =========================

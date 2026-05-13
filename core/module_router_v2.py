@@ -6,34 +6,33 @@ from collections import defaultdict
 
 from core.system_state import system_state
 
+# =========================
+# ⚙️ LOG CONTROL
+# =========================
+LOG_LEVEL = "INFO"
+# OPTIONS: "SILENT", "ERROR", "INFO"
+
+def log(msg, level="INFO"):
+    if LOG_LEVEL == "SILENT":
+        return
+    if LOG_LEVEL == "ERROR" and level != "ERROR":
+        return
+    print(msg)
+
+
+# =========================
+# 🧠 REGISTRY
+# =========================
+
 try:
     from modules.system_registry import register_module
 except Exception:
     register_module = None
 
 
-# =========================================================
-# ⚙️ LOG LEVEL CONTROL
-# =========================================================
-# silent  -> почти ничего
-# normal  -> краткие логи
-# debug   -> всё как сейчас (но контролируемо)
-# =========================================================
-
-LOG_LEVEL = "normal"
-
-
-def log(msg, level="normal"):
-    if LOG_LEVEL == "silent":
-        return
-    if LOG_LEVEL == "normal" and level == "debug":
-        return
-    print(msg)
-
-
-# =========================================================
+# =========================
 # 🧠 ROLE MAP
-# =========================================================
+# =========================
 
 ROLE_MAP = {
     "ENTRYPOINT": ["main", "app", "start", "bot_start"],
@@ -49,7 +48,6 @@ ROLE_MAP = {
 class ModuleRouterV2:
 
     def __init__(self):
-
         self.modules = {}
         self.roles = defaultdict(list)
         self.failed = {}
@@ -57,27 +55,21 @@ class ModuleRouterV2:
         self.load_modules()
         self.build_architecture_map()
 
-    # =====================================================
-    # 📦 LOAD MODULES (SAFE)
-    # =====================================================
-
+    # =========================
+    # 📦 LOAD
+    # =========================
     def load_modules(self):
 
         path = "modules"
-
-        log("[RouterV2] loading modules...")
+        log("[RouterV2] loading modules...", "INFO")
 
         if not os.path.exists(path):
-            log("[RouterV2] ERROR: modules folder not found")
+            log("[RouterV2] modules folder not found", "ERROR")
             return
-
-        ok_count = 0
 
         for file in os.listdir(path):
 
-            if not file.endswith(".py"):
-                continue
-            if file.startswith("__"):
+            if not file.endswith(".py") or file.startswith("__"):
                 continue
 
             name = file[:-3]
@@ -86,12 +78,11 @@ class ModuleRouterV2:
                 module = importlib.import_module(f"modules.{name}")
                 importlib.reload(module)
 
-                if not hasattr(module, "run") or not callable(module.run):
+                if not hasattr(module, "run"):
                     self.failed[name] = "NO_RUN"
                     continue
 
                 self.modules[name] = module
-                ok_count += 1
 
                 if register_module:
                     try:
@@ -99,17 +90,16 @@ class ModuleRouterV2:
                     except Exception:
                         pass
 
+                log(f"[RouterV2] loaded: {name}")
+
             except Exception as e:
                 self.failed[name] = str(e)
+                log(f"[RouterV2] error: {name}", "ERROR")
 
-        log(f"[RouterV2] modules OK={ok_count} FAILED={len(self.failed)}")
-
-    # =====================================================
-    # 🧠 ROLE DETECTION
-    # =====================================================
-
+    # =========================
+    # 🧠 ROLE DETECT
+    # =========================
     def detect_role(self, name: str):
-
         lower = name.lower()
 
         for role, keys in ROLE_MAP.items():
@@ -119,33 +109,28 @@ class ModuleRouterV2:
 
         return "UNKNOWN"
 
-    # =====================================================
-    # 🧠 ARCHITECTURE MAP
-    # =====================================================
-
+    # =========================
+    # 🧠 ARCH MAP
+    # =========================
     def build_architecture_map(self):
 
         self.roles = defaultdict(list)
 
-        for name in self.modules.keys():
-            role = self.detect_role(name)
-            self.roles[role].append(name)
+        for name in self.modules:
+            self.roles[self.detect_role(name)].append(name)
 
         try:
             with open("architecture_map.json", "w", encoding="utf-8") as f:
                 json.dump(dict(self.roles), f, indent=2, ensure_ascii=False)
-
-        except Exception:
+        except:
             pass
 
-        log("[RouterV2] architecture map ready")
+        log("[RouterV2] architecture map built")
 
-    # =====================================================
+    # =========================
     # 🔁 FLOW
-    # =====================================================
-
+    # =========================
     def get_flow(self):
-
         return [
             "CONTROL",
             "ENTRYPOINT",
@@ -155,10 +140,9 @@ class ModuleRouterV2:
             "MEMORY"
         ]
 
-    # =====================================================
-    # 🧼 NORMALIZER
-    # =====================================================
-
+    # =========================
+    # 🧼 NORMALIZE
+    # =========================
     def normalize(self, command):
 
         if isinstance(command, str):
@@ -170,21 +154,18 @@ class ModuleRouterV2:
         if "module" not in command:
             return {"module": "director", "data": command}
 
-        if "data" not in command:
-            command["data"] = {}
-
+        command.setdefault("data", {})
         return command
 
-    # =====================================================
-    # 🎯 ROUTE (CLEAN + SAFE)
-    # =====================================================
-
+    # =========================
+    # 🎯 ROUTE
+    # =========================
     def route(self, command):
 
         command = self.normalize(command)
 
-        # ---- STATE (SAFE LOAD) ----
         try:
+            system_state.load()
             system_state.inject(command)
             state = system_state.get()
         except Exception:
@@ -194,18 +175,10 @@ class ModuleRouterV2:
         data = command.get("data", {})
 
         if module_name not in self.modules:
-            log(f"[RouterV2] fallback -> director")
+            log("[RouterV2] fallback -> director", "ERROR")
             module_name = "director"
 
-        module = self.modules.get(module_name)
-
-        if not module:
-            return {
-                "status": "error",
-                "message": "No module available"
-            }
-
-        log(f"[RouterV2] EXEC -> {module_name}")
+        module = self.modules[module_name]
 
         try:
             result = module.run({
@@ -213,27 +186,23 @@ class ModuleRouterV2:
                 "system_state": state,
                 "roles": dict(self.roles),
                 "flow": self.get_flow(),
-                "router_version": "v2.1-clean"
+                "router_version": "v2.1"
             })
 
             try:
                 system_state.update("last_module", module_name)
                 system_state.update("last_result", result)
-            except Exception:
+            except:
                 pass
 
             return {
                 "status": "success",
                 "module": module_name,
                 "result": result,
-                "roles_summary": {
-                    k: len(v) for k, v in self.roles.items()
-                },
-                "flow": self.get_flow()
+                "architecture_view": dict(self.roles)
             }
 
         except Exception as e:
-
             return {
                 "status": "error",
                 "module": module_name,

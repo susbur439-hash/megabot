@@ -7,16 +7,24 @@ from collections import defaultdict
 from core.system_state import system_state
 
 # =========================
-# ⚙️ LOG CONTROL
+# ⚙️ LOG CONTROL (IMPROVED)
 # =========================
-LOG_LEVEL = "INFO"
-# OPTIONS: "SILENT", "ERROR", "INFO"
+
+LOG_LEVEL = "ERROR"
+# SILENT | ERROR | INFO | DEBUG
+
 
 def log(msg, level="INFO"):
+
     if LOG_LEVEL == "SILENT":
         return
+
     if LOG_LEVEL == "ERROR" and level != "ERROR":
         return
+
+    if LOG_LEVEL == "INFO" and level == "DEBUG":
+        return
+
     print(msg)
 
 
@@ -45,9 +53,14 @@ ROLE_MAP = {
 }
 
 
+# =========================
+# 🧠 ROUTER V2
+# =========================
+
 class ModuleRouterV2:
 
     def __init__(self):
+
         self.modules = {}
         self.roles = defaultdict(list)
         self.failed = {}
@@ -56,15 +69,17 @@ class ModuleRouterV2:
         self.build_architecture_map()
 
     # =========================
-    # 📦 LOAD
+    # 📦 LOAD MODULES
     # =========================
+
     def load_modules(self):
 
         path = "modules"
+
         log("[RouterV2] loading modules...", "INFO")
 
         if not os.path.exists(path):
-            log("[RouterV2] modules folder not found", "ERROR")
+            log("[RouterV2] modules folder missing", "ERROR")
             return
 
         for file in os.listdir(path):
@@ -80,6 +95,7 @@ class ModuleRouterV2:
 
                 if not hasattr(module, "run"):
                     self.failed[name] = "NO_RUN"
+                    log(f"[RouterV2] skip {name}", "DEBUG")
                     continue
 
                 self.modules[name] = module
@@ -90,16 +106,18 @@ class ModuleRouterV2:
                     except Exception:
                         pass
 
-                log(f"[RouterV2] loaded: {name}")
+                log(f"[RouterV2] loaded: {name}", "INFO")
 
             except Exception as e:
                 self.failed[name] = str(e)
-                log(f"[RouterV2] error: {name}", "ERROR")
+                log(f"[RouterV2] error: {name} | {e}", "ERROR")
 
     # =========================
-    # 🧠 ROLE DETECT
+    # 🧠 ROLE DETECTION
     # =========================
+
     def detect_role(self, name: str):
+
         lower = name.lower()
 
         for role, keys in ROLE_MAP.items():
@@ -112,6 +130,7 @@ class ModuleRouterV2:
     # =========================
     # 🧠 ARCH MAP
     # =========================
+
     def build_architecture_map(self):
 
         self.roles = defaultdict(list)
@@ -122,15 +141,17 @@ class ModuleRouterV2:
         try:
             with open("architecture_map.json", "w", encoding="utf-8") as f:
                 json.dump(dict(self.roles), f, indent=2, ensure_ascii=False)
-        except:
+        except Exception:
             pass
 
-        log("[RouterV2] architecture map built")
+        log("[RouterV2] architecture map built", "INFO")
 
     # =========================
     # 🔁 FLOW
     # =========================
+
     def get_flow(self):
+
         return [
             "CONTROL",
             "ENTRYPOINT",
@@ -143,6 +164,7 @@ class ModuleRouterV2:
     # =========================
     # 🧼 NORMALIZE
     # =========================
+
     def normalize(self, command):
 
         if isinstance(command, str):
@@ -160,6 +182,7 @@ class ModuleRouterV2:
     # =========================
     # 🎯 ROUTE
     # =========================
+
     def route(self, command):
 
         command = self.normalize(command)
@@ -186,13 +209,13 @@ class ModuleRouterV2:
                 "system_state": state,
                 "roles": dict(self.roles),
                 "flow": self.get_flow(),
-                "router_version": "v2.1"
+                "router_version": "v2.2"
             })
 
             try:
                 system_state.update("last_module", module_name)
                 system_state.update("last_result", result)
-            except:
+            except Exception:
                 pass
 
             return {
@@ -203,6 +226,9 @@ class ModuleRouterV2:
             }
 
         except Exception as e:
+
+            log(f"[RouterV2] execution error: {e}", "ERROR")
+
             return {
                 "status": "error",
                 "module": module_name,

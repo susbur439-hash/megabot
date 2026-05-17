@@ -3,16 +3,22 @@ name: Megabot Builder
 on:
   workflow_dispatch:
 
+# Принудительно переводим все процессы на Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # Обновлено с v4 до v6 для поддержки Node.js 24
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
+      # Обновлено с v5 до v6 для поддержки Node.js 24
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 

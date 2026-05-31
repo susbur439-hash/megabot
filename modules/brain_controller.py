@@ -2,6 +2,7 @@ import json
 import os
 
 from core.system_state import system_state
+from core.system_brain_bridge import SystemBrainBridge
 
 MEMORY_FILE = "code_understanding.json"
 
@@ -50,8 +51,7 @@ def detect_intent(task_text):
     scores = {}
 
     for intent, keywords in INTENTS.items():
-        score = sum(1 for word in keywords if word in task_lower)
-        scores[intent] = score
+        scores[intent] = sum(1 for word in keywords if word in task_lower)
 
     best_intent = max(scores, key=scores.get)
 
@@ -62,7 +62,7 @@ def detect_intent(task_text):
 
 
 # =========================================================
-# 🧠 DECISION ENGINE (UPDATED)
+# 🧠 DECISION ENGINE (BRIDGE-POWERED)
 # =========================================================
 
 def decide(task):
@@ -73,14 +73,21 @@ def decide(task):
     state = system_state.inject(task)
     state = system_state.load()
 
-    # normalize
+    # normalize task
     if isinstance(task, dict):
         task_text = task.get("task", "")
     else:
         task_text = str(task)
 
-    memory = load_memory()
-    roles = memory.get("summary", {}).get("roles", {})
+    # =====================================================
+    # 🧠 NEW: SINGLE SOURCE OF ARCHITECTURE
+    # =====================================================
+
+    bridge = SystemBrainBridge()
+    roles = bridge.roles
+
+    # optional refresh (safe)
+    bridge.refresh()
 
     intent = detect_intent(task_text)
 
@@ -88,7 +95,7 @@ def decide(task):
     state["task_text"] = task_text
 
     # =====================================================
-    # 🧠 REAL ARCHITECTURE-BASED ROUTING
+    # 🧠 ARCHITECTURE POOLS
     # =====================================================
 
     execution_pool = roles.get("EXECUTION", [])
@@ -101,7 +108,7 @@ def decide(task):
 
     if intent == "execution":
 
-        module = execution_pool[0] if execution_pool else "director"
+        module = bridge.get_execution_module()
 
         return {
             "module": module,
@@ -118,7 +125,7 @@ def decide(task):
 
     if intent == "analysis":
 
-        module = analysis_pool[0] if analysis_pool else "analysis"
+        module = bridge.get_analysis_module()
 
         return {
             "module": module,
@@ -135,7 +142,7 @@ def decide(task):
 
     if intent == "intelligence":
 
-        module = decision_pool[0] if decision_pool else "central_decision"
+        module = bridge.get_decision_module()
 
         return {
             "module": module,

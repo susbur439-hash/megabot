@@ -1,7 +1,14 @@
 def run(context):
     """
-    Evaluation module:
-    оценивает результат выполнения задачи и качество системы
+    Evaluation v2
+
+    Оценивает:
+
+    - была ли задача
+    - было ли выполнение
+    - были ли ошибки
+    - успешно ли выполнился модуль
+    - есть ли результат
     """
 
     if not isinstance(context, dict):
@@ -10,67 +17,116 @@ def run(context):
     score = 50
     reasons = []
 
-    task = context.get("task", "")
-    log = context.get("log", [])
-    modules_created = context.get("modules_created", [])
+    task = context.get("task")
+    status = context.get("status")
+    result = context.get("result")
+    execution_result = context.get("execution_result", {})
     errors = context.get("errors", [])
-    doctor_issues = context.get("doctor_issues", [])
+    log = context.get("log", [])
 
-    # =========================
-    # 🧠 БАЗОВАЯ ОЦЕНКА
-    # =========================
+    # =====================================================
+    # TASK
+    # =====================================================
+
     if task:
         score += 10
     else:
-        score -= 20
+        score -= 30
         reasons.append("no_task")
 
-    # =========================
-    # 🧱 МОДУЛИ
-    # =========================
-    if modules_created:
-        score += len(modules_created) * 3
+    # =====================================================
+    # EXECUTION STATUS
+    # =====================================================
+
+    if status in ["ok", "success"]:
+        score += 15
+
+    elif status == "error":
+        score -= 20
+        reasons.append("execution_error")
+
+    # =====================================================
+    # EXECUTION RESULT
+    # =====================================================
+
+    if execution_result.get("success") is True:
+        score += 15
+
+    elif execution_result:
+        score -= 10
+        reasons.append("execution_failed")
+
+    # =====================================================
+    # RESULT
+    # =====================================================
+
+    if result:
+        score += 10
     else:
         score -= 5
-        reasons.append("no_modules_created")
+        reasons.append("no_result")
 
-    # =========================
-    # ❌ ОШИБКИ
-    # =========================
+    # =====================================================
+    # ERRORS
+    # =====================================================
+
     if errors:
-        score -= len(errors) * 5
+
+        penalty = min(len(errors) * 5, 30)
+
+        score -= penalty
+
         reasons.append("errors_present")
 
-    # =========================
-    # ⚠️ СИСТЕМНЫЕ ПРОБЛЕМЫ
-    # =========================
-    if doctor_issues:
-        score -= len(doctor_issues) * 3
-        reasons.append("doctor_issues")
+    # =====================================================
+    # LOG ANALYSIS
+    # =====================================================
 
-    # =========================
-    # 📜 ЛОГ АНАЛИЗ
-    # =========================
-    if log:
-        useful_logs = [
-            l for l in log
-            if "create" in l or "executed" in l or "decision" in l
-        ]
-        score += len(useful_logs)
+    useful = 0
 
-    # =========================
-    # 🔒 НОРМАЛИЗАЦИЯ
-    # =========================
+    for line in log:
+
+        text = str(line).lower()
+
+        if any(
+            x in text
+            for x in [
+                "decision",
+                "success",
+                "executed",
+                "created module",
+                "running"
+            ]
+        ):
+            useful += 1
+
+    score += min(useful, 10)
+
+    # =====================================================
+    # NORMALIZE
+    # =====================================================
+
     score = max(0, min(100, score))
 
-    result = {
+    if score >= 80:
+        state = "excellent"
+
+    elif score >= 60:
+        state = "good"
+
+    elif score >= 40:
+        state = "neutral"
+
+    else:
+        state = "bad"
+
+    evaluation = {
         "score": score,
-        "result": "good" if score >= 70 else "neutral" if score >= 40 else "bad",
-        "reason": reasons,
-        "delta": score - 50
+        "result": state,
+        "delta": score - 50,
+        "reason": reasons
     }
 
-    # 🔥 КЛЮЧ: записываем обратно в систему
-    context["evaluation"] = result
+    context["evaluation"] = evaluation
 
     return context

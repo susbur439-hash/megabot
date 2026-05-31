@@ -1,6 +1,6 @@
 # =========================================================
 # 🧠 MEGABOT SYSTEM BRAIN BRIDGE
-# 🧠 SINGLE SOURCE OF ARCHITECTURE TRUTH
+# 🧠 SINGLE SOURCE OF ARCHITECTURE TRUTH (FIXED)
 # =========================================================
 
 from core.module_router_v2 import ModuleRouterV2
@@ -10,21 +10,26 @@ class SystemBrainBridge:
 
     def __init__(self):
 
-        # загружаем реальный роутер
+        # router создаём один раз
         self.router = ModuleRouterV2()
 
-        # архитектурное состояние
         self.roles = {}
+        self.last_refresh = 0
+
         self.refresh()
 
     # =====================================================
-    # 🔄 REFRESH ARCHITECTURE
+    # 🔄 REFRESH (SAFE)
     # =====================================================
 
     def refresh(self):
 
-        self.router.build_architecture_map()
-        self.roles = self.router.roles
+        try:
+            # НЕ пересканируем каждый раз тяжёлую часть
+            self.roles = dict(self.router.roles)
+
+        except Exception:
+            self.roles = {}
 
     # =====================================================
     # 🧠 GET ROLE MODULES
@@ -35,7 +40,7 @@ class SystemBrainBridge:
         return self.roles.get(role, [])
 
     # =====================================================
-    # ⚙ EXECUTION LAYER
+    # ⚙ EXECUTION
     # =====================================================
 
     def get_execution_module(self):
@@ -44,7 +49,7 @@ class SystemBrainBridge:
         return pool[0] if pool else "director"
 
     # =====================================================
-    # 🔍 ANALYSIS LAYER
+    # 🔍 ANALYSIS
     # =====================================================
 
     def get_analysis_module(self):
@@ -53,7 +58,7 @@ class SystemBrainBridge:
         return pool[0] if pool else "analysis"
 
     # =====================================================
-    # 🧠 DECISION LAYER
+    # 🧠 DECISION
     # =====================================================
 
     def get_decision_module(self):
@@ -62,30 +67,30 @@ class SystemBrainBridge:
         return pool[0] if pool else "central_decision"
 
     # =====================================================
-    # 📊 DEBUG INFO
+    # 📊 DEBUG
     # =====================================================
 
     def debug(self):
 
         return {
-            "roles": dict(self.roles),
+            "roles": self.roles,
             "counts": {k: len(v) for k, v in self.roles.items()},
             "brain_node": self._find_brain_node()
         }
 
     # =====================================================
-    # 🧠 SIMPLE BRAIN NODE HEURISTIC
+    # 🧠 BRAIN NODE
     # =====================================================
 
     def _find_brain_node(self):
 
-        if "DECISION" in self.roles:
+        if self.roles.get("DECISION"):
             return self.roles["DECISION"][0]
 
-        if "EXECUTION" in self.roles:
+        if self.roles.get("EXECUTION"):
             return self.roles["EXECUTION"][0]
 
-        if "ANALYSIS" in self.roles:
+        if self.roles.get("ANALYSIS"):
             return self.roles["ANALYSIS"][0]
 
         return "director"

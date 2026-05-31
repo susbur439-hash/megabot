@@ -28,27 +28,20 @@ def load_memory():
 # =========================================================
 
 INTENTS = {
-
     "execution": [
         "run", "execute", "launch", "start",
         "build", "repair", "fix", "deploy", "create"
     ],
-
     "analysis": [
         "analyze", "scan", "inspect", "check",
         "review", "diagnose"
     ],
-
     "intelligence": [
         "brain", "system", "strategy",
         "architecture", "reason", "think"
     ]
 }
 
-
-# =========================================================
-# 🧠 DETECT INTENT
-# =========================================================
 
 def detect_intent(task_text):
 
@@ -57,13 +50,7 @@ def detect_intent(task_text):
     scores = {}
 
     for intent, keywords in INTENTS.items():
-
-        score = 0
-
-        for word in keywords:
-            if word in task_lower:
-                score += 1
-
+        score = sum(1 for word in keywords if word in task_lower)
         scores[intent] = score
 
     best_intent = max(scores, key=scores.get)
@@ -75,33 +62,38 @@ def detect_intent(task_text):
 
 
 # =========================================================
-# 🧠 DECISION ENGINE (STATE-BASED)
+# 🧠 DECISION ENGINE (UPDATED)
 # =========================================================
 
 def decide(task):
 
     # =========================
-    # 🧠 SYSTEM STATE INTEGRATION
+    # 🧠 SYSTEM STATE
     # =========================
     state = system_state.inject(task)
     state = system_state.load()
 
-    # нормализация
+    # normalize
     if isinstance(task, dict):
         task_text = task.get("task", "")
     else:
         task_text = str(task)
 
     memory = load_memory()
-
-    summary = memory.get("summary", {})
-    roles = summary.get("roles", {})
+    roles = memory.get("summary", {}).get("roles", {})
 
     intent = detect_intent(task_text)
 
-    # сохраняем в state
     state["intent"] = intent
     state["task_text"] = task_text
+
+    # =====================================================
+    # 🧠 REAL ARCHITECTURE-BASED ROUTING
+    # =====================================================
+
+    execution_pool = roles.get("EXECUTION", [])
+    analysis_pool = roles.get("ANALYSIS", [])
+    decision_pool = roles.get("DECISION", [])
 
     # =====================================================
     # ⚙ EXECUTION
@@ -109,12 +101,14 @@ def decide(task):
 
     if intent == "execution":
 
+        module = execution_pool[0] if execution_pool else "director"
+
         return {
-            "module": "director",
+            "module": module,
             "data": {
                 "task": task_text,
-                "preferred": roles.get("execution_core", []),
-                "system_state": state
+                "system_state": state,
+                "execution_pool": execution_pool
             }
         }
 
@@ -124,11 +118,14 @@ def decide(task):
 
     if intent == "analysis":
 
+        module = analysis_pool[0] if analysis_pool else "analysis"
+
         return {
-            "module": "analysis",
+            "module": module,
             "data": {
                 "task": task_text,
-                "system_state": state
+                "system_state": state,
+                "analysis_pool": analysis_pool
             }
         }
 
@@ -138,12 +135,14 @@ def decide(task):
 
     if intent == "intelligence":
 
+        module = decision_pool[0] if decision_pool else "central_decision"
+
         return {
-            "module": "intelligence_layer",
+            "module": module,
             "data": {
                 "question": task_text,
-                "brain_candidates": roles.get("decision_orchestrator", []),
-                "system_state": state
+                "system_state": state,
+                "decision_pool": decision_pool
             }
         }
 

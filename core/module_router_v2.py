@@ -7,11 +7,10 @@ from collections import defaultdict
 from core.system_state import system_state
 
 # =========================
-# ⚙️ LOG CONTROL (IMPROVED)
+# ⚙️ LOG CONTROL
 # =========================
 
 LOG_LEVEL = "ERROR"
-# SILENT | ERROR | INFO | DEBUG
 
 
 def log(msg, level="INFO"):
@@ -54,7 +53,7 @@ ROLE_MAP = {
 
 
 # =========================
-# 🧠 ROUTER V2
+# 🧠 ROUTER V2 (v13 BASE)
 # =========================
 
 class ModuleRouterV2:
@@ -63,6 +62,10 @@ class ModuleRouterV2:
 
         self.modules = {}
         self.roles = defaultdict(list)
+
+        # 🧠 NEW: module scoring map
+        self.module_score = {}
+
         self.failed = {}
 
         self.load_modules()
@@ -95,18 +98,18 @@ class ModuleRouterV2:
 
                 if not hasattr(module, "run"):
                     self.failed[name] = "NO_RUN"
-                    log(f"[RouterV2] skip {name}", "DEBUG")
                     continue
 
                 self.modules[name] = module
+
+                # 🧠 NEW: initial score baseline
+                self.module_score[name] = 1.0
 
                 if register_module:
                     try:
                         register_module(name, module)
                     except Exception:
                         pass
-
-                log(f"[RouterV2] loaded: {name}", "INFO")
 
             except Exception as e:
                 self.failed[name] = str(e)
@@ -136,7 +139,9 @@ class ModuleRouterV2:
         self.roles = defaultdict(list)
 
         for name in self.modules:
-            self.roles[self.detect_role(name)].append(name)
+            role = self.detect_role(name)
+
+            self.roles[role].append(name)
 
         try:
             with open("architecture_map.json", "w", encoding="utf-8") as f:
@@ -145,6 +150,33 @@ class ModuleRouterV2:
             pass
 
         log("[RouterV2] architecture map built", "INFO")
+
+    # =========================
+    # 🧠 SCORING ENGINE (NEW v13 CORE)
+    # =========================
+
+    def score_module(self, name, role, state):
+
+        base = self.module_score.get(name, 1.0)
+
+        # role importance
+        role_weight = {
+            "DECISION": 3,
+            "EXECUTION": 3,
+            "ANALYSIS": 2,
+            "CONTROL": 2,
+            "MEMORY": 1.5,
+            "ENTRYPOINT": 1,
+            "LEARNING": 2
+        }.get(role, 1)
+
+        # system influence
+        stability = state.get("stability", 1.0)
+        energy = state.get("energy", 50)
+
+        score = base * role_weight * (0.5 + stability) * (energy / 100)
+
+        return score
 
     # =========================
     # 🔁 FLOW
@@ -173,14 +205,15 @@ class ModuleRouterV2:
         if not isinstance(command, dict):
             return {"module": "director", "data": {"task": str(command)}}
 
-        if "module" not in command:
-            return {"module": "director", "data": command}
-
         command.setdefault("data", {})
+
+        if "module" not in command:
+            command["module"] = "director"
+
         return command
 
     # =========================
-    # 🎯 ROUTE
+    # 🎯 ROUTE (v13)
     # =========================
 
     def route(self, command):
@@ -194,33 +227,50 @@ class ModuleRouterV2:
         except Exception:
             state = {}
 
-        module_name = command.get("module", "director")
         data = command.get("data", {})
 
-        if module_name not in self.modules:
-            log("[RouterV2] fallback -> director", "ERROR")
-            module_name = "director"
+        # 🧠 NEW: dynamic module selection (SCORING)
+        best_module = None
+        best_score = -1
 
-        module = self.modules[module_name]
+        for role, modules in self.roles.items():
+
+            for m in modules:
+
+                module_obj = self.modules.get(m)
+                if not module_obj:
+                    continue
+
+                score = self.score_module(m, role, state)
+
+                if score > best_score:
+                    best_score = score
+                    best_module = m
+
+        if not best_module:
+            best_module = command.get("module", "director")
+
+        if best_module not in self.modules:
+            best_module = "director"
+
+        module = self.modules[best_module]
 
         try:
             result = module.run({
                 **data,
                 "system_state": state,
                 "roles": dict(self.roles),
-                "flow": self.get_flow(),
-                "router_version": "v2.2"
+                "router_version": "v3-v13-core",
+                "selected_score": best_score
             })
 
-            try:
-                system_state.update("last_module", module_name)
-                system_state.update("last_result", result)
-            except Exception:
-                pass
+            system_state.update("last_module", best_module)
+            system_state.update("last_result", result)
 
             return {
                 "status": "success",
-                "module": module_name,
+                "module": best_module,
+                "score": best_score,
                 "result": result,
                 "architecture_view": dict(self.roles)
             }
@@ -231,7 +281,7 @@ class ModuleRouterV2:
 
             return {
                 "status": "error",
-                "module": module_name,
+                "module": best_module,
                 "message": str(e),
                 "trace": traceback.format_exc()
             }

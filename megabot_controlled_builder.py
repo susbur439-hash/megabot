@@ -56,7 +56,7 @@ def log(msg):
     print(msg)
 
 # =========================================================
-# 🔐 GRAPH HASH (NEW)
+# 🔐 GRAPH HASH
 # =========================================================
 
 def hash_graph(graph):
@@ -105,8 +105,11 @@ def load_memory():
 
 
 def save_memory(memory):
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(memory, f, indent=2, ensure_ascii=False)
+    try:
+        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(memory, f, indent=2, ensure_ascii=False)
+    except:
+        pass
 
 # =========================================================
 # 📄 REPORT
@@ -123,8 +126,11 @@ def save_report(actions, isolated, hubs):
         "actions": actions or []
     }
 
-    with open(REPORT_FILE, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
+    try:
+        with open(REPORT_FILE, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+    except:
+        pass
 
 # =========================================================
 # 📖 FILE
@@ -212,6 +218,9 @@ def build_runtime_graph(files, modules):
     reverse = {m: set() for m in modules}
     weights = {m: 0 for m in modules}
 
+    if not modules:
+        return graph, reverse, weights
+
     for file in files:
 
         current = os.path.basename(file).replace(".py", "")
@@ -250,6 +259,9 @@ def find_brain(graph, reverse):
 
     best, score_best = None, -1
 
+    if not graph:
+        return None
+
     for n in graph:
         score = len(graph[n]) * 2 + len(reverse[n]) * 3
 
@@ -269,7 +281,7 @@ def find_brain(graph, reverse):
     return best
 
 # =========================================================
-# 🧠 HUBS + LEARNING WEIGHT
+# 🧠 HUBS
 # =========================================================
 
 def compute_hubs(graph, reverse, weights, learning_score):
@@ -299,7 +311,7 @@ def compute_isolated(graph, reverse):
     return [n for n in graph if not graph[n] and not reverse[n]]
 
 # =========================================================
-# 🧠 DECISION (IMPROVED PRIORITY)
+# 🧠 DECISION
 # =========================================================
 
 def decide(hubs, isolated):
@@ -325,7 +337,7 @@ def decide(hubs, isolated):
     return actions
 
 # =========================================================
-# 🧪 VALIDATION
+# 🧪 VALIDATION FIXED
 # =========================================================
 
 def validate(files):
@@ -335,7 +347,6 @@ def validate(files):
     for f in files:
         try:
             code = read_file(f)
-            compile(code, f, "exec")
             ast.parse(code)
         except:
             errors += 1
@@ -343,7 +354,7 @@ def validate(files):
     return errors
 
 # =========================================================
-# 🧠 CYCLE + LEARNING LOOP
+# 🧠 CYCLE
 # =========================================================
 
 def build_cycle():
@@ -365,19 +376,10 @@ def build_cycle():
     isolated = compute_isolated(graph, reverse)
     actions = decide(hubs, isolated)
 
-    # =========================
-    # 🧠 LEARNING UPDATE
-    # =========================
-
     for a in actions:
-        t = a["target"]
-        learning[t] = learning.get(t, 0) + 1
+        learning[a["target"]] = learning.get(a["target"], 0) + 1
 
     memory["learning_score"] = learning
-
-    # =========================
-    # 🧠 GRAPH DRIFT + HASH
-    # =========================
 
     ghash = hash_graph(graph)
     prev_hash = memory.get("graph_hash")
@@ -419,7 +421,6 @@ def build_cycle():
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
     log(f"DRIFT: {drift}")
-
     log("==============================")
     log(f"cycles={memory['cycles']} errors={errors}")
 

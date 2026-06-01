@@ -40,15 +40,6 @@ CORE_MODULES = {
 }
 
 # =========================================================
-# 🎯 PATTERNS
-# =========================================================
-
-RUNTIME_PATTERNS = {
-    "director_run": "director",
-    "engine_run": "engine"
-}
-
-# =========================================================
 # 📋 LOG
 # =========================================================
 
@@ -112,27 +103,6 @@ def save_memory(memory):
         pass
 
 # =========================================================
-# 📄 REPORT
-# =========================================================
-
-def save_report(actions, isolated, hubs):
-
-    report = {
-        "issues": [f"{i} isolated" for i in (isolated or [])],
-        "suggestions": (
-            [f"connect {i}" for i in (isolated or [])] +
-            [f"optimize {h}" for h in (hubs or [])]
-        ),
-        "actions": actions or []
-    }
-
-    try:
-        with open(REPORT_FILE, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
-    except:
-        pass
-
-# =========================================================
 # 📖 FILE
 # =========================================================
 
@@ -144,35 +114,29 @@ def read_file(path):
         return ""
 
 # =========================================================
-# 🔍 SCAN
+# 🔍 IMPORT ANALYZER (NEW)
 # =========================================================
 
-def scan():
+def extract_imports(code):
+    imports = []
+    try:
+        tree = ast.parse(code)
 
-    files = []
-    modules = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for n in node.names:
+                    imports.append(n.name)
 
-    for root, _, file_list in os.walk(ROOT_DIR):
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    imports.append(node.module)
+    except:
+        pass
 
-        if ".git" in root or "__pycache__" in root:
-            continue
-
-        for f in file_list:
-            if not f.endswith(".py"):
-                continue
-
-            path = os.path.join(root, f)
-            files.append(path)
-
-            if os.path.basename(root) == MODULES_DIR:
-                name = f.replace(".py", "")
-                if name in CORE_MODULES:
-                    modules.append(name)
-
-    return files, modules
+    return imports
 
 # =========================================================
-# 🧠 AST
+# 🔍 CALL ANALYZER
 # =========================================================
 
 def extract_runtime_calls(code):
@@ -209,7 +173,7 @@ def extract_runtime_calls(code):
     return calls
 
 # =========================================================
-# 🔗 GRAPH BUILD
+# 🔗 GRAPH BUILD (IMPROVED)
 # =========================================================
 
 def build_runtime_graph(files, modules):
@@ -229,9 +193,13 @@ def build_runtime_graph(files, modules):
             continue
 
         code = read_file(file)
-        calls = extract_runtime_calls(code)
 
-        for call in calls:
+        calls = extract_runtime_calls(code)
+        imports = extract_imports(code)
+
+        all_refs = calls + imports
+
+        for ref in all_refs:
 
             for target in modules:
 
@@ -239,9 +207,9 @@ def build_runtime_graph(files, modules):
                     continue
 
                 linked = (
-                    call == target or
-                    call.endswith("." + target) or
-                    (call in RUNTIME_PATTERNS and RUNTIME_PATTERNS[call] == target)
+                    target in ref or
+                    ref == target or
+                    ref.endswith("." + target)
                 )
 
                 if linked:
@@ -257,10 +225,10 @@ def build_runtime_graph(files, modules):
 
 def find_brain(graph, reverse):
 
-    best, score_best = None, -1
-
     if not graph:
         return None
+
+    best, score_best = None, -1
 
     for n in graph:
         score = len(graph[n]) * 2 + len(reverse[n]) * 3
@@ -307,7 +275,6 @@ def compute_hubs(graph, reverse, weights, learning_score):
 # =========================================================
 
 def compute_isolated(graph, reverse):
-
     return [n for n in graph if not graph[n] and not reverse[n]]
 
 # =========================================================
@@ -319,25 +286,15 @@ def decide(hubs, isolated):
     actions = []
 
     for n in isolated:
-        actions.append({
-            "type": "connect",
-            "target": n,
-            "priority": 10,
-            "reason": "isolation"
-        })
+        actions.append({"type": "connect", "target": n, "priority": 10})
 
     for n in hubs:
-        actions.append({
-            "type": "optimize",
-            "target": n,
-            "priority": 5,
-            "reason": "traffic"
-        })
+        actions.append({"type": "optimize", "target": n, "priority": 5})
 
     return actions
 
 # =========================================================
-# 🧪 VALIDATION FIXED
+# 🧪 VALIDATION
 # =========================================================
 
 def validate(files):
@@ -346,8 +303,7 @@ def validate(files):
 
     for f in files:
         try:
-            code = read_file(f)
-            ast.parse(code)
+            ast.parse(read_file(f))
         except:
             errors += 1
 
@@ -360,10 +316,27 @@ def validate(files):
 def build_cycle():
 
     memory = load_memory()
-    files, modules = scan()
+
+    files = []
+    modules = []
+
+    for root, _, file_list in os.walk(ROOT_DIR):
+
+        if ".git" in root or "__pycache__" in root:
+            continue
+
+        for f in file_list:
+            if f.endswith(".py"):
+                path = os.path.join(root, f)
+                files.append(path)
+
+                if os.path.basename(root) == MODULES_DIR:
+                    name = f.replace(".py", "")
+                    if name in CORE_MODULES:
+                        modules.append(name)
 
     log("\n==============================")
-    log("🧠 MEGABOT v11 LEARNING LOOP")
+    log("🧠 MEGABOT v11 IMPROVED LOOP")
     log("==============================")
 
     graph, reverse, weights = build_runtime_graph(files, modules)
@@ -384,12 +357,10 @@ def build_cycle():
     ghash = hash_graph(graph)
     prev_hash = memory.get("graph_hash")
 
-    drift = 1 if prev_hash and prev_hash != ghash else 0
+    drift = 0 if prev_hash is None else (1 if prev_hash != ghash else 0)
 
     memory["graph_hash"] = ghash
     memory["drift"] = drift
-
-    save_report(actions, isolated, hubs)
 
     memory.update({
         "runtime_graph": {k: list(v) for k, v in graph.items()},

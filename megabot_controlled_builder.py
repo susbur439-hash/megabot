@@ -16,6 +16,7 @@ ROOT_DIR = "."
 MODULES_DIR = "modules"
 
 MEMORY_FILE = "builder_memory.json"
+REPORT_FILE = "builder_report.json"
 
 MAX_CYCLES = 1
 
@@ -80,7 +81,6 @@ def load_memory():
         return default
 
     try:
-
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
 
@@ -99,16 +99,41 @@ def save_memory(memory):
         json.dump(memory, f, indent=2, ensure_ascii=False)
 
 # =========================================================
+# 📄 REPORT (NEW)
+# =========================================================
+
+def save_report(actions, isolated, hubs):
+
+    issues = []
+    suggestions = []
+
+    # превращаем анализ в простой human-readable смысл
+    for i in isolated:
+        issues.append(f"{i} is isolated")
+
+        suggestions.append(f"connect {i} to core graph")
+
+    for h in hubs:
+        suggestions.append(f"optimize {h}")
+
+    report = {
+        "issues": issues,
+        "suggestions": suggestions,
+        "actions": actions
+    }
+
+    with open(REPORT_FILE, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+
+# =========================================================
 # 📖 FILE
 # =========================================================
 
 def read_file(path):
 
     try:
-
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
-
     except:
         return ""
 
@@ -135,10 +160,8 @@ def scan():
                 continue
 
             path = os.path.join(root, f)
-
             files.append(path)
 
-            # only core architecture modules
             if os.path.basename(root) == MODULES_DIR:
 
                 name = f.replace(".py", "")
@@ -157,31 +180,21 @@ def extract_runtime_calls(code):
     calls = []
 
     try:
-
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
 
             if isinstance(node, ast.Call):
 
-                # -------------------------
-                # simple call
-                # -------------------------
                 if isinstance(node.func, ast.Name):
-
                     calls.append(node.func.id)
 
-                # -------------------------
-                # attribute call
-                # -------------------------
                 elif isinstance(node.func, ast.Attribute):
 
                     parts = []
-
                     current = node.func
 
                     while isinstance(current, ast.Attribute):
-
                         parts.append(current.attr)
                         current = current.value
 
@@ -189,7 +202,6 @@ def extract_runtime_calls(code):
                         parts.append(current.id)
 
                     parts.reverse()
-
                     calls.append(".".join(parts))
 
     except:
@@ -198,7 +210,7 @@ def extract_runtime_calls(code):
     return calls
 
 # =========================================================
-# 🔗 BUILD RUNTIME GRAPH
+# 🔗 BUILD GRAPH
 # =========================================================
 
 def build_runtime_graph(files, modules):
@@ -208,7 +220,6 @@ def build_runtime_graph(files, modules):
     weights = {}
 
     for m in modules:
-
         graph[m] = set()
         reverse[m] = set()
         weights[m] = 0
@@ -221,53 +232,36 @@ def build_runtime_graph(files, modules):
             continue
 
         code = read_file(file)
-
         calls = extract_runtime_calls(code)
-
-        # =================================================
-        # runtime linking
-        # =================================================
 
         for call in calls:
 
-            # ---------------------------------------------
-            # exact module call
-            # ---------------------------------------------
             for target in modules:
 
                 linked = False
 
-                # direct match
                 if target == call:
                     linked = True
 
-                # attribute match
                 elif call.endswith("." + target):
                     linked = True
 
-                # runtime alias
                 elif call in RUNTIME_PATTERNS:
-
                     if RUNTIME_PATTERNS[call] == target:
                         linked = True
 
                 if linked:
 
-                    if (
-                        target != current_module
-                        and target not in graph[current_module]
-                    ):
+                    if target != current_module and target not in graph[current_module]:
 
                         graph[current_module].add(target)
-
                         reverse[target].add(current_module)
-
                         weights[current_module] += 1
 
     return graph, reverse, weights
 
 # =========================================================
-# 🧠 FIND BRAIN NODE
+# 🧠 BRAIN
 # =========================================================
 
 def find_brain(graph, reverse):
@@ -277,21 +271,14 @@ def find_brain(graph, reverse):
 
     for node in graph:
 
-        score = (
-            len(graph[node]) * 2 +
-            len(reverse[node]) * 3
-        )
+        score = len(graph[node]) * 2 + len(reverse[node]) * 3
 
-        # architecture priorities
         if node == "director":
             score += 15
-
         elif node == "central_decision":
             score += 12
-
         elif node == "control_panel":
             score += 10
-
         elif node == "engine":
             score += 8
 
@@ -302,7 +289,7 @@ def find_brain(graph, reverse):
     return best
 
 # =========================================================
-# 🧠 HUB DETECTOR
+# 🧠 HUBS
 # =========================================================
 
 def compute_hubs(graph, reverse, weights):
@@ -311,11 +298,7 @@ def compute_hubs(graph, reverse, weights):
 
     for node in graph:
 
-        score = (
-            len(graph[node]) * 2 +
-            len(reverse[node]) * 2 +
-            weights[node]
-        )
+        score = len(graph[node]) * 2 + len(reverse[node]) * 2 + weights[node]
 
         if score >= 6:
             hubs.append(node)
@@ -323,25 +306,18 @@ def compute_hubs(graph, reverse, weights):
     return hubs
 
 # =========================================================
-# 🧠 ISOLATED DETECTOR
+# 🧠 ISOLATED
 # =========================================================
 
 def compute_isolated(graph, reverse):
 
-    isolated = []
-
-    for node in graph:
-
-        if (
-            len(graph[node]) == 0 and
-            len(reverse[node]) == 0
-        ):
-            isolated.append(node)
-
-    return isolated
+    return [
+        node for node in graph
+        if len(graph[node]) == 0 and len(reverse[node]) == 0
+    ]
 
 # =========================================================
-# 🧠 DECISION LAYER
+# 🧠 DECISION
 # =========================================================
 
 def decide(hubs, isolated):
@@ -349,7 +325,6 @@ def decide(hubs, isolated):
     actions = []
 
     for node in isolated:
-
         actions.append({
             "type": "connect",
             "target": node,
@@ -357,7 +332,6 @@ def decide(hubs, isolated):
         })
 
     for node in hubs:
-
         actions.append({
             "type": "optimize",
             "target": node,
@@ -377,11 +351,8 @@ def validate(files):
     for file in files:
 
         try:
-
             code = read_file(file)
-
             compile(code, file, "exec")
-
             ast.parse(code)
 
         except:
@@ -390,13 +361,12 @@ def validate(files):
     return errors
 
 # =========================================================
-# 🧠 MAIN CYCLE
+# 🧠 CYCLE
 # =========================================================
 
 def build_cycle():
 
     memory = load_memory()
-
     files, modules = scan()
 
     log("\n==============================")
@@ -406,61 +376,26 @@ def build_cycle():
     log(f"FILES: {len(files)}")
     log(f"CORE MODULES: {len(modules)}")
 
-    # =====================================================
-    # 🔗 RUNTIME GRAPH
-    # =====================================================
-
-    graph, reverse, weights = build_runtime_graph(
-        files,
-        modules
-    )
-
-    # =====================================================
-    # 🧠 ANALYSIS
-    # =====================================================
+    graph, reverse, weights = build_runtime_graph(files, modules)
 
     brain = find_brain(graph, reverse)
 
-    hubs = compute_hubs(
-        graph,
-        reverse,
-        weights
-    )
+    hubs = compute_hubs(graph, reverse, weights)
+    isolated = compute_isolated(graph, reverse)
 
-    isolated = compute_isolated(
-        graph,
-        reverse
-    )
+    actions = decide(hubs, isolated)
 
-    actions = decide(
-        hubs,
-        isolated
-    )
+    # 💾 NEW REPORT
+    save_report(actions, isolated, hubs)
 
-    # =====================================================
-    # 💾 MEMORY
-    # =====================================================
-
-    memory["runtime_graph"] = {
-        k: list(v)
-        for k, v in graph.items()
-    }
-
-    memory["reverse_graph"] = {
-        k: list(v)
-        for k, v in reverse.items()
-    }
-
+    memory["runtime_graph"] = {k: list(v) for k, v in graph.items()}
+    memory["reverse_graph"] = {k: list(v) for k, v in reverse.items()}
     memory["weights"] = weights
 
     memory["brain_node"] = brain
     memory["hubs"] = hubs
     memory["isolated"] = isolated
     memory["actions"] = actions
-
-    # =====================================================
-    # 📋 LOGGING
-    # =====================================================
 
     log("\n🧠 BRAIN STATE")
     log(f"BRAIN NODE: {brain}")
@@ -470,16 +405,7 @@ def build_cycle():
     log("\n⚙ ACTIONS")
 
     for action in actions[:25]:
-
-        log(
-            f"[ACTION] "
-            f"{action['type']} -> "
-            f"{action['target']}"
-        )
-
-    # =====================================================
-    # 🧪 VALIDATION
-    # =====================================================
+        log(f"[ACTION] {action['type']} -> {action['target']}")
 
     errors = validate(files)
 
@@ -496,10 +422,6 @@ def build_cycle():
 
     save_memory(memory)
 
-    # =====================================================
-    # 📊 DONE
-    # =====================================================
-
     log("\n==============================")
     log("📊 DONE")
     log("==============================")
@@ -514,12 +436,9 @@ def build_cycle():
 if __name__ == "__main__":
 
     try:
-
         for _ in range(MAX_CYCLES):
             build_cycle()
 
     except Exception as e:
-
         log(f"FATAL: {e}")
-
         log(traceback.format_exc())

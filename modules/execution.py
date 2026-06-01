@@ -10,8 +10,6 @@ from modules.control_bus import emit
 # ⚙ CONFIG
 # =========================
 MODULES_DIR = "modules"
-DELETE_THRESHOLD = 30
-MIN_RUNS_TO_DELETE = 3
 
 PROTECTED_MODULES = {
     "task_core",
@@ -23,18 +21,18 @@ PROTECTED_MODULES = {
 }
 
 # =========================
-# 📡 EVENT EMITTER (NEW)
+# 📡 EVENT SYSTEM (FIXED PROTOCOL)
 # =========================
-def emit_event(name, data, extra=None, success=None):
+def emit_event(event, data, success=None, extra=None):
 
     try:
         emit({
-            "event": name,
+            "event": event,
             "module": data.get("module"),
             "decision": data.get("decision"),
-            "success": success,
-            "ts": time.time(),
-            "extra": extra or {}
+            "result": "success" if success else "fail" if success is False else None,
+            "extra": extra or {},
+            "ts": time.time()
         })
     except:
         pass
@@ -52,7 +50,7 @@ def run_python_module(module_path, data, state):
 
         spec = importlib.util.spec_from_file_location("dynamic_module", module_path)
 
-        if spec is None or spec.loader is None:
+        if not spec or not spec.loader:
             data.setdefault("log", []).append(f"❌ invalid module spec: {module_path}")
             return data, False
 
@@ -118,51 +116,12 @@ def run(data, state=None):
 # 🧹 CLEANUP
 # =========================
 def cleanup_modules(data):
-
-    experience = data.get("experience", [])
-    control_flags = data.get("control_flags", {})
-
-    stats = {}
-
-    for e in experience:
-        if not isinstance(e, dict):
-            continue
-
-        m = e.get("module")
-        s = e.get("score")
-
-        if m and s is not None:
-            stats.setdefault(m, []).append(s)
-
-    global_block = (
-        control_flags.get("overcreate", False)
-        or control_flags.get("loop_detected", False)
-    )
-
-    for module, scores in stats.items():
-
-        if module in PROTECTED_MODULES:
-            continue
-
-        if len(scores) < MIN_RUNS_TO_DELETE:
-            continue
-
-        avg = sum(scores) / len(scores)
-
-        path = os.path.join(MODULES_DIR, module + ".py")
-
-        if avg < DELETE_THRESHOLD and global_block and os.path.exists(path):
-            try:
-                os.remove(path)
-                data.setdefault("log", []).append(
-                    f"🗑️ deleted module: {module} (avg={round(avg,1)})"
-                )
-            except Exception as e:
-                data.setdefault("log", []).append(f"❌ delete failed: {module} | {e}")
+    # оставляем как есть (не трогаем сейчас)
+    return
 
 
 # =========================
-# 🚀 EXECUTION CORE (EVENT GRAPH ENABLED)
+# 🚀 EXECUTION CORE (STABLE EVENT LOOP)
 # =========================
 def execution(data):
 
@@ -170,9 +129,6 @@ def execution(data):
     data.setdefault("experience", [])
     data.setdefault("execution_result", {})
 
-    # =========================
-    # 🧠 STATE
-    # =========================
     state = system_state.load()
     state = system_state.inject(data)
 
@@ -232,14 +188,6 @@ def execution(data):
     state["cycle"] = state.get("cycle", 0) + 1
 
     system_state.state = state
-
-    # =========================
-    # 🧹 CLEANUP
-    # =========================
-    try:
-        cleanup_modules(data)
-    except Exception as e:
-        data.setdefault("log", []).append(f"❌ cleanup error: {e}")
 
     # =========================
     # 📦 RESULT

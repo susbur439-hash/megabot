@@ -1,6 +1,5 @@
 # =========================================================
-# 🧠 MEGABOT RUNTIME GRAPH BUILDER v10 (IMPROVED LOOP)
-# 🧠 STABLE CORE ARCHITECTURE ANALYZER
+# 🧠 MEGABOT RUNTIME GRAPH BUILDER v10 (IMPROVED LOOP FIXED)
 # =========================================================
 
 import os
@@ -74,7 +73,9 @@ def load_memory():
         "hubs": [],
         "isolated": [],
         "actions": [],
-        "history": []
+        "history": [],
+        "last_graph_hash": None,
+        "drift": 0
     }
 
     if not os.path.exists(MEMORY_FILE):
@@ -106,21 +107,17 @@ def save_report(actions, isolated, hubs):
     issues = []
     suggestions = []
 
-    isolated = isolated or []
-    hubs = hubs or []
-    actions = actions or []
-
-    for i in isolated:
+    for i in (isolated or []):
         issues.append(f"{i} is isolated")
         suggestions.append(f"connect {i} to core graph")
 
-    for h in hubs:
+    for h in (hubs or []):
         suggestions.append(f"optimize {h}")
 
     report = {
         "issues": issues,
         "suggestions": suggestions,
-        "actions": actions
+        "actions": actions or []
     }
 
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
@@ -148,10 +145,7 @@ def scan():
 
     for root, _, file_list in os.walk(ROOT_DIR):
 
-        if ".git" in root:
-            continue
-
-        if "__pycache__" in root:
+        if ".git" in root or "__pycache__" in root:
             continue
 
         for f in file_list:
@@ -210,19 +204,14 @@ def extract_runtime_calls(code):
     return calls
 
 # =========================================================
-# 🔗 BUILD GRAPH
+# 🔗 BUILD GRAPH (IMPROVED)
 # =========================================================
 
 def build_runtime_graph(files, modules):
 
-    graph = {}
-    reverse = {}
-    weights = {}
-
-    for m in modules:
-        graph[m] = set()
-        reverse[m] = set()
-        weights[m] = 0
+    graph = {m: set() for m in modules}
+    reverse = {m: set() for m in modules}
+    weights = {m: 0 for m in modules}
 
     for file in files:
 
@@ -238,20 +227,18 @@ def build_runtime_graph(files, modules):
 
             for target in modules:
 
-                linked = False
+                if target == current_module:
+                    continue
 
-                if target == call:
-                    linked = True
-                elif call.endswith("." + target):
-                    linked = True
-                elif call in RUNTIME_PATTERNS and RUNTIME_PATTERNS[call] == target:
-                    linked = True
+                linked = (
+                    target == call
+                    or call.endswith("." + target)
+                    or (call in RUNTIME_PATTERNS and RUNTIME_PATTERNS[call] == target)
+                )
 
-                if linked and target != current_module:
-
+                if linked:
                     graph[current_module].add(target)
                     reverse[target].add(current_module)
-
                     weights[current_module] = weights.get(current_module, 0) + 1
 
     return graph, reverse, weights
@@ -261,6 +248,9 @@ def build_runtime_graph(files, modules):
 # =========================================================
 
 def find_brain(graph, reverse):
+
+    if not graph:
+        return None
 
     best = None
     best_score = -1
@@ -294,7 +284,11 @@ def compute_hubs(graph, reverse, weights):
 
     for node in graph:
 
-        score = len(graph[node]) * 2 + len(reverse[node]) * 2 + weights.get(node, 0)
+        score = (
+            len(graph[node]) * 2 +
+            len(reverse[node]) * 2 +
+            weights.get(node, 0)
+        )
 
         if score >= 6:
             hubs.append(node)
@@ -302,7 +296,7 @@ def compute_hubs(graph, reverse, weights):
     return hubs
 
 # =========================================================
-# 🧠 ISOLATED
+# 🧠 ISOLATED (FIXED)
 # =========================================================
 
 def compute_isolated(graph, reverse):
@@ -345,19 +339,17 @@ def validate(files):
     errors = 0
 
     for file in files:
-
         try:
             code = read_file(file)
             compile(code, file, "exec")
             ast.parse(code)
-
         except:
             errors += 1
 
     return errors
 
 # =========================================================
-# 🧠 CYCLE
+# 🧠 CYCLE (FIXED LOOP INTELLIGENCE)
 # =========================================================
 
 def build_cycle():
@@ -366,7 +358,7 @@ def build_cycle():
     files, modules = scan()
 
     log("\n==============================")
-    log("🧠 MEGABOT RUNTIME BUILDER v10")
+    log("🧠 MEGABOT RUNTIME BUILDER v10 FIXED")
     log("==============================")
 
     log(f"FILES: {len(files)}")
@@ -383,6 +375,18 @@ def build_cycle():
 
     save_report(actions, isolated, hubs)
 
+    # =========================
+    # 🧠 DRIFT DETECTION
+    # =========================
+
+    prev = memory.get("runtime_graph", {})
+    drift = 0
+
+    if prev:
+        drift = abs(len(graph) - len(prev))
+
+    memory["drift"] = drift
+
     memory["runtime_graph"] = {k: list(v) for k, v in graph.items()}
     memory["reverse_graph"] = {k: list(v) for k, v in reverse.items()}
     memory["weights"] = weights
@@ -396,6 +400,7 @@ def build_cycle():
     log(f"BRAIN NODE: {brain}")
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
+    log(f"DRIFT: {drift}")
 
     log("\n⚙ ACTIONS")
 
@@ -412,7 +417,8 @@ def build_cycle():
         "hubs": len(hubs),
         "isolated": len(isolated),
         "actions": len(actions),
-        "errors": errors
+        "errors": errors,
+        "drift": drift
     })
 
     save_memory(memory)

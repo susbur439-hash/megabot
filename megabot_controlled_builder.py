@@ -1,5 +1,5 @@
 # =========================================================
-# 🧠 MEGABOT RUNTIME GRAPH BUILDER v10
+# 🧠 MEGABOT RUNTIME GRAPH BUILDER v10 (IMPROVED LOOP)
 # 🧠 STABLE CORE ARCHITECTURE ANALYZER
 # =========================================================
 
@@ -94,12 +94,11 @@ def load_memory():
 
 
 def save_memory(memory):
-
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory, f, indent=2, ensure_ascii=False)
 
 # =========================================================
-# 📄 REPORT (NEW)
+# 📄 REPORT
 # =========================================================
 
 def save_report(actions, isolated, hubs):
@@ -107,10 +106,12 @@ def save_report(actions, isolated, hubs):
     issues = []
     suggestions = []
 
-    # превращаем анализ в простой human-readable смысл
+    isolated = isolated or []
+    hubs = hubs or []
+    actions = actions or []
+
     for i in isolated:
         issues.append(f"{i} is isolated")
-
         suggestions.append(f"connect {i} to core graph")
 
     for h in hubs:
@@ -130,7 +131,6 @@ def save_report(actions, isolated, hubs):
 # =========================================================
 
 def read_file(path):
-
     try:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
@@ -242,21 +242,17 @@ def build_runtime_graph(files, modules):
 
                 if target == call:
                     linked = True
-
                 elif call.endswith("." + target):
                     linked = True
+                elif call in RUNTIME_PATTERNS and RUNTIME_PATTERNS[call] == target:
+                    linked = True
 
-                elif call in RUNTIME_PATTERNS:
-                    if RUNTIME_PATTERNS[call] == target:
-                        linked = True
+                if linked and target != current_module:
 
-                if linked:
+                    graph[current_module].add(target)
+                    reverse[target].add(current_module)
 
-                    if target != current_module and target not in graph[current_module]:
-
-                        graph[current_module].add(target)
-                        reverse[target].add(current_module)
-                        weights[current_module] += 1
+                    weights[current_module] = weights.get(current_module, 0) + 1
 
     return graph, reverse, weights
 
@@ -298,7 +294,7 @@ def compute_hubs(graph, reverse, weights):
 
     for node in graph:
 
-        score = len(graph[node]) * 2 + len(reverse[node]) * 2 + weights[node]
+        score = len(graph[node]) * 2 + len(reverse[node]) * 2 + weights.get(node, 0)
 
         if score >= 6:
             hubs.append(node)
@@ -324,14 +320,14 @@ def decide(hubs, isolated):
 
     actions = []
 
-    for node in isolated:
+    for node in (isolated or []):
         actions.append({
             "type": "connect",
             "target": node,
             "reason": "core isolation"
         })
 
-    for node in hubs:
+    for node in (hubs or []):
         actions.append({
             "type": "optimize",
             "target": node,
@@ -385,7 +381,6 @@ def build_cycle():
 
     actions = decide(hubs, isolated)
 
-    # 💾 NEW REPORT
     save_report(actions, isolated, hubs)
 
     memory["runtime_graph"] = {k: list(v) for k, v in graph.items()}

@@ -3,6 +3,9 @@ import json
 import traceback
 import ast
 import hashlib
+import time
+
+from modules.control_bus import emit
 
 # =========================================================
 # ⚙ CONFIG
@@ -90,7 +93,6 @@ def load_memory():
             data.setdefault(k, v)
 
         return data
-
     except:
         return default
 
@@ -101,6 +103,30 @@ def save_memory(memory):
             json.dump(memory, f, indent=2, ensure_ascii=False)
     except:
         pass
+
+# =========================================================
+# 📡 CONTROL INJECTION (NEW v12)
+# =========================================================
+
+def get_control_bias():
+    try:
+        from modules.control_bus import CONTROL_BUS
+        return CONTROL_BUS.get_bias()
+    except:
+        return {
+            "success": 0,
+            "fail": 0,
+            "create": 0,
+            "run": 0
+        }
+
+def control_factor():
+    bias = get_control_bias()
+
+    energy = 1 + (bias["success"] - bias["fail"]) * 0.01
+    activity = 1 + (bias["create"] - bias["run"]) * 0.02
+
+    return max(0.5, min(2.0, energy * activity))
 
 # =========================================================
 # 📖 FILE
@@ -114,66 +140,49 @@ def read_file(path):
         return ""
 
 # =========================================================
-# 🔍 IMPORT ANALYZER (NEW)
-# =========================================================
-
-def extract_imports(code):
-    imports = []
-    try:
-        tree = ast.parse(code)
-
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for n in node.names:
-                    imports.append(n.name)
-
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    imports.append(node.module)
-    except:
-        pass
-
-    return imports
-
-# =========================================================
-# 🔍 CALL ANALYZER
+# 🔍 ANALYSIS
 # =========================================================
 
 def extract_runtime_calls(code):
-
     calls = []
-
     try:
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
-
                 if isinstance(node.func, ast.Name):
                     calls.append(node.func.id)
-
                 elif isinstance(node.func, ast.Attribute):
-
                     parts = []
                     cur = node.func
-
                     while isinstance(cur, ast.Attribute):
                         parts.append(cur.attr)
                         cur = cur.value
-
                     if isinstance(cur, ast.Name):
                         parts.append(cur.id)
-
                     parts.reverse()
                     calls.append(".".join(parts))
-
     except:
         pass
-
     return calls
 
+def extract_imports(code):
+    imports = []
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for n in node.names:
+                    imports.append(n.name)
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    imports.append(node.module)
+    except:
+        pass
+    return imports
+
 # =========================================================
-# 🔗 GRAPH BUILD (IMPROVED)
+# 🔗 GRAPH BUILD (v12 CONTROL-AWARE)
 # =========================================================
 
 def build_runtime_graph(files, modules):
@@ -185,6 +194,8 @@ def build_runtime_graph(files, modules):
     if not modules:
         return graph, reverse, weights
 
+    c_factor = control_factor()
+
     for file in files:
 
         current = os.path.basename(file).replace(".py", "")
@@ -194,45 +205,41 @@ def build_runtime_graph(files, modules):
 
         code = read_file(file)
 
-        calls = extract_runtime_calls(code)
-        imports = extract_imports(code)
+        refs = extract_runtime_calls(code) + extract_imports(code)
 
-        all_refs = calls + imports
-
-        for ref in all_refs:
-
+        for ref in refs:
             for target in modules:
 
                 if target == current:
                     continue
 
-                linked = (
-                    target in ref or
-                    ref == target or
-                    ref.endswith("." + target)
-                )
+                if target in ref or ref.endswith("." + target):
 
-                if linked:
                     graph[current].add(target)
                     reverse[target].add(current)
-                    weights[current] += 1
+
+                    weights[current] += 1 * c_factor
 
     return graph, reverse, weights
 
 # =========================================================
-# 🧠 BRAIN
+# 🧠 BRAIN (v12 ADAPTIVE)
 # =========================================================
 
-def find_brain(graph, reverse):
+def find_brain(graph, reverse, memory):
 
     if not graph:
         return None
 
+    bias = get_control_bias()
+
     best, score_best = None, -1
 
     for n in graph:
+
         score = len(graph[n]) * 2 + len(reverse[n]) * 3
 
+        # base boosts
         if n == "director":
             score += 15
         elif n == "central_decision":
@@ -241,6 +248,14 @@ def find_brain(graph, reverse):
             score += 10
         elif n == "engine":
             score += 8
+
+        # v12 control influence
+        score += bias["success"] * 0.5
+        score -= bias["fail"] * 0.3
+
+        drift = memory.get("drift", 0)
+        if drift:
+            score += 5
 
         if score > score_best:
             best = n
@@ -278,18 +293,22 @@ def compute_isolated(graph, reverse):
     return [n for n in graph if not graph[n] and not reverse[n]]
 
 # =========================================================
-# 🧠 DECISION
+# 🧠 DECISION (v12 CONTROL SHIFT)
 # =========================================================
 
 def decide(hubs, isolated):
 
+    bias = get_control_bias()
+
     actions = []
 
     for n in isolated:
-        actions.append({"type": "connect", "target": n, "priority": 10})
+        priority = 10 + bias["fail"] * 0.2
+        actions.append({"type": "connect", "target": n, "priority": priority})
 
     for n in hubs:
-        actions.append({"type": "optimize", "target": n, "priority": 5})
+        priority = 5 + bias["success"] * 0.1
+        actions.append({"type": "optimize", "target": n, "priority": priority})
 
     return actions
 
@@ -300,13 +319,11 @@ def decide(hubs, isolated):
 def validate(files):
 
     errors = 0
-
     for f in files:
         try:
             ast.parse(read_file(f))
         except:
             errors += 1
-
     return errors
 
 # =========================================================
@@ -336,12 +353,12 @@ def build_cycle():
                         modules.append(name)
 
     log("\n==============================")
-    log("🧠 MEGABOT v11 IMPROVED LOOP")
+    log("🧠 MEGABOT v12 CONTROL LOOP")
     log("==============================")
 
     graph, reverse, weights = build_runtime_graph(files, modules)
 
-    brain = find_brain(graph, reverse)
+    brain = find_brain(graph, reverse, memory)
 
     learning = memory.get("learning_score", {})
 
@@ -357,10 +374,8 @@ def build_cycle():
     ghash = hash_graph(graph)
     prev_hash = memory.get("graph_hash")
 
-    drift = 0 if prev_hash is None else (1 if prev_hash != ghash else 0)
-
+    memory["drift"] = 0 if prev_hash is None else int(prev_hash != ghash)
     memory["graph_hash"] = ghash
-    memory["drift"] = drift
 
     memory.update({
         "runtime_graph": {k: list(v) for k, v in graph.items()},
@@ -383,7 +398,7 @@ def build_cycle():
         "isolated": len(isolated),
         "actions": len(actions),
         "errors": errors,
-        "drift": drift
+        "drift": memory["drift"]
     })
 
     save_memory(memory)
@@ -391,7 +406,7 @@ def build_cycle():
     log(f"BRAIN: {brain}")
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
-    log(f"DRIFT: {drift}")
+    log(f"DRIFT: {memory['drift']}")
     log("==============================")
     log(f"cycles={memory['cycles']} errors={errors}")
 
@@ -400,11 +415,9 @@ def build_cycle():
 # =========================================================
 
 if __name__ == "__main__":
-
     try:
         for _ in range(MAX_CYCLES):
             build_cycle()
-
     except Exception as e:
         log(f"FATAL: {e}")
         log(traceback.format_exc())

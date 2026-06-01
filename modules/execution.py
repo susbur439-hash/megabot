@@ -1,8 +1,10 @@
 import os
 import importlib.util
 import random
+import time
 
 from core.system_state import system_state
+from modules.control_bus import emit
 
 # =========================
 # ⚙ CONFIG
@@ -19,6 +21,24 @@ PROTECTED_MODULES = {
     "control_layer",
     "system_observer"
 }
+
+# =========================
+# 📡 EVENT EMITTER (NEW)
+# =========================
+def emit_event(name, data, extra=None, success=None):
+
+    try:
+        emit({
+            "event": name,
+            "module": data.get("module"),
+            "decision": data.get("decision"),
+            "success": success,
+            "ts": time.time(),
+            "extra": extra or {}
+        })
+    except:
+        pass
+
 
 # =========================
 # 📦 MODULE RUNNER
@@ -43,7 +63,6 @@ def run_python_module(module_path, data, state):
             data.setdefault("log", []).append("❌ module has no run()")
             return data, False
 
-        # state-aware execution (optional future use)
         result = module.run(data, state)
 
         if isinstance(result, dict):
@@ -143,7 +162,7 @@ def cleanup_modules(data):
 
 
 # =========================
-# 🚀 EXECUTION CORE (STATE-DRIVEN FIXED)
+# 🚀 EXECUTION CORE (EVENT GRAPH ENABLED)
 # =========================
 def execution(data):
 
@@ -152,7 +171,7 @@ def execution(data):
     data.setdefault("execution_result", {})
 
     # =========================
-    # 🧠 STATE FLOW (FIXED)
+    # 🧠 STATE
     # =========================
     state = system_state.load()
     state = system_state.inject(data)
@@ -161,25 +180,37 @@ def execution(data):
     module_used = data.get("module")
     success = False
 
+    emit_event("execution.start", data)
+
     # =========================
     # 🧩 CREATE
     # =========================
     if decision == "create_module":
+
+        emit_event("create.start", data)
+
         data, success = create_module(data)
         module_used = data.get("module")
+
+        emit_event("create.end", data, success=success)
 
     # =========================
     # 🚀 RUN
     # =========================
     elif decision == "run_module" and module_used:
 
+        emit_event("run.start", data)
+
         module_used = str(module_used).replace(".py", "").replace("modules/", "")
         path = os.path.join(MODULES_DIR, module_used + ".py")
 
         data, success = run_python_module(path, data, state)
 
+        emit_event("run.end", data, success=success)
+
     else:
         data.setdefault("log", []).append("⚠️ execution skipped")
+        emit_event("execution.skipped", data)
 
     # =========================
     # 🧠 EXPERIENCE
@@ -194,7 +225,7 @@ def execution(data):
         })
 
     # =========================
-    # 🧠 UPDATE STATE (FIXED)
+    # 🧠 STATE UPDATE
     # =========================
     state["last_module"] = module_used
     state["last_success"] = success
@@ -217,6 +248,8 @@ def execution(data):
         "module": module_used,
         "success": success
     }
+
+    emit_event("execution.end", data, success=success)
 
     data.setdefault("log", []).append(
         "🧠 learning signal: success" if success else "🧠 learning signal: failure"

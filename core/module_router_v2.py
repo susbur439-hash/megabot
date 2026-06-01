@@ -14,16 +14,12 @@ LOG_LEVEL = "ERROR"
 
 
 def log(msg, level="INFO"):
-
     if LOG_LEVEL == "SILENT":
         return
-
     if LOG_LEVEL == "ERROR" and level != "ERROR":
         return
-
     if LOG_LEVEL == "INFO" and level == "DEBUG":
         return
-
     print(msg)
 
 
@@ -53,7 +49,7 @@ ROLE_MAP = {
 
 
 # =========================
-# 🧠 ROUTER V2 (v13 BASE)
+# 🧠 ROUTER V2 (v13 LEARNING CORE)
 # =========================
 
 class ModuleRouterV2:
@@ -63,8 +59,10 @@ class ModuleRouterV2:
         self.modules = {}
         self.roles = defaultdict(list)
 
-        # 🧠 NEW: module scoring map
+        # 🧠 LEARNING STATE
         self.module_score = {}
+        self.success_memory = defaultdict(int)
+        self.fail_memory = defaultdict(int)
 
         self.failed = {}
 
@@ -102,18 +100,17 @@ class ModuleRouterV2:
 
                 self.modules[name] = module
 
-                # 🧠 NEW: initial score baseline
+                # 🧠 initial learning weight
                 self.module_score[name] = 1.0
 
                 if register_module:
                     try:
                         register_module(name, module)
-                    except Exception:
+                    except:
                         pass
 
             except Exception as e:
                 self.failed[name] = str(e)
-                log(f"[RouterV2] error: {name} | {e}", "ERROR")
 
     # =========================
     # 🧠 ROLE DETECTION
@@ -140,26 +137,22 @@ class ModuleRouterV2:
 
         for name in self.modules:
             role = self.detect_role(name)
-
             self.roles[role].append(name)
 
         try:
             with open("architecture_map.json", "w", encoding="utf-8") as f:
                 json.dump(dict(self.roles), f, indent=2, ensure_ascii=False)
-        except Exception:
+        except:
             pass
 
-        log("[RouterV2] architecture map built", "INFO")
-
     # =========================
-    # 🧠 SCORING ENGINE (NEW v13 CORE)
+    # 🧠 SCORING ENGINE (v13 LEARNING)
     # =========================
 
     def score_module(self, name, role, state):
 
         base = self.module_score.get(name, 1.0)
 
-        # role importance
         role_weight = {
             "DECISION": 3,
             "EXECUTION": 3,
@@ -170,50 +163,18 @@ class ModuleRouterV2:
             "LEARNING": 2
         }.get(role, 1)
 
-        # system influence
         stability = state.get("stability", 1.0)
         energy = state.get("energy", 50)
 
+        learn_bonus = self.success_memory[name] - self.fail_memory[name]
+
         score = base * role_weight * (0.5 + stability) * (energy / 100)
+        score += learn_bonus * 0.1
 
         return score
 
     # =========================
-    # 🔁 FLOW
-    # =========================
-
-    def get_flow(self):
-
-        return [
-            "CONTROL",
-            "ENTRYPOINT",
-            "ANALYSIS",
-            "DECISION",
-            "EXECUTION",
-            "MEMORY"
-        ]
-
-    # =========================
-    # 🧼 NORMALIZE
-    # =========================
-
-    def normalize(self, command):
-
-        if isinstance(command, str):
-            return {"module": "director", "data": {"task": command}}
-
-        if not isinstance(command, dict):
-            return {"module": "director", "data": {"task": str(command)}}
-
-        command.setdefault("data", {})
-
-        if "module" not in command:
-            command["module"] = "director"
-
-        return command
-
-    # =========================
-    # 🎯 ROUTE (v13)
+    # 🔁 ROUTE (LEARNING VERSION)
     # =========================
 
     def route(self, command):
@@ -224,21 +185,19 @@ class ModuleRouterV2:
             system_state.load()
             system_state.inject(command)
             state = system_state.get()
-        except Exception:
+        except:
             state = {}
 
         data = command.get("data", {})
 
-        # 🧠 NEW: dynamic module selection (SCORING)
         best_module = None
         best_score = -1
 
+        # 🧠 selection
         for role, modules in self.roles.items():
-
             for m in modules:
 
-                module_obj = self.modules.get(m)
-                if not module_obj:
+                if m not in self.modules:
                     continue
 
                 score = self.score_module(m, role, state)
@@ -260,9 +219,24 @@ class ModuleRouterV2:
                 **data,
                 "system_state": state,
                 "roles": dict(self.roles),
-                "router_version": "v3-v13-core",
+                "router_version": "v13-learning",
                 "selected_score": best_score
             })
+
+            # =========================
+            # 🧠 LEARNING UPDATE
+            # =========================
+
+            success = True
+            if isinstance(result, dict):
+                success = result.get("success", True)
+
+            if success:
+                self.success_memory[best_module] += 1
+                self.module_score[best_module] *= 1.01
+            else:
+                self.fail_memory[best_module] += 1
+                self.module_score[best_module] *= 0.98
 
             system_state.update("last_module", best_module)
             system_state.update("last_result", result)
@@ -271,13 +245,16 @@ class ModuleRouterV2:
                 "status": "success",
                 "module": best_module,
                 "score": best_score,
-                "result": result,
-                "architecture_view": dict(self.roles)
+                "learning": {
+                    "success": dict(self.success_memory),
+                    "fail": dict(self.fail_memory)
+                },
+                "result": result
             }
 
         except Exception as e:
 
-            log(f"[RouterV2] execution error: {e}", "ERROR")
+            self.fail_memory[best_module] += 1
 
             return {
                 "status": "error",
@@ -285,3 +262,20 @@ class ModuleRouterV2:
                 "message": str(e),
                 "trace": traceback.format_exc()
             }
+
+    # =========================
+    # 🧼 NORMALIZE
+    # =========================
+
+    def normalize(self, command):
+
+        if isinstance(command, str):
+            return {"module": "director", "data": {"task": command}}
+
+        if not isinstance(command, dict):
+            return {"module": "director", "data": {"task": str(command)}}
+
+        command.setdefault("data", {})
+        command.setdefault("module", "director")
+
+        return command

@@ -6,10 +6,11 @@ from core.system_brain_bridge import SystemBrainBridge
 
 MEMORY_FILE = "code_understanding.json"
 
+# =========================
+# 🧠 SINGLETON BRIDGE
+# =========================
+bridge = SystemBrainBridge()
 
-# =========================================================
-# 📥 LOAD MEMORY
-# =========================================================
 
 def load_memory():
 
@@ -24,69 +25,46 @@ def load_memory():
         return {"error": str(e)}
 
 
-# =========================================================
+# =========================
 # 🧠 INTENT CLASSIFIER
-# =========================================================
-
+# =========================
 INTENTS = {
-    "execution": [
-        "run", "execute", "launch", "start",
-        "build", "repair", "fix", "deploy", "create"
-    ],
-    "analysis": [
-        "analyze", "scan", "inspect", "check",
-        "review", "diagnose"
-    ],
-    "intelligence": [
-        "brain", "system", "strategy",
-        "architecture", "reason", "think"
-    ]
+    "execution": ["run", "execute", "launch", "start", "build", "repair", "fix", "deploy", "create"],
+    "analysis": ["analyze", "scan", "inspect", "check", "review", "diagnose"],
+    "intelligence": ["brain", "system", "strategy", "architecture", "reason", "think"]
 }
 
 
 def detect_intent(task_text):
 
     task_lower = task_text.lower()
-
     scores = {}
 
     for intent, keywords in INTENTS.items():
-        scores[intent] = sum(1 for word in keywords if word in task_lower)
+        scores[intent] = sum(1 for w in keywords if w in task_lower)
 
-    best_intent = max(scores, key=scores.get)
+    best = max(scores, key=scores.get)
 
-    if scores[best_intent] == 0:
-        return "unknown"
-
-    return best_intent
+    return best if scores[best] > 0 else "unknown"
 
 
-# =========================================================
-# 🧠 DECISION ENGINE (BRIDGE-POWERED)
-# =========================================================
-
+# =========================
+# 🧠 DECISION ENGINE
+# =========================
 def decide(task):
 
-    # =========================
-    # 🧠 SYSTEM STATE
-    # =========================
-    state = system_state.inject(task)
+    # FIX 1: load first, inject second (логика состояния)
     state = system_state.load()
 
-    # normalize task
     if isinstance(task, dict):
         task_text = task.get("task", "")
     else:
         task_text = str(task)
 
-    # =====================================================
-    # 🧠 NEW: SINGLE SOURCE OF ARCHITECTURE
-    # =====================================================
+    state = system_state.inject(task_text)
 
-    bridge = SystemBrainBridge()
+    # FIX 2: reuse single bridge (НЕ пересоздаём)
     roles = bridge.roles
-
-    # optional refresh (safe)
     bridge.refresh()
 
     intent = detect_intent(task_text)
@@ -94,24 +72,17 @@ def decide(task):
     state["intent"] = intent
     state["task_text"] = task_text
 
-    # =====================================================
-    # 🧠 ARCHITECTURE POOLS
-    # =====================================================
-
     execution_pool = roles.get("EXECUTION", [])
     analysis_pool = roles.get("ANALYSIS", [])
     decision_pool = roles.get("DECISION", [])
 
-    # =====================================================
-    # ⚙ EXECUTION
-    # =====================================================
-
+    # =========================
+    # EXECUTION
+    # =========================
     if intent == "execution":
 
-        module = bridge.get_execution_module()
-
         return {
-            "module": module,
+            "module": bridge.get_execution_module(),
             "data": {
                 "task": task_text,
                 "system_state": state,
@@ -119,16 +90,13 @@ def decide(task):
             }
         }
 
-    # =====================================================
-    # 🔍 ANALYSIS
-    # =====================================================
-
+    # =========================
+    # ANALYSIS
+    # =========================
     if intent == "analysis":
 
-        module = bridge.get_analysis_module()
-
         return {
-            "module": module,
+            "module": bridge.get_analysis_module(),
             "data": {
                 "task": task_text,
                 "system_state": state,
@@ -136,16 +104,13 @@ def decide(task):
             }
         }
 
-    # =====================================================
-    # 🧠 INTELLIGENCE
-    # =====================================================
-
+    # =========================
+    # INTELLIGENCE
+    # =========================
     if intent == "intelligence":
 
-        module = bridge.get_decision_module()
-
         return {
-            "module": module,
+            "module": bridge.get_decision_module(),
             "data": {
                 "question": task_text,
                 "system_state": state,
@@ -153,10 +118,9 @@ def decide(task):
             }
         }
 
-    # =====================================================
-    # ❓ UNKNOWN TASK
-    # =====================================================
-
+    # =========================
+    # UNKNOWN
+    # =========================
     return {
         "module": "task_interpreter",
         "data": {
@@ -167,10 +131,9 @@ def decide(task):
     }
 
 
-# =========================================================
+# =========================
 # 🚀 TEST LOOP
-# =========================================================
-
+# =========================
 if __name__ == "__main__":
 
     while True:

@@ -1,94 +1,164 @@
 from modules.control_bus import inject, emit
 
+
 def decide(data):
-return decision(data)
+    return decision(data)
+
 
 def decision(data):
 
-if not isinstance(data, dict):
-    data = {}
+    if not isinstance(data, dict):
+        data = {}
 
-data.setdefault("log", [])
-data.setdefault("experience", [])
-data.setdefault("evaluation", {})
+    data.setdefault("log", [])
+    data.setdefault("experience", [])
+    data.setdefault("evaluation", {})
+    data.setdefault("create_repeats", 0)
 
-data = inject(data)
+    # =========================
+    # 🧠 CONTROL BUS INJECT
+    # =========================
+    data = inject(data)
 
-experience = data.get("experience", [])
-score = data.get("evaluation", {}).get("score", 50)
+    control_state = data.get("control_state", {})
+    control_flags = data.get("control_flags", {})
 
-module_map = {}
+    score = data.get("evaluation", {}).get("score", 50)
+    experience = data.get("experience", [])
 
-for e in experience:
+    # =========================
+    # 🚨 HARD BLOCKS
+    # =========================
+    system_block_create = (
+        control_flags.get("overcreate", False)
+        or control_flags.get("loop_detected", False)
+        or control_state.get("mode") == "repair"
+    )
 
-    if not isinstance(e, dict):
-        continue
+    # =========================
+    # 🧠 EXPERIENCE MAP
+    # =========================
+    module_map = {}
 
-    module = e.get("module")
-    module_score = e.get("score")
+    for e in experience:
+        if not isinstance(e, dict):
+            continue
 
-    if not module:
-        continue
+        m = e.get("module")
+        s = e.get("score")
 
-    if not isinstance(module_score, (int, float)):
-        continue
+        if not m or not isinstance(s, (int, float)):
+            continue
 
-    module_map.setdefault(module, []).append(module_score)
+        module_map.setdefault(m, []).append(s)
 
-best_module = None
-best_score = -1
+    # =========================
+    # 🧠 BEST MODULE
+    # =========================
+    best_module = None
+    best_score = -1
 
-for module, scores in module_map.items():
+    for m, scores in module_map.items():
+        avg = sum(scores) / len(scores)
 
-    avg = sum(scores) / len(scores)
+        if len(scores) < 2:
+            avg *= 0.85
 
-    if avg > best_score:
-        best_score = avg
-        best_module = module
+        if avg > best_score:
+            best_score = avg
+            best_module = m
 
-action = None
-selected_module = None
+    has_modules = len(module_map) > 0
+    has_good_module = best_module is not None and best_score >= 40
 
-# ====================================
-# MANUAL MODULE
-# ====================================
+    create_streak = data.get("create_repeats", 0)
 
-requested_module = data.get("module")
+    action = None
+    module = None
 
-if requested_module:
+    # =========================
+    # 🚨 CORE LOGIC
+    # =========================
 
-    action = "run_module"
-    selected_module = requested_module
+    if has_good_module:
+        action = "run_module"
+        module = best_module
 
-# ====================================
-# BEST KNOWN MODULE
-# ====================================
+    elif has_modules:
+        action = "run_module"
+        module = best_module
 
-elif best_module:
+    elif system_block_create:
+        action = "run_module"
+        module = best_module
 
-    action = "run_module"
-    selected_module = best_module
+    elif create_streak == 0:
+        action = "create_module"
 
-# ====================================
-# NO MODULES YET
-# ====================================
+    else:
+        action = "run_module"
+        module = best_module
 
-else:
+    # =========================
+    # 🧨 SAFETY FIX
+    # =========================
+    if action == "run_module" and not module:
+        action = "run_module"
+        module = "director"
 
-    action = "create_module"
+    # =========================
+    # 🧹 CLEANUP DETECTION
+    # =========================
+    cleanup_list = []
 
-data["decision"] = action
-data["module"] = selected_module
+    for m, scores in module_map.items():
+        avg = sum(scores) / len(scores)
 
-emit({
-    "phase": "decision",
-    "action": action,
-    "module": selected_module,
-    "score": score
-})
+        if len(scores) >= 2 and avg < 20:
+            cleanup_list.append(m)
 
-data["log"].append(
-    f"decision={action} module={selected_module} best_score={best_score}"
-)
+    if cleanup_list:
+        data["cleanup_modules"] = cleanup_list
 
-return data
+        emit({
+            "phase": "cleanup",
+            "action": "delete_modules",
+            "modules": cleanup_list
+        })
+
+    # =========================
+    # 📡 CONTROL EVENT
+    # =========================
+    emit({
+        "phase": "decision",
+        "action": action,
+        "module": module,
+        "score": score,
+        "modules": len(module_map),
+        "blocked": system_block_create
+    })
+
+    # =========================
+    # 📦 OUTPUT
+    # =========================
+    data["decision"] = action
+    data["module"] = module
+
+    # =========================
+    # 📈 STREAK
+    # =========================
+    if action == "create_module":
+        data["create_repeats"] = create_streak + 1
+    else:
+        data["create_repeats"] = 0
+
+    # =========================
+    # 🧾 LOG
+    # =========================
+    best_score_safe = round(best_score, 1) if best_score != -1 else 0
+
+    data["log"].append(
+        f"decision={action} score={score} best={best_module}({best_score_safe}) modules={len(module_map)} blocked={system_block_create}"
+    )
+
+    return data

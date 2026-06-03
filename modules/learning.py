@@ -1,141 +1,201 @@
 import json
 import os
-import random
 
 
 def run(context):
-    """
-    Learning module:
-    накапливает опыт, анализирует прошлые результаты и улучшает стратегию
-    + активное саморазвитие системы
-    """
 
     print("[Learning] START")
 
     memory_file = "memory.json"
+    scores_file = "module_scores.json"
 
     # =========================
-    # 📦 ЗАГРУЗКА ПАМЯТИ
+    # MEMORY LOAD
     # =========================
+
+    memory = {
+        "experiences": [],
+        "learning_log": []
+    }
+
     if os.path.exists(memory_file):
         try:
             with open(memory_file, "r", encoding="utf-8") as f:
-                memory = json.load(f)
+                memory.update(json.load(f))
         except:
-            memory = {"experiences": []}
-    else:
-        memory = {"experiences": []}
+            pass
 
     experiences = memory.get("experiences", [])
-    memory.setdefault("learning_log", [])
+    learning_log = memory.get("learning_log", [])
 
     # =========================
-    # 📊 ТЕКУЩИЙ КОНТЕКСТ
+    # MODULE SCORES LOAD
     # =========================
+
+    module_scores = {}
+
+    if os.path.exists(scores_file):
+        try:
+            with open(scores_file, "r", encoding="utf-8") as f:
+                module_scores = json.load(f)
+        except:
+            pass
+
+    # =========================
+    # CONTEXT
+    # =========================
+
     task = context.get("task", "unknown")
-    meta = context.get("meta", {})
 
-    score = context.get("evaluation", {}).get("score", 50)
+    evaluation = context.get("evaluation", {})
+    score = evaluation.get("score", 50)
+
+    module_name = (
+        context.get("module")
+        or context.get("last_module")
+        or "unknown"
+    )
+
     modules_created = context.get("modules_created", [])
 
-    print(f"[Learning] Task: {task}")
-    print(f"[Learning] Goal: {meta.get('goal')}")
+    # =========================
+    # EXPERIENCE
+    # =========================
 
-    # =========================
-    # 🧠 ЗАПИСЬ ОПЫТА
-    # =========================
     experience = {
         "task": task,
         "score": score,
-        "modules_created": modules_created,
+        "module": module_name,
         "success": score >= 70
     }
 
     experiences.append(experience)
 
     # =========================
-    # 📈 АНАЛИЗ ТЕНДЕНЦИИ
+    # TREND
     # =========================
-    last_scores = [e["score"] for e in experiences[-10:]]
 
     trend = "stable"
 
+    last_scores = [e.get("score", 50) for e in experiences[-10:]]
+
     if len(last_scores) >= 3:
+
         if last_scores[-1] > last_scores[0]:
             trend = "improving"
+
         elif last_scores[-1] < last_scores[0]:
             trend = "declining"
 
     # =========================
-    # 🧠 ВЫВОД ОБУЧЕНИЯ
+    # MODULE STATISTICS
     # =========================
+
+    stats = module_scores.get(module_name, {
+        "runs": 0,
+        "success": 0,
+        "avg_score": 50,
+        "disabled": False
+    })
+
+    stats["runs"] += 1
+
+    if score >= 70:
+        stats["success"] += 1
+
+    old_avg = stats["avg_score"]
+
+    stats["avg_score"] = round(
+        ((old_avg * (stats["runs"] - 1)) + score)
+        / stats["runs"],
+        2
+    )
+
+    # auto-disable bad module
+
+    if (
+        stats["runs"] >= 5
+        and stats["avg_score"] < 30
+    ):
+        stats["disabled"] = True
+
+    module_scores[module_name] = stats
+
+    # =========================
+    # INSIGHTS
+    # =========================
+
     insights = []
 
     if trend == "improving":
-        insights.append("system is improving strategy")
-    elif trend == "declining":
-        insights.append("system is degrading performance")
+        insights.append("system performance improving")
 
-    if len(modules_created) > 3:
-        insights.append("too many modules created per cycle")
+    elif trend == "declining":
+        insights.append("system performance declining")
 
     if score < 40:
         insights.append("low quality output detected")
 
-    # =========================
-    # 🔥 АКТИВНОЕ САМООБУЧЕНИЕ
-    # =========================
-    created_module = None
+    if len(modules_created) > 3:
+        insights.append("too many modules created")
 
-    # если задача — саморазвитие → создаём модуль
-    if meta.get("goal") == "improve_system":
-        modules_dir = "modules"
-        os.makedirs(modules_dir, exist_ok=True)
-
-        new_module_name = f"module_auto_{random.randint(1000,9999)}.py"
-        new_module_path = os.path.join(modules_dir, new_module_name)
-
-        if not os.path.exists(new_module_path):
-            with open(new_module_path, "w", encoding="utf-8") as f:
-                f.write(f'''
-def run(data):
-    print("🚀 Auto-generated module working")
-    return {{"status": "ok"}}
-''')
-
-            print(f"[Learning] Created new module: {new_module_name}")
-            created_module = new_module_name
+    if stats["disabled"]:
+        insights.append(
+            f"module {module_name} disabled"
+        )
 
     # =========================
-    # 💾 ЛОГ ОБУЧЕНИЯ
+    # LEARNING LOG
     # =========================
-    memory["learning_log"].append({
+
+    learning_log.append({
         "task": task,
+        "module": module_name,
+        "score": score,
         "trend": trend,
-        "insights": insights,
-        "created_module": created_module
+        "insights": insights
     })
 
     # =========================
-    # 💾 СОХРАНЕНИЕ ПАМЯТИ
+    # SAVE MEMORY
     # =========================
-    memory["experiences"] = experiences[-50:]
+
+    memory["experiences"] = experiences[-100:]
+    memory["learning_log"] = learning_log[-100:]
 
     try:
         with open(memory_file, "w", encoding="utf-8") as f:
-            json.dump(memory, f, ensure_ascii=False, indent=2)
+            json.dump(
+                memory,
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
+    except:
+        pass
+
+    # =========================
+    # SAVE SCORES
+    # =========================
+
+    try:
+        with open(scores_file, "w", encoding="utf-8") as f:
+            json.dump(
+                module_scores,
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
     except:
         pass
 
     print("[Learning] DONE")
 
-    # =========================
-    # 📤 РЕЗУЛЬТАТ
-    # =========================
     return {
         "status": "ok",
         "trend": trend,
+        "module": module_name,
+        "module_stats": stats,
         "insights": insights,
-        "created_module": created_module,
         "total_experiences": len(experiences)
     }

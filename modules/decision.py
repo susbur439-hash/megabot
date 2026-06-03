@@ -1,182 +1,94 @@
 from modules.control_bus import inject, emit
 
-
 def decide(data):
-    return decision(data)
-
+return decision(data)
 
 def decision(data):
 
-    if not isinstance(data, dict):
-        data = {}
+if not isinstance(data, dict):
+    data = {}
 
-    data.setdefault("log", [])
-    data.setdefault("experience", [])
-    data.setdefault("evaluation", {})
-    data.setdefault("create_repeats", 0)
+data.setdefault("log", [])
+data.setdefault("experience", [])
+data.setdefault("evaluation", {})
 
-    # =========================
-    # 🧠 CONTROL BUS INJECT
-    # =========================
-    data = inject(data)
+data = inject(data)
 
-    control_state = data.get("control_state", {})
-    control_flags = data.get("control_flags", {})
+experience = data.get("experience", [])
+score = data.get("evaluation", {}).get("score", 50)
 
-    score = data.get("evaluation", {}).get("score", 50)
-    experience = data.get("experience", [])
+module_map = {}
 
-    # =========================
-    # 🌐 BIAS
-    # =========================
-    internet_weights = data.get("internet_weights", {})
-    snapshot_bias = data.get("snapshot_bias", {})
+for e in experience:
 
-    decision_bias = (
-        internet_weights.get("decision:create_module", 0)
-        + snapshot_bias.get("create", 0)
-    )
+    if not isinstance(e, dict):
+        continue
 
-    # =========================
-    # 🚨 HARD CONTROL OVERRIDES
-    # =========================
-    system_block_create = (
-        control_flags.get("overcreate", False)
-        or control_flags.get("loop_detected", False)
-        or control_state.get("mode") == "repair"
-    )
+    module = e.get("module")
+    module_score = e.get("score")
 
-    # =========================
-    # 🧠 EXPERIENCE MAP
-    # =========================
-    module_map = {}
+    if not module:
+        continue
 
-    for e in experience:
-        if not isinstance(e, dict):
-            continue
+    if not isinstance(module_score, (int, float)):
+        continue
 
-        m = e.get("module")
-        s = e.get("score")
+    module_map.setdefault(module, []).append(module_score)
 
-        if not m or s is None:
-            continue
+best_module = None
+best_score = -1
 
-        if not isinstance(s, (int, float)):
-            continue
+for module, scores in module_map.items():
 
-        module_map.setdefault(m, []).append(s)
+    avg = sum(scores) / len(scores)
 
-    # =========================
-    # 🧠 BEST MODULE
-    # =========================
-    best_module = None
-    best_score = -1
+    if avg > best_score:
+        best_score = avg
+        best_module = module
 
-    for m, scores in module_map.items():
-        avg = sum(scores) / len(scores)
+action = None
+selected_module = None
 
-        if len(scores) < 2:
-            avg *= 0.8
+# ====================================
+# MANUAL MODULE
+# ====================================
 
-        if avg > best_score:
-            best_score = avg
-            best_module = m
+requested_module = data.get("module")
 
-    has_modules = len(module_map) > 0
-    has_good_module = best_module is not None and best_score >= 40
+if requested_module:
 
-    create_streak = data.get("create_repeats", 0)
+    action = "run_module"
+    selected_module = requested_module
 
-    action = None
-    module = None
+# ====================================
+# BEST KNOWN MODULE
+# ====================================
 
-    # =========================
-    # 🚨 CORE LOGIC (CONTROL-FIRST)
-    # =========================
+elif best_module:
 
-    # 1. если есть хороший модуль → всегда run
-    if has_good_module:
-        action = "run_module"
-        module = best_module
+    action = "run_module"
+    selected_module = best_module
 
-    # 2. если есть любые модули → run (никогда не create)
-    elif has_modules:
-        action = "run_module"
-        module = best_module
+# ====================================
+# NO MODULES YET
+# ====================================
 
-    # 3. если система заблокировала создание → только run/repair
-    elif system_block_create:
-        action = "run_module"
-        module = best_module
+else:
 
-    # 4. если вообще пусто → create (ОГРАНИЧЕННО)
-    elif create_streak == 0:
-        action = "create_module"
+    action = "create_module"
 
-    else:
-        action = "run_module"
-        module = best_module
+data["decision"] = action
+data["module"] = selected_module
 
-    # =========================
-    # 🧨 SAFETY FIX
-    # =========================
-    if action == "run_module" and not module:
-        # НИКАКИХ create fallback больше
-        action = "run_module"
-        module = None
+emit({
+    "phase": "decision",
+    "action": action,
+    "module": selected_module,
+    "score": score
+})
 
-    # =========================
-    # 🧹 CLEANUP SIGNAL
-    # =========================
-    cleanup_list = []
+data["log"].append(
+    f"decision={action} module={selected_module} best_score={best_score}"
+)
 
-    for m, scores in module_map.items():
-        avg = sum(scores) / len(scores)
-
-        if avg < 20 and len(scores) >= 2:
-            cleanup_list.append(m)
-
-    if cleanup_list:
-        data["cleanup_modules"] = cleanup_list
-        data["log"].append(f"🧹 cleanup candidates: {cleanup_list}")
-
-        emit({
-            "phase": "cleanup",
-            "action": "delete_modules",
-            "modules": cleanup_list
-        })
-
-    # =========================
-    # 📡 CONTROL BUS EVENT
-    # =========================
-    emit({
-        "phase": "decision",
-        "action": action,
-        "module": module,
-        "score": score,
-        "modules": len(module_map),
-        "blocked": system_block_create
-    })
-
-    # =========================
-    # 📦 OUTPUT
-    # =========================
-    data["decision"] = action
-    data["module"] = module
-
-    # =========================
-    # 📈 STREAK
-    # =========================
-    if action == "create_module":
-        data["create_repeats"] = create_streak + 1
-    else:
-        data["create_repeats"] = 0
-
-    # =========================
-    # 🧾 LOG
-    # =========================
-    data["log"].append(
-        f"decision: {action} | score: {score} | best: {best_module}({round(best_score,1)}) | modules:{len(module_map)} | blocked:{system_block_create}"
-    )
-
-    return data
+return data

@@ -7,6 +7,12 @@ import time
 
 from modules.control_bus import emit
 
+# 🧠 AI LAYER (NEW)
+try:
+    from modules.ai_gateway import ask_model
+except:
+    ask_model = None
+
 # =========================================================
 # ⚙ CONFIG
 # =========================================================
@@ -79,7 +85,9 @@ def load_memory():
         "history": [],
         "graph_hash": None,
         "drift": 0,
-        "learning_score": {}
+        "learning_score": {},
+        "ai_report": {},
+        "ai_score": 0
     }
 
     if not os.path.exists(MEMORY_FILE):
@@ -105,7 +113,7 @@ def save_memory(memory):
         pass
 
 # =========================================================
-# 📡 CONTROL INJECTION (NEW v12)
+# 📡 CONTROL INJECTION
 # =========================================================
 
 def get_control_bias():
@@ -166,6 +174,7 @@ def extract_runtime_calls(code):
         pass
     return calls
 
+
 def extract_imports(code):
     imports = []
     try:
@@ -182,7 +191,44 @@ def extract_imports(code):
     return imports
 
 # =========================================================
-# 🔗 GRAPH BUILD (v12 CONTROL-AWARE)
+# 🤖 AI ANALYSIS LAYER (NEW)
+# =========================================================
+
+def ai_analyze(graph, reverse, hubs, isolated, brain):
+
+    if not ask_model:
+        return {}
+
+    prompt = f"""
+Ты архитектор системы Megabot.
+
+Проанализируй структуру проекта.
+
+Дай:
+- проблемы архитектуры
+- слабые модули
+- риски
+- улучшения
+- оценку качества (0-100)
+
+BRAIN: {brain}
+HUBS: {hubs}
+ISOLATED: {isolated}
+
+GRAPH:
+{graph}
+
+REVERSE:
+{reverse}
+"""
+
+    try:
+        return ask_model(prompt)
+    except:
+        return {}
+
+# =========================================================
+# 🔗 GRAPH BUILD
 # =========================================================
 
 def build_runtime_graph(files, modules):
@@ -223,7 +269,7 @@ def build_runtime_graph(files, modules):
     return graph, reverse, weights
 
 # =========================================================
-# 🧠 BRAIN (v12 ADAPTIVE)
+# 🧠 BRAIN
 # =========================================================
 
 def find_brain(graph, reverse, memory):
@@ -239,7 +285,6 @@ def find_brain(graph, reverse, memory):
 
         score = len(graph[n]) * 2 + len(reverse[n]) * 3
 
-        # base boosts
         if n == "director":
             score += 15
         elif n == "central_decision":
@@ -249,12 +294,10 @@ def find_brain(graph, reverse, memory):
         elif n == "engine":
             score += 8
 
-        # v12 control influence
         score += bias["success"] * 0.5
         score -= bias["fail"] * 0.3
 
-        drift = memory.get("drift", 0)
-        if drift:
+        if memory.get("drift", 0):
             score += 5
 
         if score > score_best:
@@ -293,7 +336,7 @@ def compute_isolated(graph, reverse):
     return [n for n in graph if not graph[n] and not reverse[n]]
 
 # =========================================================
-# 🧠 DECISION (v12 CONTROL SHIFT)
+# 🧠 DECISION
 # =========================================================
 
 def decide(hubs, isolated):
@@ -303,12 +346,18 @@ def decide(hubs, isolated):
     actions = []
 
     for n in isolated:
-        priority = 10 + bias["fail"] * 0.2
-        actions.append({"type": "connect", "target": n, "priority": priority})
+        actions.append({
+            "type": "connect",
+            "target": n,
+            "priority": 10 + bias["fail"] * 0.2
+        })
 
     for n in hubs:
-        priority = 5 + bias["success"] * 0.1
-        actions.append({"type": "optimize", "target": n, "priority": priority})
+        actions.append({
+            "type": "optimize",
+            "target": n,
+            "priority": 5 + bias["success"] * 0.1
+        })
 
     return actions
 
@@ -353,7 +402,7 @@ def build_cycle():
                         modules.append(name)
 
     log("\n==============================")
-    log("🧠 MEGABOT v12 CONTROL LOOP")
+    log("🧠 MEGABOT v13 AI CONTROL LOOP")
     log("==============================")
 
     graph, reverse, weights = build_runtime_graph(files, modules)
@@ -370,6 +419,12 @@ def build_cycle():
         learning[a["target"]] = learning.get(a["target"], 0) + 1
 
     memory["learning_score"] = learning
+
+    # AI ANALYSIS
+    ai_report = ai_analyze(graph, reverse, hubs, isolated, brain)
+
+    memory["ai_report"] = ai_report
+    memory["ai_score"] = ai_report.get("score", 0) if isinstance(ai_report, dict) else 0
 
     ghash = hash_graph(graph)
     prev_hash = memory.get("graph_hash")
@@ -407,6 +462,7 @@ def build_cycle():
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
     log(f"DRIFT: {memory['drift']}")
+    log(f"AI_SCORE: {memory['ai_score']}")
     log("==============================")
     log(f"cycles={memory['cycles']} errors={errors}")
 

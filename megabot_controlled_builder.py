@@ -3,11 +3,10 @@ import json
 import traceback
 import ast
 import hashlib
-import time
 
 from modules.control_bus import emit
 
-# 🧠 AI LAYER (NEW)
+# 🧠 AI LAYER (SAFE)
 try:
     from modules.ai_gateway import ask_model
 except:
@@ -21,7 +20,6 @@ ROOT_DIR = "."
 MODULES_DIR = "modules"
 
 MEMORY_FILE = "builder_memory.json"
-REPORT_FILE = "builder_report.json"
 
 MAX_CYCLES = 1
 
@@ -113,30 +111,6 @@ def save_memory(memory):
         pass
 
 # =========================================================
-# 📡 CONTROL INJECTION
-# =========================================================
-
-def get_control_bias():
-    try:
-        from modules.control_bus import CONTROL_BUS
-        return CONTROL_BUS.get_bias()
-    except:
-        return {
-            "success": 0,
-            "fail": 0,
-            "create": 0,
-            "run": 0
-        }
-
-def control_factor():
-    bias = get_control_bias()
-
-    energy = 1 + (bias["success"] - bias["fail"]) * 0.01
-    activity = 1 + (bias["create"] - bias["run"]) * 0.02
-
-    return max(0.5, min(2.0, energy * activity))
-
-# =========================================================
 # 📖 FILE
 # =========================================================
 
@@ -150,30 +124,6 @@ def read_file(path):
 # =========================================================
 # 🔍 ANALYSIS
 # =========================================================
-
-def extract_runtime_calls(code):
-    calls = []
-    try:
-        tree = ast.parse(code)
-
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Name):
-                    calls.append(node.func.id)
-                elif isinstance(node.func, ast.Attribute):
-                    parts = []
-                    cur = node.func
-                    while isinstance(cur, ast.Attribute):
-                        parts.append(cur.attr)
-                        cur = cur.value
-                    if isinstance(cur, ast.Name):
-                        parts.append(cur.id)
-                    parts.reverse()
-                    calls.append(".".join(parts))
-    except:
-        pass
-    return calls
-
 
 def extract_imports(code):
     imports = []
@@ -190,42 +140,68 @@ def extract_imports(code):
         pass
     return imports
 
+
+def extract_runtime_calls(code):
+    calls = []
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):
+                    calls.append(node.func.id)
+                elif isinstance(node.func, ast.Attribute):
+                    calls.append(node.func.attr)
+    except:
+        pass
+    return calls
+
 # =========================================================
-# 🤖 AI ANALYSIS LAYER (NEW)
+# 🤖 AI ANALYSIS (FIXED + SAFE)
 # =========================================================
 
 def ai_analyze(graph, reverse, hubs, isolated, brain):
 
     if not ask_model:
-        return {}
+        return {
+            "score": 0,
+            "status": "no_ai_gateway"
+        }
 
     prompt = f"""
 Ты архитектор системы Megabot.
 
-Проанализируй структуру проекта.
+Дай строгий анализ:
 
-Дай:
-- проблемы архитектуры
-- слабые модули
-- риски
+- архитектурные проблемы
+- слабые места
+- избыточные модули
 - улучшения
-- оценку качества (0-100)
+- оценка качества 0-100 (обязательно)
 
 BRAIN: {brain}
 HUBS: {hubs}
 ISOLATED: {isolated}
 
 GRAPH:
-{graph}
-
-REVERSE:
-{reverse}
+{json.dumps(graph, indent=2)}
 """
 
     try:
-        return ask_model(prompt)
-    except:
-        return {}
+        result = ask_model(prompt)
+
+        # 🔧 FIX: нормализация ответа
+        if isinstance(result, dict):
+            if "score" not in result:
+                result["score"] = 0
+            return result
+
+        return {"score": 0, "raw": str(result)}
+
+    except Exception as e:
+        return {
+            "score": 0,
+            "error": str(e)
+        }
 
 # =========================================================
 # 🔗 GRAPH BUILD
@@ -236,11 +212,6 @@ def build_runtime_graph(files, modules):
     graph = {m: set() for m in modules}
     reverse = {m: set() for m in modules}
     weights = {m: 0 for m in modules}
-
-    if not modules:
-        return graph, reverse, weights
-
-    c_factor = control_factor()
 
     for file in files:
 
@@ -259,12 +230,10 @@ def build_runtime_graph(files, modules):
                 if target == current:
                     continue
 
-                if target in ref or ref.endswith("." + target):
-
+                if target in ref:
                     graph[current].add(target)
                     reverse[target].add(current)
-
-                    weights[current] += 1 * c_factor
+                    weights[current] += 1
 
     return graph, reverse, weights
 
@@ -274,35 +243,21 @@ def build_runtime_graph(files, modules):
 
 def find_brain(graph, reverse, memory):
 
-    if not graph:
-        return None
-
-    bias = get_control_bias()
-
-    best, score_best = None, -1
+    best, best_score = None, -1
+    bias = 0
 
     for n in graph:
 
-        score = len(graph[n]) * 2 + len(reverse[n]) * 3
+        score = len(graph[n]) + len(reverse[n])
 
         if n == "director":
-            score += 15
-        elif n == "central_decision":
-            score += 12
-        elif n == "control_panel":
-            score += 10
-        elif n == "engine":
-            score += 8
+            score += 20
 
-        score += bias["success"] * 0.5
-        score -= bias["fail"] * 0.3
+        score += bias
 
-        if memory.get("drift", 0):
-            score += 5
-
-        if score > score_best:
+        if score > best_score:
             best = n
-            score_best = score
+            best_score = score
 
     return best
 
@@ -310,21 +265,15 @@ def find_brain(graph, reverse, memory):
 # 🧠 HUBS
 # =========================================================
 
-def compute_hubs(graph, reverse, weights, learning_score):
+def compute_hubs(graph, reverse, weights, learning):
 
     hubs = []
 
-    for node in graph:
+    for n in graph:
+        score = len(graph[n]) + len(reverse[n]) + weights.get(n, 0)
 
-        score = (
-            len(graph[node]) * 2 +
-            len(reverse[node]) * 2 +
-            weights.get(node, 0) +
-            learning_score.get(node, 0)
-        )
-
-        if score >= 6:
-            hubs.append(node)
+        if score >= 3:
+            hubs.append(n)
 
     return hubs
 
@@ -341,23 +290,13 @@ def compute_isolated(graph, reverse):
 
 def decide(hubs, isolated):
 
-    bias = get_control_bias()
-
     actions = []
 
     for n in isolated:
-        actions.append({
-            "type": "connect",
-            "target": n,
-            "priority": 10 + bias["fail"] * 0.2
-        })
+        actions.append({"type": "connect", "target": n})
 
     for n in hubs:
-        actions.append({
-            "type": "optimize",
-            "target": n,
-            "priority": 5 + bias["success"] * 0.1
-        })
+        actions.append({"type": "optimize", "target": n})
 
     return actions
 
@@ -366,7 +305,6 @@ def decide(hubs, isolated):
 # =========================================================
 
 def validate(files):
-
     errors = 0
     for f in files:
         try:
@@ -402,69 +340,40 @@ def build_cycle():
                         modules.append(name)
 
     log("\n==============================")
-    log("🧠 MEGABOT v13 AI CONTROL LOOP")
+    log("🧠 MEGABOT v13 AI CONTROL LOOP (FIXED)")
     log("==============================")
 
     graph, reverse, weights = build_runtime_graph(files, modules)
 
     brain = find_brain(graph, reverse, memory)
 
-    learning = memory.get("learning_score", {})
-
-    hubs = compute_hubs(graph, reverse, weights, learning)
+    hubs = compute_hubs(graph, reverse, weights, memory.get("learning_score", {}))
     isolated = compute_isolated(graph, reverse)
     actions = decide(hubs, isolated)
 
-    for a in actions:
-        learning[a["target"]] = learning.get(a["target"], 0) + 1
-
-    memory["learning_score"] = learning
-
-    # AI ANALYSIS
+    # 🤖 AI CALL
     ai_report = ai_analyze(graph, reverse, hubs, isolated, brain)
 
     memory["ai_report"] = ai_report
-    memory["ai_score"] = ai_report.get("score", 0) if isinstance(ai_report, dict) else 0
-
-    ghash = hash_graph(graph)
-    prev_hash = memory.get("graph_hash")
-
-    memory["drift"] = 0 if prev_hash is None else int(prev_hash != ghash)
-    memory["graph_hash"] = ghash
-
-    memory.update({
-        "runtime_graph": {k: list(v) for k, v in graph.items()},
-        "reverse_graph": {k: list(v) for k, v in reverse.items()},
-        "weights": weights,
-        "brain_node": brain,
-        "hubs": hubs,
-        "isolated": isolated,
-        "actions": actions
-    })
+    memory["ai_score"] = ai_report.get("score", 0)
 
     errors = validate(files)
 
     memory["cycles"] += 1
-
-    memory["history"].append({
-        "cycle": memory["cycles"],
-        "brain": brain,
-        "hubs": len(hubs),
-        "isolated": len(isolated),
-        "actions": len(actions),
-        "errors": errors,
-        "drift": memory["drift"]
-    })
-
-    save_memory(memory)
+    memory["brain_node"] = brain
+    memory["hubs"] = hubs
+    memory["isolated"] = isolated
+    memory["actions"] = actions
+    memory["graph_hash"] = hash_graph(graph)
 
     log(f"BRAIN: {brain}")
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
-    log(f"DRIFT: {memory['drift']}")
     log(f"AI_SCORE: {memory['ai_score']}")
+    log(f"ERRORS: {errors}")
     log("==============================")
-    log(f"cycles={memory['cycles']} errors={errors}")
+
+    save_memory(memory)
 
 # =========================================================
 # ▶ RUN

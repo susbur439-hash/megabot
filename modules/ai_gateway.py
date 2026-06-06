@@ -1,104 +1,67 @@
 import os
 import requests
 
-# =========================================================
-# 🔐 TOKEN
-# =========================================================
-
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
-
-# =========================================================
-# 🤖 AVAILABLE MODELS (fallback list)
-# =========================================================
-
-MODELS = [
-    "gpt-4o-mini",
-    "gpt-4o",
-    "gpt-4.1-mini",
-    "gpt-3.5-turbo"
-]
 
 URL = "https://models.github.ai/inference/chat/completions"
 
+MODEL = "gpt-4o-mini"
 
-# =========================================================
-# 🧠 AUTO MODEL SELECT
-# =========================================================
 
-def try_model(model, prompt):
+def ask_model(prompt: str):
+
+    if not GITHUB_TOKEN:
+        return {
+            "error": "MODELS_TOKEN not found"
+        }
+
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": model,
+        "model": MODEL,
         "messages": [
-            {"role": "user", "content": prompt}
+            {
+                "role": "user",
+                "content": prompt
+            }
         ],
         "temperature": 0.3
     }
 
     try:
+
         response = requests.post(
             URL,
             json=payload,
             headers=headers,
-            timeout=30
+            timeout=60
         )
 
-        # если модель не поддерживается — пробуем следующую
-        if response.status_code != 200:
-            return None, {
-                "error": response.text,
-                "status": response.status_code,
-                "model": model
-            }
-
-        data = response.json()
-
-        content = None
-        try:
-            content = data["choices"][0]["message"]["content"]
-        except:
-            content = str(data)
-
-        return {
-            "raw": data,
-            "text": content,
-            "model_used": model
-        }, None
-
-    except Exception as e:
-        return None, {
-            "error": str(e),
-            "model": model
+        result = {
+            "status_code": response.status_code,
+            "response_text": response.text[:3000]
         }
 
+        if response.status_code != 200:
+            return {
+                "error": "request_failed",
+                "debug": result
+            }
 
-# =========================================================
-# 🚀 MAIN FUNCTION (AUTO FALLBACK)
-# =========================================================
+        try:
+            data = response.json()
+        except Exception as e:
+            return {
+                "error": f"json_error: {e}",
+                "debug": result
+            }
 
-def ask_model(prompt: str):
-    """
-    Авто-выбор рабочей модели GitHub Models
-    """
+        return data
 
-    if not GITHUB_TOKEN:
-        return {"error": "MODELS_TOKEN not found"}
-
-    last_error = None
-
-    for model in MODELS:
-        result, error = try_model(model, prompt)
-
-        if result:
-            return result
-
-        last_error = error
-
-    return {
-        "error": "All models failed",
-        "last_error": last_error
-    }
+    except Exception as e:
+        return {
+            "error": str(e)
+        }

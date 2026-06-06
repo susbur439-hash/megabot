@@ -4,28 +4,47 @@ import requests
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
 def ask_model(prompt: str):
-    """
-    Отправка запроса в GitHub Models / API
-    """
+"""
+Отправка запроса в GitHub Models API
+"""
 
-    headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Content-Type": "application/json"
-    }
+if not GITHUB_TOKEN:
+    return {"error": "MODELS_TOKEN not found"}
 
-    payload = {
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.3
-    }
+url = "https://models.github.ai/inference/chat/completions"
 
-    # ⚠️ endpoint может отличаться в зависимости от модели
-    url = "https://models.inference.ai.azure.com/chat/completions"
+headers = {
+    "Authorization": f"Bearer {GITHUB_TOKEN}",
+    "Content-Type": "application/json"
+}
 
-    response = requests.post(url, json=payload, headers=headers)
+payload = {
+    "model": "gpt-4o-mini",
+    "messages": [
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ],
+    "temperature": 0.3
+}
+
+try:
+    response = requests.post(url, json=payload, headers=headers, timeout=30)
 
     if response.status_code != 200:
-        return {"error": response.text}
+        return {
+            "error": response.text,
+            "status": response.status_code
+        }
 
-    return response.json()
+    data = response.json()
+
+    # защита от пустого ответа
+    if not data:
+        return {"error": "empty response"}
+
+    return data
+
+except Exception as e:
+    return {"error": str(e)}

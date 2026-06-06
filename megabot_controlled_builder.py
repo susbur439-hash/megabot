@@ -3,6 +3,7 @@ import json
 import traceback
 import ast
 import hashlib
+import re
 
 from modules.control_bus import emit
 
@@ -11,6 +12,7 @@ try:
     from modules.ai_gateway import ask_model
 except:
     ask_model = None
+
 
 # =========================================================
 # ⚙ CONFIG
@@ -22,6 +24,7 @@ MODULES_DIR = "modules"
 MEMORY_FILE = "builder_memory.json"
 
 MAX_CYCLES = 1
+
 
 # =========================================================
 # 🧠 CORE MODULES
@@ -46,12 +49,14 @@ CORE_MODULES = {
     "control_bus"
 }
 
+
 # =========================================================
 # 📋 LOG
 # =========================================================
 
 def log(msg):
     print(msg)
+
 
 # =========================================================
 # 🔐 GRAPH HASH
@@ -64,6 +69,7 @@ def hash_graph(graph):
         return hashlib.md5(raw).hexdigest()
     except:
         return None
+
 
 # =========================================================
 # 💾 MEMORY
@@ -82,8 +88,6 @@ def load_memory():
         "actions": [],
         "history": [],
         "graph_hash": None,
-        "drift": 0,
-        "learning_score": {},
         "ai_report": {},
         "ai_score": 0
     }
@@ -110,6 +114,7 @@ def save_memory(memory):
     except:
         pass
 
+
 # =========================================================
 # 📖 FILE
 # =========================================================
@@ -120,6 +125,7 @@ def read_file(path):
             return f.read()
     except:
         return ""
+
 
 # =========================================================
 # 🔍 ANALYSIS
@@ -155,28 +161,28 @@ def extract_runtime_calls(code):
         pass
     return calls
 
+
 # =========================================================
-# 🤖 AI ANALYSIS (FIXED + SAFE)
+# 🤖 AI ANALYSIS (FIXED)
 # =========================================================
 
 def ai_analyze(graph, reverse, hubs, isolated, brain):
 
     if not ask_model:
         return {
+            "text": "",
             "score": 0,
             "status": "no_ai_gateway"
         }
 
     prompt = f"""
-Ты архитектор системы Megabot.
+Ты архитектор Megabot.
 
-Дай строгий анализ:
-
-- архитектурные проблемы
+Дай анализ:
+- проблемы архитектуры
 - слабые места
-- избыточные модули
 - улучшения
-- оценка качества 0-100 (обязательно)
+- оценка 0-100 (в конце напиши score: N)
 
 BRAIN: {brain}
 HUBS: {hubs}
@@ -189,19 +195,44 @@ GRAPH:
     try:
         result = ask_model(prompt)
 
-        # 🔧 FIX: нормализация ответа
-        if isinstance(result, dict):
-            if "score" not in result:
-                result["score"] = 0
-            return result
+        # ❗ если ошибка
+        if isinstance(result, dict) and "error" in result:
+            return {"text": "", "score": 0, "error": result["error"]}
 
-        return {"score": 0, "raw": str(result)}
+        # =====================================================
+        # 🧠 EXTRACT RESPONSE (GitHub Models format)
+        # =====================================================
+
+        text = ""
+
+        try:
+            text = result["choices"][0]["message"]["content"]
+        except:
+            text = str(result)
+
+        # =====================================================
+        # 🔍 EXTRACT SCORE FROM TEXT
+        # =====================================================
+
+        score = 0
+        match = re.search(r"score\s*:\s*(\d+)", text.lower())
+
+        if match:
+            score = int(match.group(1))
+
+        return {
+            "text": text,
+            "score": score,
+            "raw": result
+        }
 
     except Exception as e:
         return {
+            "text": "",
             "score": 0,
             "error": str(e)
         }
+
 
 # =========================================================
 # 🔗 GRAPH BUILD
@@ -237,14 +268,15 @@ def build_runtime_graph(files, modules):
 
     return graph, reverse, weights
 
+
 # =========================================================
 # 🧠 BRAIN
 # =========================================================
 
-def find_brain(graph, reverse, memory):
+def find_brain(graph, reverse):
 
-    best, best_score = None, -1
-    bias = 0
+    best = None
+    best_score = -1
 
     for n in graph:
 
@@ -253,19 +285,18 @@ def find_brain(graph, reverse, memory):
         if n == "director":
             score += 20
 
-        score += bias
-
         if score > best_score:
             best = n
             best_score = score
 
     return best
 
+
 # =========================================================
 # 🧠 HUBS
 # =========================================================
 
-def compute_hubs(graph, reverse, weights, learning):
+def compute_hubs(graph, reverse, weights):
 
     hubs = []
 
@@ -277,12 +308,14 @@ def compute_hubs(graph, reverse, weights, learning):
 
     return hubs
 
+
 # =========================================================
 # 🧠 ISOLATED
 # =========================================================
 
 def compute_isolated(graph, reverse):
     return [n for n in graph if not graph[n] and not reverse[n]]
+
 
 # =========================================================
 # 🧠 DECISION
@@ -300,6 +333,7 @@ def decide(hubs, isolated):
 
     return actions
 
+
 # =========================================================
 # 🧪 VALIDATION
 # =========================================================
@@ -312,6 +346,7 @@ def validate(files):
         except:
             errors += 1
     return errors
+
 
 # =========================================================
 # 🧠 CYCLE
@@ -345,9 +380,9 @@ def build_cycle():
 
     graph, reverse, weights = build_runtime_graph(files, modules)
 
-    brain = find_brain(graph, reverse, memory)
+    brain = find_brain(graph, reverse)
 
-    hubs = compute_hubs(graph, reverse, weights, memory.get("learning_score", {}))
+    hubs = compute_hubs(graph, reverse, weights)
     isolated = compute_isolated(graph, reverse)
     actions = decide(hubs, isolated)
 
@@ -356,8 +391,6 @@ def build_cycle():
 
     memory["ai_report"] = ai_report
     memory["ai_score"] = ai_report.get("score", 0)
-
-    errors = validate(files)
 
     memory["cycles"] += 1
     memory["brain_node"] = brain
@@ -370,10 +403,10 @@ def build_cycle():
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
     log(f"AI_SCORE: {memory['ai_score']}")
-    log(f"ERRORS: {errors}")
     log("==============================")
 
     save_memory(memory)
+
 
 # =========================================================
 # ▶ RUN

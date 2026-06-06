@@ -7,78 +7,98 @@ import requests
 
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
+# =========================================================
+# 🤖 AVAILABLE MODELS (fallback list)
+# =========================================================
+
+MODELS = [
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1-mini",
+    "gpt-3.5-turbo"
+]
+
+URL = "https://models.github.ai/inference/chat/completions"
+
 
 # =========================================================
-# 🤖 AI REQUEST
+# 🧠 AUTO MODEL SELECT
 # =========================================================
 
-def ask_model(prompt: str):
-    """
-    Отправка запроса в GitHub Models API
-    """
-
-    if not GITHUB_TOKEN:
-        return {
-            "error": "MODELS_TOKEN not found"
-        }
-
-    url = "https://models.github.ai/inference/chat/completions"
-
+def try_model(model, prompt):
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": "gpt-4o-mini",
+        "model": model,
         "messages": [
-            {
-                "role": "user",
-                "content": prompt
-            }
+            {"role": "user", "content": prompt}
         ],
         "temperature": 0.3
     }
 
     try:
         response = requests.post(
-            url,
+            URL,
             json=payload,
             headers=headers,
             timeout=30
         )
 
-        # -------------------------
-        # HTTP ERROR HANDLING
-        # -------------------------
+        # если модель не поддерживается — пробуем следующую
         if response.status_code != 200:
-            return {
+            return None, {
                 "error": response.text,
-                "status": response.status_code
+                "status": response.status_code,
+                "model": model
             }
 
         data = response.json()
 
-        if not data:
-            return {
-                "error": "empty response"
-            }
-
-        # =====================================================
-        # 🧠 NORMALIZED OUTPUT (ВАЖНО ДЛЯ MEGABOT)
-        # =====================================================
-
+        content = None
         try:
             content = data["choices"][0]["message"]["content"]
         except:
-            content = None
+            content = str(data)
 
         return {
             "raw": data,
-            "text": content
-        }
+            "text": content,
+            "model_used": model
+        }, None
 
     except Exception as e:
-        return {
-            "error": str(e)
+        return None, {
+            "error": str(e),
+            "model": model
         }
+
+
+# =========================================================
+# 🚀 MAIN FUNCTION (AUTO FALLBACK)
+# =========================================================
+
+def ask_model(prompt: str):
+    """
+    Авто-выбор рабочей модели GitHub Models
+    """
+
+    if not GITHUB_TOKEN:
+        return {"error": "MODELS_TOKEN not found"}
+
+    last_error = None
+
+    for model in MODELS:
+        result, error = try_model(model, prompt)
+
+        if result:
+            return result
+
+        last_error = error
+
+    return {
+        "error": "All models failed",
+        "last_error": last_error
+    }

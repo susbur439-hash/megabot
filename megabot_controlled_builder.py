@@ -4,25 +4,43 @@ import traceback
 import ast
 import hashlib
 import re
-import requests
+
+# =========================================================
+# 📦 SAFE IMPORT (requests)
+# =========================================================
+
+try:
+    import requests
+except Exception as e:
+    requests = None
+
 
 from modules.control_bus import emit
 
+
 # =========================================================
-# 🧠 AI LAYER (SAFE IMPORT)
+# 🧠 AI CONFIG
 # =========================================================
 
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
-def ask_model(prompt: str):
-    """
-    Прямой вызов GitHub Models API (без внешних зависимостей)
-    """
+MODELS = [
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1-mini",
+    "gpt-3.5-turbo"
+]
 
-    if not GITHUB_TOKEN:
-        return {"error": "MODELS_TOKEN is missing"}
+URL = "https://models.github.ai/inference/chat/completions"
 
-    url = "https://models.github.ai/inference/chat/completions"
+
+# =========================================================
+# 🤖 AI CALL (AUTO FALLBACK + DEBUG)
+# =========================================================
+
+def try_model(model, prompt):
+    if not requests:
+        return None, {"error": "requests not installed"}
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -30,30 +48,64 @@ def ask_model(prompt: str):
     }
 
     payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3
     }
 
     try:
-        r = requests.post(url, json=payload, headers=headers, timeout=30)
+        r = requests.post(URL, json=payload, headers=headers, timeout=30)
 
         if r.status_code != 200:
-            return {
+            return None, {
                 "error": r.text,
-                "status": r.status_code
+                "status": r.status_code,
+                "model": model
             }
 
-        return r.json()
+        data = r.json()
+
+        try:
+            text = data["choices"][0]["message"]["content"]
+        except:
+            text = str(data)
+
+        return {
+            "text": text,
+            "raw": data,
+            "model": model
+        }, None
 
     except Exception as e:
-        return {"error": str(e)}
+        return None, {"error": str(e), "model": model}
+
+
+def ask_model(prompt: str):
+
+    if not GITHUB_TOKEN:
+        return {"error": "MODELS_TOKEN missing"}
+
+    if not requests:
+        return {"error": "requests module missing"}
+
+    last_error = None
+
+    for model in MODELS:
+        result, error = try_model(model, prompt)
+
+        if result:
+            return result
+
+        last_error = error
+
+    return {
+        "error": "ALL_MODELS_FAILED",
+        "last_error": last_error
+    }
 
 
 # =========================================================
-# ⚙ CONFIG
+# 🧠 CORE CONFIG
 # =========================================================
 
 ROOT_DIR = "."
@@ -63,27 +115,15 @@ MAX_CYCLES = 1
 
 
 CORE_MODULES = {
-    "director",
-    "central_decision",
-    "execution",
-    "engine",
-    "observer",
-    "control_panel",
-    "learning",
-    "evaluation",
-    "planner",
-    "memory",
-    "decision",
-    "task_interpreter",
-    "analysis",
-    "router",
-    "module_router",
-    "control_bus"
+    "director", "central_decision", "execution", "engine",
+    "observer", "control_panel", "learning", "evaluation",
+    "planner", "memory", "decision", "task_interpreter",
+    "analysis", "router", "module_router", "control_bus"
 }
 
 
 # =========================================================
-# 📋 LOG
+# 📋 LOG (DEBUG POWERED)
 # =========================================================
 
 def log(msg):
@@ -190,7 +230,7 @@ def extract_calls(code):
 
 
 # =========================================================
-# 🤖 AI ANALYSIS (FIXED)
+# 🤖 AI ANALYSIS (ROBUST)
 # =========================================================
 
 def ai_analyze(graph, reverse, hubs, isolated, brain):
@@ -205,7 +245,7 @@ def ai_analyze(graph, reverse, hubs, isolated, brain):
 - проблемы
 - слабые места
 - улучшения
-- score 0-100 (обязательно напиши score: N)
+- обязательно score: N (0-100)
 
 BRAIN: {brain}
 HUBS: {hubs}
@@ -217,17 +257,28 @@ GRAPH:
 
     result = ask_model(prompt)
 
+    log("AI_RAW_RESPONSE:")
+    log(json.dumps(result, indent=2, ensure_ascii=False))
+
     if isinstance(result, dict) and "error" in result:
         return {"text": "", "score": 0, "error": result["error"]}
 
     text = ""
     try:
-        text = result["choices"][0]["message"]["content"]
+        text = result["text"]
     except:
         text = str(result)
 
-    match = re.search(r"score\s*:\s*(\d+)", text.lower())
-    score = int(match.group(1)) if match else 0
+    # 🔍 SCORE EXTRACTION (2 METHODS)
+    score = 0
+
+    m = re.search(r"score\s*:\s*(\d+)", text.lower())
+    if m:
+        score = int(m.group(1))
+    else:
+        m = re.search(r"\b(\d{1,3})\b", text)
+        if m:
+            score = int(m.group(1))
 
     return {
         "text": text,
@@ -337,7 +388,6 @@ def build_cycle():
     modules = []
 
     for root, _, file_list in os.walk(ROOT_DIR):
-
         if ".git" in root or "__pycache__" in root:
             continue
 

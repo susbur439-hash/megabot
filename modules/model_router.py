@@ -3,41 +3,33 @@ import time
 import requests
 
 # =========================================================
-# 🧠 MODEL DISCOVERY (DYNAMIC)
-# =========================================================
-
-def load_models():
-    try:
-        from modules.model_discovery import get_models
-        models = get_models()
-        if models:
-            return models
-    except:
-        pass
-
-    # fallback ONLY SAFE MODELS
-    return [
-        "openai/gpt-4o-mini",
-        "openai/gpt-4o"
-    ]
-
-
-# =========================================================
-# 🔧 CONFIG
+# 🧠 SAFE MODEL ROUTER v3 FIXED
 # =========================================================
 
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 URL = "https://models.github.ai/inference/chat/completions"
 
+# 🚀 ONLY CONFIRMED WORKING PATTERN MODELS
+BASE_MODELS = [
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1-mini",
+    "o3-mini",
+    "o4-mini"
+]
+
 
 # =========================================================
-# 🤖 LOW-LEVEL CALL
+# 🤖 LOW LEVEL CALL
 # =========================================================
 
 def try_model(model, prompt):
 
     if not requests:
         return None, {"error": "NO_REQUESTS"}
+
+    if not GITHUB_TOKEN:
+        return None, {"error": "NO_TOKEN"}
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -53,7 +45,7 @@ def try_model(model, prompt):
     try:
         r = requests.post(URL, json=payload, headers=headers, timeout=30)
 
-        # ❌ ACCESS BLOCK
+        # ❌ ACCESS FIX
         if r.status_code in [401, 403]:
             return None, {"error": "ACCESS_DENIED", "model": model}
 
@@ -78,7 +70,7 @@ def try_model(model, prompt):
 
 
 # =========================================================
-# 🧠 ROUTER v3 CORE (MAIN FIX)
+# 🧠 ROUTER CORE FIXED
 # =========================================================
 
 def ask_model(prompt):
@@ -86,33 +78,28 @@ def ask_model(prompt):
     if not GITHUB_TOKEN:
         return {"error": "NO_TOKEN"}
 
-    models = load_models()
-
     last_error = None
-    tried = set()
+    tried_models = []
 
-    for model in models:
+    for model in BASE_MODELS:
 
-        if model in tried:
-            continue
-
-        tried.add(model)
+        tried_models.append(model)
 
         result, error = try_model(model, prompt)
 
-        if result:
-            return result
+        if result and result.get("text"):
+            return {
+                "text": result["text"],
+                "model_used": model
+            }
 
         last_error = error
 
-        # если нет доступа — не повторяем
-        if error and error.get("error") == "ACCESS_DENIED":
-            continue
-
-        time.sleep(0.3)
+        # ⛔ anti-rate-limit safe delay
+        time.sleep(0.4)
 
     return {
         "error": "ALL_MODELS_FAILED",
         "last_error": last_error,
-        "tried_models": list(tried)
+        "tried_models": tried_models
     }

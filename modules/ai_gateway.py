@@ -5,15 +5,15 @@ GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
 URL = "https://models.github.ai/inference/chat/completions"
 
-MODEL = "gpt-4o-mini"
+MODELS = [
+    "gpt-4o",
+    "gpt-4o-mini",
+    "Meta-Llama-3.1-8B-Instruct",
+    "Meta-Llama-3.1-405B-Instruct"
+]
 
 
-def ask_model(prompt: str):
-
-    if not GITHUB_TOKEN:
-        return {
-            "error": "MODELS_TOKEN not found"
-        }
+def try_model(model, prompt):
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -21,7 +21,7 @@ def ask_model(prompt: str):
     }
 
     payload = {
-        "model": MODEL,
+        "model": model,
         "messages": [
             {
                 "role": "user",
@@ -40,28 +40,50 @@ def ask_model(prompt: str):
             timeout=60
         )
 
-        result = {
-            "status_code": response.status_code,
-            "response_text": response.text[:3000]
-        }
+        print("=" * 60)
+        print("MODEL:", model)
+        print("STATUS:", response.status_code)
+        print("RESPONSE:")
+        print(response.text[:3000])
+        print("=" * 60)
 
         if response.status_code != 200:
-            return {
-                "error": "request_failed",
-                "debug": result
+            return None, {
+                "model": model,
+                "status": response.status_code,
+                "error": response.text
             }
 
-        try:
-            data = response.json()
-        except Exception as e:
-            return {
-                "error": f"json_error: {e}",
-                "debug": result
-            }
-
-        return data
+        return response.json(), None
 
     except Exception as e:
-        return {
+
+        return None, {
+            "model": model,
             "error": str(e)
         }
+
+
+def ask_model(prompt: str):
+
+    if not GITHUB_TOKEN:
+        return {
+            "error": "MODELS_TOKEN not found"
+        }
+
+    last_error = None
+
+    for model in MODELS:
+
+        result, error = try_model(model, prompt)
+
+        if result:
+            result["model_used"] = model
+            return result
+
+        last_error = error
+
+    return {
+        "error": "ALL_MODELS_FAILED",
+        "last_error": last_error
+    }

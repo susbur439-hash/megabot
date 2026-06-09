@@ -24,6 +24,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
+      - name: Discover Models
+        env:
+          MODELS_TOKEN: ${{ secrets.MODELS_TOKEN }}
+        run: python modules/model_discovery.py
+
       - name: Run Builder
         env:
           MODELS_TOKEN: ${{ secrets.MODELS_TOKEN }}

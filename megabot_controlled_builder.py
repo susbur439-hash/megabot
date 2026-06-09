@@ -1,7 +1,6 @@
 import os
 import json
 import ast
-import hashlib
 import re
 import time
 
@@ -15,39 +14,36 @@ except:
     requests = None
 
 
-from modules.control_bus import emit
-
-
 # =========================================================
-# 🧠 CONFIG (FIXED SAFE MODE)
+# 🧠 CONFIG
 # =========================================================
 
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
 URL = "https://models.github.ai/inference/chat/completions"
 
-# 🚀 ONLY SAFE + ACCESSIBLE MODELS (NO LLAMA, NO 403)
+# 🚀 SAFE FALLBACK LIST (NO HARD PREFIXES)
 MODELS = [
-    "openai/gpt-4o-mini",
-    "openai/gpt-4o",
-    "openai/gpt-4.1-mini",
-    "openai/o3-mini",
-    "openai/o4-mini",
-    "microsoft/phi-4-mini-instruct"
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1-mini",
+    "o3-mini",
+    "o4-mini",
+    "phi-4-mini-instruct"
 ]
 
 
 # =========================================================
-# 🤖 MODEL CALL (SAFE)
+# 🤖 MODEL CALL
 # =========================================================
 
 def try_model(model, prompt):
 
     if not requests:
-        return None, {"error": "requests missing"}
+        return None, {"error": "requests_missing"}
 
     if not GITHUB_TOKEN:
-        return None, {"error": "NO_TOKEN"}
+        return None, {"error": "no_token"}
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -63,23 +59,24 @@ def try_model(model, prompt):
     try:
         r = requests.post(URL, json=payload, headers=headers, timeout=30)
 
-        # ❌ ACCESS FIX
         if r.status_code in [401, 403]:
-            return None, {"error": "ACCESS_DENIED", "model": model}
+            return None, {"error": "access_denied", "model": model}
 
         if r.status_code == 429:
-            return None, {"error": "RATE_LIMIT", "model": model}
+            return None, {"error": "rate_limit", "model": model}
 
         if r.status_code != 200:
-            return None, {"error": r.text, "status": r.status_code, "model": model}
+            return None, {"error": r.text, "model": model}
 
         data = r.json()
 
-        text = data["choices"][0]["message"]["content"]
+        try:
+            text = data["choices"][0]["message"]["content"]
+        except:
+            text = json.dumps(data)
 
         return {
             "text": text,
-            "raw": data,
             "model": model
         }, None
 
@@ -88,7 +85,7 @@ def try_model(model, prompt):
 
 
 # =========================================================
-# 🧠 ROUTER (FIXED)
+# 🧠 ROUTER CORE (FIXED)
 # =========================================================
 
 def ask_model(prompt):
@@ -96,23 +93,28 @@ def ask_model(prompt):
     if not GITHUB_TOKEN:
         return {"error": "NO_TOKEN"}
 
+    if not requests:
+        return {"error": "NO_REQUESTS"}
+
     last_error = None
 
     for model in MODELS:
 
         result, error = try_model(model, prompt)
 
-        if result:
+        # ✅ FIX: правильная проверка
+        if result and result.get("text"):
             return result
 
         last_error = error
 
-        # ⛔ защита от GitHub rate limit
-        time.sleep(0.7)
+        # ⛔ anti-rate-limit
+        time.sleep(0.6)
 
     return {
         "error": "ALL_MODELS_FAILED",
-        "last_error": last_error
+        "last_error": last_error,
+        "tried_models": MODELS
     }
 
 
@@ -176,7 +178,7 @@ def ai_analyze(graph, reverse, hubs, isolated, brain):
     prompt = f"""
 Analyze Megabot architecture.
 
-Give:
+Return:
 - problems
 - weak points
 - improvements
@@ -193,15 +195,15 @@ GRAPH:
     result = ask_model(prompt)
 
     log("AI_RAW:")
-    log(json.dumps(result, indent=2))
+    log(json.dumps(result, indent=2, ensure_ascii=False))
 
-    if "error" in result:
+    if not result or "error" in result:
         return {"text": "", "score": 0, "error": result}
 
     text = result.get("text", "")
 
-    # SCORE
-    m = re.search(r"score\s*:\s*(\d+)", text.lower())
+    # SCORE PARSE SAFE
+    m = re.search(r"score\s*[:=]?\s*(\d+)", text.lower())
     score = int(m.group(1)) if m else 0
 
     return {
@@ -283,7 +285,7 @@ def decide(hubs, isolated):
 
 
 # =========================================================
-# 🧠 MAIN
+# 🧠 MAIN LOOP
 # =========================================================
 
 def build_cycle():
@@ -309,16 +311,18 @@ def build_cycle():
     brain = find_brain(graph, reverse)
     hubs = compute_hubs(graph, reverse)
     isolated = compute_isolated(graph, reverse)
+
     actions = decide(hubs, isolated)
 
     ai = ai_analyze(graph, reverse, hubs, isolated, brain)
 
     log("==============================")
-    log("MEGABOT AI LOOP")
+    log("MEGABOT AI ROUTER v3 FIXED")
     log("==============================")
     log(f"BRAIN: {brain}")
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
+    log(f"ACTIONS: {len(actions)}")
     log(f"AI_SCORE: {ai.get('score', 0)}")
     log("==============================")
 

@@ -1,92 +1,32 @@
 import os
-import json
 import requests
+import json
 
 TOKEN = os.getenv("MODELS_TOKEN")
 
-OUTPUT_FILE = "working_models.json"
+headers = {
+    "Authorization": f"Bearer {TOKEN}"
+}
 
-# список кандидатов можно расширять
-CANDIDATES = [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "o4-mini",
-    "o3",
-    "phi-4",
-    "mistral-small",
-    "mistral-medium",
-    "llama-3.3-70b-instruct",
-    "llama-3.1-70b-instruct",
-    "deepseek-r1"
+urls = [
+    "https://models.github.ai/catalog/models",
+    "https://models.inference.ai.azure.com/models"
 ]
 
-URL = "https://models.github.ai/inference/chat/completions"
-
-
-def test_model(model):
-    headers = {
-        "Authorization": f"Bearer {TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "user", "content": "hello"}
-        ],
-        "max_tokens": 5
-    }
+for url in urls:
+    print("=" * 50)
+    print("CHECK:", url)
 
     try:
-        r = requests.post(
-            URL,
-            json=payload,
-            headers=headers,
-            timeout=20
-        )
+        r = requests.get(url, headers=headers, timeout=30)
 
-        return r.status_code == 200
+        print("STATUS:", r.status_code)
 
-    except Exception:
-        return False
+        try:
+            data = r.json()
+            print(json.dumps(data, indent=2))
+        except:
+            print(r.text)
 
-
-def discover_models():
-
-    if not TOKEN:
-        print("MODELS_TOKEN not found")
-        return []
-
-    working = []
-
-    print("=== MODEL DISCOVERY ===")
-
-    for model in CANDIDATES:
-
-        print(f"Testing: {model}")
-
-        if test_model(model):
-            print(f"OK: {model}")
-            working.append(model)
-        else:
-            print(f"FAIL: {model}")
-
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(
-            working,
-            f,
-            indent=2,
-            ensure_ascii=False
-        )
-
-    print()
-    print("WORKING MODELS:")
-    print(working)
-
-    return working
-
-
-if __name__ == "__main__":
-    discover_models()
+    except Exception as e:
+        print("ERROR:", e)

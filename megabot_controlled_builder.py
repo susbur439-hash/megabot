@@ -14,32 +14,40 @@ try:
 except:
     requests = None
 
+
 from modules.control_bus import emit
 
 
 # =========================================================
-# 🧠 CONFIG
+# 🧠 CONFIG (FIXED SAFE MODE)
 # =========================================================
 
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
-MODELS = [
-    "gpt-4o-mini",
-    "gpt-4o",
-    "Meta-Llama-3.1-8B-Instruct",
-    "Meta-Llama-3.1-405B-Instruct"
-]
-
 URL = "https://models.github.ai/inference/chat/completions"
+
+# 🚀 ONLY SAFE + ACCESSIBLE MODELS (NO LLAMA, NO 403)
+MODELS = [
+    "openai/gpt-4o-mini",
+    "openai/gpt-4o",
+    "openai/gpt-4.1-mini",
+    "openai/o3-mini",
+    "openai/o4-mini",
+    "microsoft/phi-4-mini-instruct"
+]
 
 
 # =========================================================
-# 🤖 MODEL CALL
+# 🤖 MODEL CALL (SAFE)
 # =========================================================
 
 def try_model(model, prompt):
+
     if not requests:
         return None, {"error": "requests missing"}
+
+    if not GITHUB_TOKEN:
+        return None, {"error": "NO_TOKEN"}
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -55,7 +63,10 @@ def try_model(model, prompt):
     try:
         r = requests.post(URL, json=payload, headers=headers, timeout=30)
 
-        # 🚨 RATE LIMIT FIX
+        # ❌ ACCESS FIX
+        if r.status_code in [401, 403]:
+            return None, {"error": "ACCESS_DENIED", "model": model}
+
         if r.status_code == 429:
             return None, {"error": "RATE_LIMIT", "model": model}
 
@@ -64,11 +75,7 @@ def try_model(model, prompt):
 
         data = r.json()
 
-        text = ""
-        try:
-            text = data["choices"][0]["message"]["content"]
-        except:
-            text = str(data)
+        text = data["choices"][0]["message"]["content"]
 
         return {
             "text": text,
@@ -80,12 +87,14 @@ def try_model(model, prompt):
         return None, {"error": str(e), "model": model}
 
 
+# =========================================================
+# 🧠 ROUTER (FIXED)
+# =========================================================
+
 def ask_model(prompt):
+
     if not GITHUB_TOKEN:
         return {"error": "NO_TOKEN"}
-
-    if not requests:
-        return {"error": "NO_REQUESTS"}
 
     last_error = None
 
@@ -98,8 +107,8 @@ def ask_model(prompt):
 
         last_error = error
 
-        # ⛔ защита от спама GitHub
-        time.sleep(1)
+        # ⛔ защита от GitHub rate limit
+        time.sleep(0.7)
 
     return {
         "error": "ALL_MODELS_FAILED",

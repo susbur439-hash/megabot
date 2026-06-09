@@ -1,25 +1,24 @@
 import os
 import json
-import traceback
 import ast
 import hashlib
 import re
+import time
 
 # =========================================================
-# 📦 SAFE IMPORT (requests)
+# 📦 SAFE IMPORT
 # =========================================================
 
 try:
     import requests
-except Exception as e:
+except:
     requests = None
-
 
 from modules.control_bus import emit
 
 
 # =========================================================
-# 🧠 AI CONFIG
+# 🧠 CONFIG
 # =========================================================
 
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
@@ -27,20 +26,20 @@ GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 MODELS = [
     "gpt-4o-mini",
     "gpt-4o",
-    "gpt-4.1-mini",
-    "gpt-3.5-turbo"
+    "Meta-Llama-3.1-8B-Instruct",
+    "Meta-Llama-3.1-405B-Instruct"
 ]
 
 URL = "https://models.github.ai/inference/chat/completions"
 
 
 # =========================================================
-# 🤖 AI CALL (AUTO FALLBACK + DEBUG)
+# 🤖 MODEL CALL
 # =========================================================
 
 def try_model(model, prompt):
     if not requests:
-        return None, {"error": "requests not installed"}
+        return None, {"error": "requests missing"}
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -56,15 +55,16 @@ def try_model(model, prompt):
     try:
         r = requests.post(URL, json=payload, headers=headers, timeout=30)
 
+        # 🚨 RATE LIMIT FIX
+        if r.status_code == 429:
+            return None, {"error": "RATE_LIMIT", "model": model}
+
         if r.status_code != 200:
-            return None, {
-                "error": r.text,
-                "status": r.status_code,
-                "model": model
-            }
+            return None, {"error": r.text, "status": r.status_code, "model": model}
 
         data = r.json()
 
+        text = ""
         try:
             text = data["choices"][0]["message"]["content"]
         except:
@@ -80,23 +80,26 @@ def try_model(model, prompt):
         return None, {"error": str(e), "model": model}
 
 
-def ask_model(prompt: str):
-
+def ask_model(prompt):
     if not GITHUB_TOKEN:
-        return {"error": "MODELS_TOKEN missing"}
+        return {"error": "NO_TOKEN"}
 
     if not requests:
-        return {"error": "requests module missing"}
+        return {"error": "NO_REQUESTS"}
 
     last_error = None
 
     for model in MODELS:
+
         result, error = try_model(model, prompt)
 
         if result:
             return result
 
         last_error = error
+
+        # ⛔ защита от спама GitHub
+        time.sleep(1)
 
     return {
         "error": "ALL_MODELS_FAILED",
@@ -105,147 +108,70 @@ def ask_model(prompt: str):
 
 
 # =========================================================
-# 🧠 CORE CONFIG
+# 📊 LOG
 # =========================================================
 
-ROOT_DIR = "."
-MODULES_DIR = "modules"
-MEMORY_FILE = "builder_memory.json"
-MAX_CYCLES = 1
-
-
-CORE_MODULES = {
-    "director", "central_decision", "execution", "engine",
-    "observer", "control_panel", "learning", "evaluation",
-    "planner", "memory", "decision", "task_interpreter",
-    "analysis", "router", "module_router", "control_bus"
-}
+def log(x):
+    print(x)
 
 
 # =========================================================
-# 📋 LOG (DEBUG POWERED)
+# 🧠 GRAPH ANALYSIS
 # =========================================================
 
-def log(msg):
-    print(msg)
-
-
-# =========================================================
-# 🔐 GRAPH HASH
-# =========================================================
-
-def hash_graph(graph):
+def extract_imports(code):
+    out = []
     try:
-        flat = {k: sorted(list(v)) for k, v in graph.items()}
-        raw = json.dumps(flat, sort_keys=True).encode()
-        return hashlib.md5(raw).hexdigest()
-    except:
-        return None
-
-
-# =========================================================
-# 💾 MEMORY
-# =========================================================
-
-def load_memory():
-    default = {
-        "cycles": 0,
-        "brain_node": None,
-        "hubs": [],
-        "isolated": [],
-        "actions": [],
-        "ai_report": {},
-        "ai_score": 0,
-        "graph_hash": None
-    }
-
-    if not os.path.exists(MEMORY_FILE):
-        return default
-
-    try:
-        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        for k, v in default.items():
-            data.setdefault(k, v)
-
-        return data
-    except:
-        return default
-
-
-def save_memory(memory):
-    try:
-        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(memory, f, indent=2, ensure_ascii=False)
+        tree = ast.parse(code)
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Import):
+                for i in n.names:
+                    out.append(i.name)
+            elif isinstance(n, ast.ImportFrom):
+                if n.module:
+                    out.append(n.module)
     except:
         pass
+    return out
 
 
-# =========================================================
-# 📖 FILE
-# =========================================================
-
-def read_file(path):
+def extract_calls(code):
+    out = []
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        tree = ast.parse(code)
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Call):
+                if isinstance(n.func, ast.Name):
+                    out.append(n.func.id)
+                elif isinstance(n.func, ast.Attribute):
+                    out.append(n.func.attr)
+    except:
+        pass
+    return out
+
+
+def read_file(p):
+    try:
+        with open(p, "r", encoding="utf-8") as f:
             return f.read()
     except:
         return ""
 
 
 # =========================================================
-# 🔍 ANALYSIS
-# =========================================================
-
-def extract_imports(code):
-    imports = []
-    try:
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for n in node.names:
-                    imports.append(n.name)
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    imports.append(node.module)
-    except:
-        pass
-    return imports
-
-
-def extract_calls(code):
-    calls = []
-    try:
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Name):
-                    calls.append(node.func.id)
-                elif isinstance(node.func, ast.Attribute):
-                    calls.append(node.func.attr)
-    except:
-        pass
-    return calls
-
-
-# =========================================================
-# 🤖 AI ANALYSIS (ROBUST)
+# 🤖 AI ANALYSIS
 # =========================================================
 
 def ai_analyze(graph, reverse, hubs, isolated, brain):
 
-    if not GITHUB_TOKEN:
-        return {"text": "", "score": 0, "status": "no_token"}
-
     prompt = f"""
-Ты анализируешь архитектуру Megabot.
+Analyze Megabot architecture.
 
-Дай:
-- проблемы
-- слабые места
-- улучшения
-- обязательно score: N (0-100)
+Give:
+- problems
+- weak points
+- improvements
+- score: N (0-100)
 
 BRAIN: {brain}
 HUBS: {hubs}
@@ -257,28 +183,17 @@ GRAPH:
 
     result = ask_model(prompt)
 
-    log("AI_RAW_RESPONSE:")
-    log(json.dumps(result, indent=2, ensure_ascii=False))
+    log("AI_RAW:")
+    log(json.dumps(result, indent=2))
 
-    if isinstance(result, dict) and "error" in result:
-        return {"text": "", "score": 0, "error": result["error"]}
+    if "error" in result:
+        return {"text": "", "score": 0, "error": result}
 
-    text = ""
-    try:
-        text = result["text"]
-    except:
-        text = str(result)
+    text = result.get("text", "")
 
-    # 🔍 SCORE EXTRACTION (2 METHODS)
-    score = 0
-
+    # SCORE
     m = re.search(r"score\s*:\s*(\d+)", text.lower())
-    if m:
-        score = int(m.group(1))
-    else:
-        m = re.search(r"\b(\d{1,3})\b", text)
-        if m:
-            score = int(m.group(1))
+    score = int(m.group(1)) if m else 0
 
     return {
         "text": text,
@@ -296,33 +211,33 @@ def build_graph(files, modules):
     graph = {m: set() for m in modules}
     reverse = {m: set() for m in modules}
 
-    for file in files:
-        current = os.path.basename(file).replace(".py", "")
+    for f in files:
+        name = os.path.basename(f).replace(".py", "")
 
-        if current not in graph:
+        if name not in graph:
             continue
 
-        code = read_file(file)
+        code = read_file(f)
+
         refs = extract_calls(code) + extract_imports(code)
 
-        for ref in refs:
-            for target in modules:
-                if target == current:
-                    continue
-
-                if target in ref:
-                    graph[current].add(target)
-                    reverse[target].add(current)
+        for r in refs:
+            for m in modules:
+                if m in r and m != name:
+                    graph[name].add(m)
+                    reverse[m].add(name)
 
     return graph, reverse
 
 
 # =========================================================
-# 🧠 BRAIN
+# 🧠 DECISION ENGINE
 # =========================================================
 
 def find_brain(graph, reverse):
-    best, best_score = None, -1
+
+    best = None
+    best_score = -1
 
     for n in graph:
         score = len(graph[n]) + len(reverse[n])
@@ -337,34 +252,16 @@ def find_brain(graph, reverse):
     return best
 
 
-# =========================================================
-# 🧠 HUBS
-# =========================================================
-
 def compute_hubs(graph, reverse):
-    hubs = []
+    return [n for n in graph if len(graph[n]) + len(reverse[n]) >= 3]
 
-    for n in graph:
-        score = len(graph[n]) + len(reverse[n])
-        if score >= 3:
-            hubs.append(n)
-
-    return hubs
-
-
-# =========================================================
-# 🧠 ISOLATED
-# =========================================================
 
 def compute_isolated(graph, reverse):
     return [n for n in graph if not graph[n] and not reverse[n]]
 
 
-# =========================================================
-# 🧠 DECISION
-# =========================================================
-
 def decide(hubs, isolated):
+
     actions = []
 
     for n in isolated:
@@ -377,29 +274,26 @@ def decide(hubs, isolated):
 
 
 # =========================================================
-# 🧠 MAIN LOOP
+# 🧠 MAIN
 # =========================================================
 
 def build_cycle():
 
-    memory = load_memory()
-
     files = []
     modules = []
 
-    for root, _, file_list in os.walk(ROOT_DIR):
+    for root, _, fs in os.walk("."):
+
         if ".git" in root or "__pycache__" in root:
             continue
 
-        for f in file_list:
+        for f in fs:
             if f.endswith(".py"):
                 path = os.path.join(root, f)
                 files.append(path)
 
-                if os.path.basename(root) == MODULES_DIR:
-                    name = f.replace(".py", "")
-                    if name in CORE_MODULES:
-                        modules.append(name)
+                if "modules" in root:
+                    modules.append(f.replace(".py", ""))
 
     graph, reverse = build_graph(files, modules)
 
@@ -408,19 +302,7 @@ def build_cycle():
     isolated = compute_isolated(graph, reverse)
     actions = decide(hubs, isolated)
 
-    ai_report = ai_analyze(graph, reverse, hubs, isolated, brain)
-
-    memory.update({
-        "brain_node": brain,
-        "hubs": hubs,
-        "isolated": isolated,
-        "actions": actions,
-        "ai_report": ai_report,
-        "ai_score": ai_report.get("score", 0),
-        "graph_hash": hash_graph(graph)
-    })
-
-    memory["cycles"] += 1
+    ai = ai_analyze(graph, reverse, hubs, isolated, brain)
 
     log("==============================")
     log("MEGABOT AI LOOP")
@@ -428,16 +310,11 @@ def build_cycle():
     log(f"BRAIN: {brain}")
     log(f"HUBS: {len(hubs)}")
     log(f"ISOLATED: {len(isolated)}")
-    log(f"AI_SCORE: {memory['ai_score']}")
+    log(f"AI_SCORE: {ai.get('score', 0)}")
     log("==============================")
 
-    save_memory(memory)
+    return ai
 
-
-# =========================================================
-# ▶ RUN
-# =========================================================
 
 if __name__ == "__main__":
-    for _ in range(MAX_CYCLES):
-        build_cycle() 
+    build_cycle()

@@ -22,13 +22,13 @@ GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
 URL = "https://models.github.ai/inference/chat/completions"
 
-# 🚀 FIXED MODEL IDS (ВАЖНО)
-MODELS = [
-    "openai/gpt-4o-mini",
-    "openai/gpt-4o"
-]
-
 DEBUG = True
+
+# 🚀 ВАЖНО: реальные GitHub Models IDs
+MODELS = [
+    "gpt-4o-mini",
+    "gpt-4o"
+]
 
 
 # =========================================================
@@ -69,24 +69,34 @@ def try_model(model, prompt):
         data = r.json()
 
         if DEBUG:
-            print("\n🔍 RAW RESPONSE:\n", json.dumps(data, indent=2)[:2000])
+            print("\n🔍 RAW RESPONSE:\n", json.dumps(data, indent=2)[:1500])
 
         # =====================================================
-        # 🧠 ROBUST TEXT EXTRACTION (FIX)
+        # 🧠 UNIVERSAL RESPONSE PARSER
         # =====================================================
 
         text = ""
 
+        # 1. OpenAI style
         try:
             text = data["choices"][0]["message"]["content"]
         except:
+            pass
+
+        # 2. alternative schema
+        if not text:
             try:
                 text = data["output"][0]["content"][0]["text"]
             except:
-                text = str(data)
+                pass
 
+        # 3. fallback
         if not text:
-            return None, {"error": "EMPTY_RESPONSE", "model": model}
+            text = data.get("text", "")
+
+        # 4. last fallback
+        if not text:
+            text = str(data)
 
         return {
             "text": text,
@@ -183,6 +193,8 @@ Return:
 - improvements
 - score: N (0-100)
 
+IMPORTANT: always include "score: X/100"
+
 BRAIN: {brain}
 HUBS: {hubs}
 ISOLATED: {isolated}
@@ -199,23 +211,25 @@ GRAPH:
     text = result.get("text", "")
 
     # =====================================================
-    # 🧠 FIXED SCORE PARSING (IMPORTANT)
+    # 🧠 ROBUST SCORE PARSER (FINAL FIX)
     # =====================================================
 
     score = 0
 
-    # try multiple patterns
     patterns = [
+        r"score\s*[:=]?\s*(\d{1,3})\s*/\s*100",
         r"score\s*[:=]?\s*(\d{1,3})",
         r"(\d{1,3})\s*/\s*100",
-        r"score.*?(\d{1,3})"
     ]
 
     for p in patterns:
         m = re.search(p, text.lower())
         if m:
-            score = int(m.group(1))
-            break
+            try:
+                score = int(m.group(1))
+                break
+            except:
+                pass
 
     return {
         "text": text,

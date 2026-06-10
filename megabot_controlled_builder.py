@@ -22,11 +22,13 @@ GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
 
 URL = "https://models.github.ai/inference/chat/completions"
 
-# 🚀 ONLY STABLE MODELS (NO ACCESS DENIED CHAOS)
+# 🚀 FIXED MODEL IDS (ВАЖНО)
 MODELS = [
-    "gpt-4o-mini",
-    "gpt-4o"
+    "openai/gpt-4o-mini",
+    "openai/gpt-4o"
 ]
+
+DEBUG = True
 
 
 # =========================================================
@@ -66,7 +68,22 @@ def try_model(model, prompt):
 
         data = r.json()
 
-        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        if DEBUG:
+            print("\n🔍 RAW RESPONSE:\n", json.dumps(data, indent=2)[:2000])
+
+        # =====================================================
+        # 🧠 ROBUST TEXT EXTRACTION (FIX)
+        # =====================================================
+
+        text = ""
+
+        try:
+            text = data["choices"][0]["message"]["content"]
+        except:
+            try:
+                text = data["output"][0]["content"][0]["text"]
+            except:
+                text = str(data)
 
         if not text:
             return None, {"error": "EMPTY_RESPONSE", "model": model}
@@ -81,7 +98,7 @@ def try_model(model, prompt):
 
 
 # =========================================================
-# 🧠 ROUTER CORE (SINGLE SOURCE OF TRUTH)
+# 🧠 ROUTER CORE
 # =========================================================
 
 def ask_model(prompt):
@@ -99,8 +116,6 @@ def ask_model(prompt):
             return result
 
         last_error = error
-
-        # anti-rate-limit
         time.sleep(0.5)
 
     return {
@@ -111,7 +126,7 @@ def ask_model(prompt):
 
 
 # =========================================================
-# 📊 GRAPH HELPERS (UNCHANGED BUT CLEAN)
+# 📊 GRAPH HELPERS
 # =========================================================
 
 def extract_imports(code):
@@ -183,8 +198,24 @@ GRAPH:
 
     text = result.get("text", "")
 
-    m = re.search(r"score\s*[:=]?\s*(\d+)", text.lower())
-    score = int(m.group(1)) if m else 0
+    # =====================================================
+    # 🧠 FIXED SCORE PARSING (IMPORTANT)
+    # =====================================================
+
+    score = 0
+
+    # try multiple patterns
+    patterns = [
+        r"score\s*[:=]?\s*(\d{1,3})",
+        r"(\d{1,3})\s*/\s*100",
+        r"score.*?(\d{1,3})"
+    ]
+
+    for p in patterns:
+        m = re.search(p, text.lower())
+        if m:
+            score = int(m.group(1))
+            break
 
     return {
         "text": text,
@@ -296,7 +327,7 @@ def build_cycle():
     ai = ai_analyze(graph, reverse, hubs, isolated, brain)
 
     print("=" * 30)
-    print("MEGABOT AI ROUTER v3 CLEAN")
+    print("MEGABOT AI ROUTER v3 FIXED")
     print("=" * 30)
     print("BRAIN:", brain)
     print("HUBS:", len(hubs))

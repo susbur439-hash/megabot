@@ -4,27 +4,20 @@ import ast
 import re
 import time
 
-# =========================================================
-# 📦 SAFE IMPORT
-# =========================================================
-
 try:
     import requests
 except:
     requests = None
 
-
 # =========================================================
-# 🔐 CONFIG
+# CONFIG
 # =========================================================
 
 GITHUB_TOKEN = os.getenv("MODELS_TOKEN")
-
 URL = "https://models.github.ai/inference/chat/completions"
 
 DEBUG = True
 
-# 🚀 ВАЖНО: реальные GitHub Models IDs
 MODELS = [
     "gpt-4o-mini",
     "gpt-4o"
@@ -32,7 +25,7 @@ MODELS = [
 
 
 # =========================================================
-# 🤖 MODEL CALL
+# MODEL CALL (FULL DEBUG)
 # =========================================================
 
 def try_model(model, prompt):
@@ -51,65 +44,51 @@ def try_model(model, prompt):
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3
+        "temperature": 0.2
     }
 
     try:
+        print("\n" + "="*60)
+        print("📤 SENDING TO MODEL:", model)
+        print("="*60)
+        print(prompt[:1500])
+        print("="*60)
+
         r = requests.post(URL, json=payload, headers=headers, timeout=30)
 
-        if r.status_code in [401, 403]:
-            return None, {"error": "ACCESS_DENIED", "model": model}
-
-        if r.status_code == 429:
-            return None, {"error": "RATE_LIMIT", "model": model}
+        print("📥 STATUS:", r.status_code)
 
         if r.status_code != 200:
+            print("❌ ERROR RESPONSE:", r.text[:500])
             return None, {"error": r.text[:300], "model": model}
 
         data = r.json()
 
         if DEBUG:
-            print("\n🔍 RAW RESPONSE:\n", json.dumps(data, indent=2)[:1500])
-
-        # =====================================================
-        # 🧠 UNIVERSAL RESPONSE PARSER
-        # =====================================================
+            print("\n📦 RAW AI RESPONSE:\n")
+            print(json.dumps(data, indent=2)[:2000])
 
         text = ""
 
-        # 1. OpenAI style
         try:
             text = data["choices"][0]["message"]["content"]
         except:
-            pass
-
-        # 2. alternative schema
-        if not text:
             try:
                 text = data["output"][0]["content"][0]["text"]
             except:
-                pass
+                text = str(data)
 
-        # 3. fallback
-        if not text:
-            text = data.get("text", "")
-
-        # 4. last fallback
-        if not text:
-            text = str(data)
+        print("\n🧠 PARSED TEXT:\n", text[:1500])
 
         return {
             "text": text,
-            "model_used": model
+            "model": model
         }, None
 
     except Exception as e:
+        print("🔥 EXCEPTION:", str(e))
         return None, {"error": str(e), "model": model}
 
-
-# =========================================================
-# 🧠 ROUTER CORE
-# =========================================================
 
 def ask_model(prompt):
 
@@ -118,25 +97,24 @@ def ask_model(prompt):
 
     last_error = None
 
-    for model in MODELS:
+    for m in MODELS:
 
-        result, error = try_model(model, prompt)
+        res, err = try_model(m, prompt)
 
-        if result and result.get("text"):
-            return result
+        if res and res.get("text"):
+            return res
 
-        last_error = error
-        time.sleep(0.5)
+        last_error = err
+        time.sleep(0.3)
 
     return {
-        "error": "ALL_MODELS_FAILED",
-        "last_error": last_error,
-        "tried_models": MODELS
+        "error": "ALL_FAILED",
+        "last_error": last_error
     }
 
 
 # =========================================================
-# 📊 GRAPH HELPERS
+# GRAPH HELPERS
 # =========================================================
 
 def extract_imports(code):
@@ -179,67 +157,7 @@ def read_file(p):
 
 
 # =========================================================
-# 🤖 AI ANALYSIS
-# =========================================================
-
-def ai_analyze(graph, reverse, hubs, isolated, brain):
-
-    prompt = f"""
-Analyze Megabot architecture.
-
-Return:
-- problems
-- weak points
-- improvements
-- score: N (0-100)
-
-IMPORTANT: always include "score: X/100"
-
-BRAIN: {brain}
-HUBS: {hubs}
-ISOLATED: {isolated}
-
-GRAPH:
-{json.dumps({k: list(v) for k, v in graph.items()}, indent=2)}
-"""
-
-    result = ask_model(prompt)
-
-    if not result or "error" in result:
-        return {"text": "", "score": 0, "error": result}
-
-    text = result.get("text", "")
-
-    # =====================================================
-    # 🧠 ROBUST SCORE PARSER (FINAL FIX)
-    # =====================================================
-
-    score = 0
-
-    patterns = [
-        r"score\s*[:=]?\s*(\d{1,3})\s*/\s*100",
-        r"score\s*[:=]?\s*(\d{1,3})",
-        r"(\d{1,3})\s*/\s*100",
-    ]
-
-    for p in patterns:
-        m = re.search(p, text.lower())
-        if m:
-            try:
-                score = int(m.group(1))
-                break
-            except:
-                pass
-
-    return {
-        "text": text,
-        "score": score,
-        "raw": result
-    }
-
-
-# =========================================================
-# 🧠 GRAPH BUILD
+# GRAPH BUILD (WITH DEBUG)
 # =========================================================
 
 def build_graph(files, modules):
@@ -247,7 +165,10 @@ def build_graph(files, modules):
     graph = {m: set() for m in modules}
     reverse = {m: set() for m in modules}
 
+    module_usage = {}
+
     for f in files:
+
         name = os.path.basename(f).replace(".py", "")
 
         if name not in graph:
@@ -257,17 +178,92 @@ def build_graph(files, modules):
 
         refs = extract_calls(code) + extract_imports(code)
 
+        module_usage[name] = refs
+
         for r in refs:
             for m in modules:
                 if m in r and m != name:
                     graph[name].add(m)
                     reverse[m].add(name)
 
-    return graph, reverse
+    print("\n📊 MODULE CONNECTION SAMPLE:")
+    for k in list(graph.keys())[:10]:
+        print(k, "->", list(graph[k]))
+
+    return graph, reverse, module_usage
 
 
 # =========================================================
-# 🧠 DECISION ENGINE
+# REAL SCORE
+# =========================================================
+
+def compute_real_score(graph, reverse, isolated):
+
+    total_nodes = len(graph)
+
+    if total_nodes == 0:
+        return 0
+
+    connectivity = sum(len(graph[n]) + len(reverse[n]) for n in graph)
+    isolation_penalty = len(isolated) * 2
+
+    score = max(0, min(100,
+        int((connectivity / (total_nodes * 2)) * 100) - isolation_penalty
+    ))
+
+    return score
+
+
+# =========================================================
+# AI ANALYSIS
+# =========================================================
+
+def ai_analyze(graph, reverse, hubs, isolated, brain):
+
+    real_score = compute_real_score(graph, reverse, isolated)
+
+    prompt = f"""
+You are analyzing a Python system architecture.
+
+IMPORTANT:
+- DO NOT guess score
+- DO NOT output JSON
+- ONLY explain problems
+
+SYSTEM STATE:
+BRAIN: {brain}
+HUBS: {len(hubs)}
+ISOLATED: {len(isolated)}
+
+ISOLATED SAMPLE:
+{isolated[:30]}
+
+TASK:
+Explain WHY system has so many isolated modules.
+"""
+
+    result = ask_model(prompt)
+
+    text = result.get("text", "")
+
+    print("\n🧠 AI FINAL ANSWER:\n")
+    print(text)
+
+    # 🔥 CRITICAL DEBUG: WHY SCORE FAILS
+    score_match = re.findall(r"(\d{1,3})", text)
+
+    print("\n🔎 NUMBERS FOUND IN AI TEXT:", score_match)
+
+    return {
+        "text": text,
+        "score": real_score,
+        "isolated_sample": isolated[:20],
+        "hubs_sample": hubs[:20]
+    }
+
+
+# =========================================================
+# ANALYTICS
 # =========================================================
 
 def find_brain(graph, reverse):
@@ -300,7 +296,7 @@ def decide(hubs, isolated):
 
     actions = []
 
-    for n in isolated:
+    for n in isolated[:30]:
         actions.append({"type": "connect", "target": n})
 
     for n in hubs:
@@ -310,7 +306,7 @@ def decide(hubs, isolated):
 
 
 # =========================================================
-# 🧠 MAIN LOOP
+# MAIN LOOP
 # =========================================================
 
 def build_cycle():
@@ -331,7 +327,7 @@ def build_cycle():
                 if "modules" in root:
                     modules.append(f.replace(".py", ""))
 
-    graph, reverse = build_graph(files, modules)
+    graph, reverse, usage = build_graph(files, modules)
 
     brain = find_brain(graph, reverse)
     hubs = compute_hubs(graph, reverse)
@@ -340,15 +336,19 @@ def build_cycle():
 
     ai = ai_analyze(graph, reverse, hubs, isolated, brain)
 
-    print("=" * 30)
-    print("MEGABOT AI ROUTER v3 FIXED")
-    print("=" * 30)
+    print("\n" + "=" * 60)
+    print("MEGABOT AI DEBUG REPORT")
+    print("=" * 60)
     print("BRAIN:", brain)
     print("HUBS:", len(hubs))
     print("ISOLATED:", len(isolated))
     print("ACTIONS:", len(actions))
-    print("AI_SCORE:", ai.get("score", 0))
-    print("=" * 30)
+    print("REAL_SCORE:", ai["score"])
+    print("=" * 60)
+
+    print("\n🔥 TOP PROBLEM:")
+    print("ISOLATED MODULES:", len(isolated))
+    print("GRAPH SIZE:", len(graph))
 
     return ai
 

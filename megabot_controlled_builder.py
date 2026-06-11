@@ -391,6 +391,7 @@ def decide(hubs, isolated):
 # =========================================================
 
 def build_cycle():
+
 token_diagnostics()
 
     files = []

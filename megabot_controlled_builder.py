@@ -114,6 +114,87 @@ def ask_model(prompt):
 
 
 # =========================================================
+# =========================================================
+# TOKEN / MODEL DIAGNOSTICS
+# =========================================================
+
+def token_diagnostics():
+
+    print("\n" + "=" * 60)
+    print("🔑 TOKEN DIAGNOSTICS")
+    print("=" * 60)
+
+    if not GITHUB_TOKEN:
+        print("❌ MODELS_TOKEN NOT FOUND")
+        return
+
+    print("✅ TOKEN FOUND")
+    print("TOKEN LENGTH:", len(GITHUB_TOKEN))
+    print("TOKEN PREFIX:", GITHUB_TOKEN[:8] + "...")
+
+    print("\n🤖 MODELS CONFIGURED:")
+
+    for m in MODELS:
+        print(" -", m)
+
+    if not requests:
+        print("❌ requests module missing")
+        return
+
+    try:
+
+        r = requests.get(
+            "https://api.github.com/user",
+            headers={
+                "Authorization": f"Bearer {GITHUB_TOKEN}"
+            },
+            timeout=20
+        )
+
+        print("\n📡 GITHUB API CHECK")
+        print("STATUS:", r.status_code)
+        print("BODY:", r.text[:500])
+
+    except Exception as e:
+
+        print("❌ GITHUB API ERROR:", str(e))
+
+    print("\n🧪 MODEL ACCESS TEST")
+
+    for model in MODELS:
+
+        try:
+
+            payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "hello"
+                    }
+                ]
+            }
+
+            r = requests.post(
+                URL,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {GITHUB_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                timeout=20
+            )
+
+            print("\nMODEL:", model)
+            print("STATUS:", r.status_code)
+            print("RESPONSE:", r.text[:500])
+
+        except Exception as e:
+
+            print("MODEL:", model)
+            print("ERROR:", str(e))
+
+    print("=" * 60)
 # GRAPH HELPERS
 # =========================================================
 
@@ -310,6 +391,7 @@ def decide(hubs, isolated):
 # =========================================================
 
 def build_cycle():
+token_diagnostics()
 
     files = []
     modules = []
